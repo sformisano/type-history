@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Accept simple stable IDs such as `receipt_created` and optional namespaces
+  such as `shop.receipt`. Remove the minimum segment count and its
+  `InvalidSegmentCount` error variant; existing dotted IDs remain valid.
 - Rename the packages to `type-history` and `type-history-*`, with
   `type_history` imports and the `cargo type-history` command.
   Configuration now uses `type-history.toml`, `type-history/schemas.json`, and

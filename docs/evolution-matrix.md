@@ -137,6 +137,8 @@ Case IDs identify behavior families; this document is not a test-run report.
 | M127 | Format using payload struct arrays | U | The generated payload decoder requires maps; support depends on the format and field types |
 | M128 | Redacted `Versioned` parse failure | R | Discard raw errors inside `Deserialize`; serializer and external trailing-input errors remain outside that boundary |
 | M129 | Raw JSON supplied as a versioned envelope | R | Existing raw JSON needs the low-level decoder and separately stored metadata |
+| M130 | Simple or namespaced stable ID | S | `receipt_created`, `shop.receipt`, and existing longer dotted IDs are valid; each segment starts with a lowercase ASCII letter and uses only lowercase letters, digits, or underscores, within 255 bytes total |
+| M131 | Empty stable ID, empty segment, or invalid identity characters | R | Declaration and deserialization reject invalid identity syntax |
 
 ## Verification and limits
 

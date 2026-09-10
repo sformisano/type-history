@@ -392,14 +392,18 @@ declaration. You can add documentation and `allow`, `warn`, or `deny` attributes
 Put field naming lints on the record, following Rust's usual lint scope.
 Other attributes that transform the declaration are unsupported.
 
-A history identity such as `billing.invoice.issued` follows these rules:
+A history identity can be a simple name such as `receipt_created`.
+Use dots if a namespace helps, as in `shop.receipt`; no segment count is required.
+The rules are:
 
-- At least three segments, separated by dots.
-- Each segment starts with a lowercase letter and contains only lowercase
-  letters, digits, or underscores.
+- Start with a lowercase ASCII letter, followed by lowercase letters, digits,
+  or underscores.
+- Optional dots separate segments that follow the same rule. Empty segments
+  are invalid, so dots cannot be leading, trailing, or consecutive.
 - At most 255 ASCII bytes in total.
 
-Declare it with `stable_id = "billing.invoice.issued"`.
+Declare it with `stable_id = "receipt_created"`.
+Existing dotted IDs such as `billing.invoice.issued` remain valid.
 Once frozen, the identity belongs to that history and must survive Rust renames and module moves.
 Builds and lifecycle commands check it against the committed ledger, just as they
 check historical field shapes. Resetting a schema does not allow changing its identity.

@@ -12,13 +12,10 @@ use serde::{de::Error as _, Deserialize, Deserializer, Serialize};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 pub enum InvalidTypeIdentity {
     /// Record types cannot exceed 255 ASCII bytes.
-    #[error("event payload type exceeds 255 bytes")]
+    #[error("type identity exceeds 255 bytes")]
     TooLong,
-    /// Record types contain fewer than three canonical segments.
-    #[error("event payload type must contain at least three segments")]
-    InvalidSegmentCount,
     /// One dot-separated segment violates the record type grammar.
-    #[error("event payload type segment {segment_number} is invalid")]
+    #[error("type identity segment {segment_number} must start with a lowercase ASCII letter and contain only lowercase ASCII letters, digits, or underscores")]
     InvalidSegment {
         /// One-based position of the invalid segment.
         segment_number: u8,
@@ -26,6 +23,11 @@ pub enum InvalidTypeIdentity {
 }
 
 /// Validated durable identity of one consumer-owned record.
+///
+/// Identities contain 1–255 ASCII bytes. Each starts with a lowercase letter,
+/// followed by lowercase letters, digits, or underscores. Optional dots separate
+/// segments that follow the same rule: `receipt_created` and `shop.receipt` are
+/// both valid. An identity must stay unchanged after its history is frozen.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
 #[serde(transparent)]
 pub struct TypeIdentity(Cow<'static, str>);
@@ -38,18 +40,16 @@ impl TypeIdentity {
     ///
     /// # Panics
     ///
-    /// Panics during constant evaluation when `value` is not canonical.
+    /// Panics when `value` violates the [`TypeIdentity`] syntax. In a constant
+    /// declaration, invalid syntax fails compilation.
     pub const fn new(value: &'static str) -> Self {
         match validate_type_identity(value) {
             Ok(()) => Self(Cow::Borrowed(value)),
             Err(InvalidTypeIdentity::TooLong) => {
-                panic!("event payload type exceeds 255 bytes")
-            }
-            Err(InvalidTypeIdentity::InvalidSegmentCount) => {
-                panic!("event payload type must contain at least three segments")
+                panic!("type identity exceeds 255 bytes")
             }
             Err(InvalidTypeIdentity::InvalidSegment { .. }) => {
-                panic!("event payload type contains an invalid segment")
+                panic!("type identity contains an invalid segment")
             }
         }
     }
@@ -104,21 +104,9 @@ const fn validate_type_identity(value: &str) -> Result<(), InvalidTypeIdentity> 
         return Err(InvalidTypeIdentity::TooLong);
     }
 
-    let mut dot_count = 0;
-    let mut index = 0;
-    while index < bytes.len() {
-        if bytes[index] == b'.' {
-            dot_count += 1;
-        }
-        index += 1;
-    }
-    if dot_count < 2 {
-        return Err(InvalidTypeIdentity::InvalidSegmentCount);
-    }
-
     let mut segment_number = 1_u8;
     let mut segment_start = 0;
-    index = 0;
+    let mut index = 0;
     while index <= bytes.len() {
         if index == bytes.len() || bytes[index] == b'.' {
             if index == segment_start || !is_ascii_lowercase(bytes[segment_start]) {

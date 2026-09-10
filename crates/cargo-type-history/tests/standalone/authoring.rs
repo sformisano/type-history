@@ -170,8 +170,8 @@ fn standalone_compiler_checks_history_contracts_and_macro_hygiene() {
             "a removal carries no conversion",
         ),
         (
-            V1.replace("billing.invoice.issued", "billing.invoice"),
-            "at least three segments",
+            V1.replace("billing.invoice.issued", "ReceiptCreated"),
+            "type identity segment 1 must start with a lowercase ASCII letter",
         ),
         (
             V1.replace(
