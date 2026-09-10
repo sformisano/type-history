@@ -45,8 +45,8 @@ so new events need a `currency` field.
 
 ### 1. Describe the change
 
-Field attributes describe when the field appeared and what value older events
-should use:
+This example declares a versioned `ReceiptCreated` struct with the new `currency`
+field:
 
 <!-- quick-example:v2.rs -->
 ```rust
@@ -61,12 +61,11 @@ pub struct ReceiptCreated {
 }
 ```
 
-- `stable_id` identifies this history. Once frozen, changing it fails the build.
+- `#[versioned(...)]` marks `ReceiptCreated` as a versioned struct.
+- Its `stable_id` argument identifies this history. Once frozen, changing it fails the build.
+- `#[history(...)]` describes the change to the `currency` field.
 - `added_at = v2` introduces `currency` in V2.
 - `backfill_value` supplies `"USD"` when converting V1 events, because the shop accepted only US dollars then.
-
-`#[versioned(...)]` applies to the struct. Its `#[history(...)]` field attributes
-describe the individual changes.
 
 ### 2. Use the current type
 
