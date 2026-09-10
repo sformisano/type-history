@@ -13,20 +13,6 @@ It works in three steps:
    attributes, so you catch those mistakes before deployment rather than at
    runtime in production.
 
-Compile-time checks cover:
-
-- **Additions:** An attribute records which version introduced a field and what
-  fallback value to use when reading older records.
-- **Type changes:** An attribute records which version changed a field’s type and
-  specifies a conversion from the old type to the new type.
-- **Renames:** You mark the old field as removed and add the new field in the same
-  version. A conversion reads the whole previous record and returns the value for
-  the new field.
-- **Removals:** The field stays in the history declaration, with an attribute
-  recording which version removed it. Earlier versions retain it so older data
-  remains readable. The current type omits it, so consumer code that still accesses
-  it fails to compile.
-
 ## Table of contents
 
 - [When to use Typehistory](#when-to-use-typehistory)
@@ -652,6 +638,20 @@ cargo build --release --locked
 ```
 
 ## Field history reference
+
+Compile-time checks cover:
+
+- **Additions:** An attribute records which version introduced a field and what
+  fallback value to use when reading older records.
+- **Type changes:** An attribute records which version changed a field’s type and
+  specifies a conversion from the old type to the new type.
+- **Renames:** You mark the old field as removed and add the new field in the same
+  version. A conversion reads the whole previous record and returns the value for
+  the new field.
+- **Removals:** The field stays in the history declaration, with an attribute
+  recording which version removed it. Earlier versions retain it so older data
+  remains readable. The current type omits it, so consumer code that still accesses
+  it fails to compile.
 
 Field attributes record when each change happened and how to construct the next
 version. Write versions as `v1`, `v2`, and so on. Version zero and values that
