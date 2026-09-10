@@ -13,15 +13,19 @@ It works in three steps:
    attributes, so you catch those mistakes before deployment rather than at
    runtime in production.
 
-Compile-time checks cover additions, type changes, and removals.
+Compile-time checks cover:
 
-- When you add a new field, an attribute records which version introduced it and
-  what fallback value to use when reading older records.
-- When a field changes type, an attribute records which version changed that type
-  and provides a conversion from the old type to the new type.
-- When you remove a field, an attribute records which version removed it. Earlier
-  versions retain the field so older data can still be read. The current type
-  omits it, so consumer code that still accesses it fails to compile.
+- **Additions:** An attribute records which version introduced a field and what
+  fallback value to use when reading older records.
+- **Type changes:** An attribute records which version changed a field’s type and
+  specifies a conversion from the old type to the new type.
+- **Renames:** You mark the old field as removed and add the new field in the same
+  version. A conversion reads the whole previous record and returns the value for
+  the new field.
+- **Removals:** The field stays in the history declaration, with an attribute
+  recording which version removed it. Earlier versions retain it so older data
+  remains readable. The current type omits it, so consumer code that still accesses
+  it fails to compile.
 
 ## Table of contents
 
