@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Keep `from_versioned` as the single API for converting a `Versioned<T>` into
+  the current type. Remove `Versioned::into_current` and explain the wrapper
+  before the README's deserialization and conversion examples.
 - Rename the field-history attribute `added_at` to `added_in`.
   Frozen schemas remain unchanged.
 - Show the generated structs and conversion before introducing the current

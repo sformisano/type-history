@@ -25,7 +25,7 @@ mod stored_tests {
         assert_eq!(serde_json::to_string(&stored).unwrap(), V1_RECORD);
         assert!(!format!("{stored:?}").contains("INV-42"));
         assert!(trace().is_empty());
-        let current = stored.into_current().unwrap();
+        let current = Invoice::from_versioned(stored).unwrap();
         assert_eq!(trace(), ["label", "widen", "stringify"]);
         assert_eq!(
             (&*current.count, &*current.label, current.revision),

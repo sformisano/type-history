@@ -17,7 +17,6 @@ pub(super) fn test_module(cases: &[(&str, String)]) -> String {
 
 pub(super) fn receipt_tests() -> String {
     let mut cases = [
-        ("overview", "overview:read-old.rs"),
         ("json", "decoding:json.rs"),
         ("source_version", "decoding:source-version.rs"),
         ("invalid_input", "decoding:invalid.rs"),
@@ -27,6 +26,14 @@ pub(super) fn receipt_tests() -> String {
     .into_iter()
     .map(|(name, marker)| (name, documented(marker).to_owned()))
     .collect::<Vec<_>>();
+    cases.push((
+        "overview",
+        format!(
+            "{}\n{}",
+            documented("overview:deserialize.rs"),
+            documented("overview:read-old.rs")
+        ),
+    ));
     cases.push((
         "messagepack",
         format!(

@@ -34,6 +34,11 @@ pub trait VersionedHistory: Sized {
     ) -> Result<Self::Historical, D::Error>;
     /// Apply adjacent conversions until the current type is reached.
     fn upgrade(value: Self::Historical) -> Result<Self, Self::Error>;
+
+    /// Consume the wrapper for the current alias's generated `from_versioned` method.
+    fn from_versioned(value: Versioned<Self>) -> Result<Self, Self::Error> {
+        Self::upgrade(value.historical)
+    }
 }
 
 /// A serializable value that keeps its identity, version, and data together.
@@ -41,7 +46,7 @@ pub trait VersionedHistory: Sized {
 /// The current alias's `into_versioned` method wraps a value with its metadata.
 /// After deserializing, use the alias's `from_versioned` method to convert to the
 /// current type. Type History selects the historical type from that metadata.
-/// No conversion runs until [`into_current`](Self::into_current) is called.
+/// No conversion runs until the alias's `from_versioned` method is called.
 ///
 /// The wire representation consists of two single-entry maps. The outer key is
 /// the stable identity; the inner key is the version as a decimal string. The
@@ -79,15 +84,6 @@ impl<T: VersionedHistory> Versioned<T> {
     /// Return the version of the contained data, before any conversions.
     pub fn source_version(&self) -> PayloadVersion {
         T::source_version(&self.historical)
-    }
-
-    /// Apply the declared conversions and return the current type.
-    ///
-    /// Conversion failures retain the stored version and the failing adjacent
-    /// step. Ordinary histories preserve the callback's concrete error source;
-    /// redacted histories retain only its redacted projection.
-    pub fn into_current(self) -> Result<T, T::Error> {
-        T::upgrade(self.historical)
     }
 }
 

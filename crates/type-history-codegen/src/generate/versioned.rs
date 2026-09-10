@@ -124,10 +124,12 @@ pub(super) fn generate(context: &Context<'_>) -> TokenStream {
             /// Convert a versioned value into the current type.
             ///
             /// Conversion failures retain the original stored version and failing step.
+            /// Ordinary histories preserve the callback's concrete error source;
+            /// redacted histories retain only its redacted projection.
             pub fn from_versioned(
                 record: #support::Versioned<Self>,
             ) -> ::core::result::Result<Self, #error_type> {
-                record.into_current()
+                <Self as #support::VersionedHistory>::from_versioned(record)
             }
         }
     }

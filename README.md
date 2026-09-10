@@ -107,25 +107,48 @@ When you introduce V3, Type History updates this alias to `ReceiptCreatedV3`
 automatically. Application code keeps using `ReceiptCreated` to construct current
 values and read earlier data, without choosing a numbered type.
 
-Its public `from_versioned` method runs the generated conversions:
+### 3. Read earlier data
+
+The application may still have receipts written as V1, before `currency` existed.
+Reading them uses two types:
+
+- `ReceiptCreated` is the current struct, with `amount_cents` and `currency`.
+- `Versioned<ReceiptCreated>` is a wrapper that can hold any supported version of
+  a receipt. It keeps the stable identity, version number, and data together.
+
+First, deserialize the saved data into the wrapper:
+
+<!-- overview:deserialize.rs -->
+```rust
+use serde_json::from_slice;
+use type_history::Versioned;
+
+let stored: Versioned<ReceiptCreated> = from_slice(
+    br#"{"shop.receipt.created":{"1":{"amount_cents":1200}}}"#,
+)?;
+```
+
+Type History checks the stable identity and reads version `1` using the generated
+`ReceiptCreatedV1` struct. The wrapper still holds V1 data; no conversion has run yet.
+
+Next, pass the wrapper to `ReceiptCreated::from_versioned` to obtain the current type:
 
 <!-- overview:read-old.rs -->
 ```rust
-use serde_json::from_slice;
-
-let stored = from_slice(
-    br#"{"shop.receipt.created":{"1":{"amount_cents":1200}}}"#,
-)?;
-let receipt = ReceiptCreated::from_versioned(stored)?;
+let receipt: ReceiptCreated = ReceiptCreated::from_versioned(stored)?;
 
 assert_eq!(receipt.amount_cents, 1200);
 assert_eq!(receipt.currency, "USD");
 ```
 
-This example uses JSON. Your application chooses storage and a supported Serde
-format. `Versioned<ReceiptCreated>` keeps the stable identity, version, and data together.
+`from_versioned` runs the generated V1-to-V2 conversion, filling `currency` with
+`"USD"`. The result is an ordinary `ReceiptCreated` value for application code to use.
+With more versions, the method applies each conversion in order until it reaches
+the current type. A value that is already current needs no conversion.
 
-### 3. Check changes at compile time
+This example uses JSON. The same two steps apply with other supported Serde formats.
+
+### 4. Check changes at compile time
 
 Once V1 is frozen, adding `currency` without its history attribute fails the build:
 it would change V1 instead of introducing V2. A backfill with the wrong type also
