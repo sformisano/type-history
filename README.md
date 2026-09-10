@@ -1,12 +1,19 @@
 # Typehistory
 
-`typehistory` keeps stored JSON records readable as your Rust types change.
-You describe when fields were added, changed, or removed. It generates the
-historical types and the conversions needed to read old records as the current type.
+`typehistory` describes and enforces the version history of Rust record types.
 
-A record keeps its stable type identity, payload version, and JSON bytes together.
-Your application owns storage and delivery. Typehistory checks historical schemas
-during builds and converts records when you read them.
+Field annotations record additions, changes, removals, and explicit conversion rules
+in one declaration. Typehistory generates the retained version structs and conversions
+between consecutive versions. The current type name aliases the latest generated version.
+
+A committed schema ledger records frozen versions. Ordinary Cargo builds reject
+incompatible changes to their schemas or removal of retained history. By default,
+development builds allow one authorized draft per history; release builds require every
+history to be frozen.
+
+The current wire format is JSON. Decoding selects the declared historical version
+and applies its conversion chain to produce the current type. Applications own
+storage and delivery, including keeping each payload's identity, version, and bytes together.
 
 ## Table of contents
 
@@ -28,14 +35,9 @@ during builds and converts records when you read them.
 
 ## Quick example
 
-Suppose V1 receipts stored only an amount, and every historical amount was in USD:
-
-```json
-{"amount_cents":1200}
-```
-
-In V2, receipts also carry a currency. The field declaration records when it
-appeared and how to fill it when reading V1:
+Suppose `Receipt` starts with an `amount_cents` field, and all V1 amounts are in USD.
+V2 adds `currency`. One declaration describes both versions and the backfill for
+the new field:
 
 <!-- quick-example:v2.rs -->
 ```rust
@@ -59,7 +61,13 @@ This history requires a configured package with its
 The [setup below](#start-an-empty-package) explains initialization and freezing.
 The receipt and invoice are separate examples; run each in a fresh package.
 
-Append these tests to the V2 declaration:
+A V1 receipt has this JSON representation:
+
+```json
+{"amount_cents":1200}
+```
+
+Append these tests to the V2 declaration to read V1 and write V2:
 
 <!-- quick-example:runtime-tests.rs -->
 ```rust
