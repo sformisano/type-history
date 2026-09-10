@@ -27,7 +27,8 @@ pub enum InvalidTypeIdentity {
 /// Identities contain 1–255 ASCII bytes. Each starts with a lowercase letter,
 /// followed by lowercase letters, digits, or underscores. Optional dots separate
 /// segments that follow the same rule: `receipt_created` and `shop.receipt` are
-/// both valid. An identity must stay unchanged after its history is frozen.
+/// both valid. Once a history is frozen, the build hook rejects changes to its
+/// identity.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
 #[serde(transparent)]
 pub struct TypeIdentity(Cow<'static, str>);

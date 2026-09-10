@@ -61,7 +61,7 @@ pub struct ReceiptCreated {
 }
 ```
 
-- `stable_id` identifies this history. Keep it unchanged when renaming the Rust type.
+- `stable_id` identifies this history. Once frozen, changing it fails the build.
 - `added_at = v2` introduces `currency` in V2.
 - `backfill_value` supplies `"USD"` when converting V1 events, because the shop accepted only US dollars then.
 
@@ -227,7 +227,8 @@ pub struct ReceiptCreated {
 This declaration gives Type History two pieces of information:
 
 - **Stable identity:** `shop.receipt.created` identifies this history in stored records.
-  Keep it unchanged when renaming the Rust type or moving its module.
+  Once frozen, changing it fails the build. Rust type and module names can change
+  without changing this identity.
 - **Initial fields:** `amount_cents` belongs to V1. Fields without history
   attributes exist from V1 by default.
 
@@ -417,9 +418,9 @@ The rules are:
 
 Declare it with `stable_id = "receipt_created"`.
 Existing dotted IDs such as `billing.invoice.issued` remain valid.
-Once frozen, the identity belongs to that history and must survive Rust renames and module moves.
-Builds and lifecycle commands check it against the committed ledger, just as they
-check historical field shapes. Resetting a schema does not allow changing its identity.
+Builds and lifecycle commands reject changes to a frozen identity, just as they
+reject changes to historical field shapes. Rust types and modules can be renamed
+without changing that identity. Resetting a schema does not allow changing its identity.
 
 ## Evolve an invoice through V1, V2, and V3
 
@@ -1046,8 +1047,8 @@ This catches changes made through type aliases or dependencies as well as direct
 
 ### What builds reject
 
-- **Changed stable identity:** A frozen history must retain its exact `stable_id`
-  value, even when its Rust name or module changes.
+- **Changed stable identity:** Changing a frozen history's `stable_id` fails the
+  build, even when its Rust name or module changes.
 - **Changed historical fields:** A frozen version must keep its serialized field
   names, types, and nested structure.
 - **Deleted history:** A frozen history or retained version cannot disappear from

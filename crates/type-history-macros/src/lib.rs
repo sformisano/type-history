@@ -30,7 +30,8 @@ use type_history_codegen::{
 /// The alias provides `into_versioned` and `from_versioned` methods. They keep
 /// identity and version metadata with the data and load the current type without
 /// requiring application code to select numbered types. The `stable_id` value
-/// is frozen with the schemas and must survive Rust type and module renames.
+/// is frozen with the schemas. Builds reject later changes to that value,
+/// even when the Rust type or its module is renamed.
 ///
 /// Ordinary records implement `Clone`, `PartialEq`, and field-wise `Debug`.
 /// The optional `redacted` argument requires the `redactable` feature on the

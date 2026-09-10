@@ -118,7 +118,7 @@ The fixed generated `Debug` does not execute that code.
 Ordinary Serde serialization always writes the original field values.
 This also applies to `Versioned`, whose envelope preserves the historical payload's strict codecs.
 Never persist `to_redacted().json()` as a historical payload.
-Keep the history's `stable_id` unchanged after freezing.
+Changing a frozen history's `stable_id` fails the build.
 
 A field policy applies across that field's complete retained lifetime.
 Added fields acquire the policy at their first version.

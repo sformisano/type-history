@@ -23,8 +23,8 @@
 //! }
 //! ```
 //!
-//! The identity is frozen with the schemas. Keep its value when renaming a Rust
-//! type: changing it would make earlier data belong to a different history.
+//! The identity is frozen with the schemas. Builds reject changes to that value,
+//! even when the Rust type or its module is renamed.
 //!
 //! Add the runtime and build hook to `Cargo.toml`:
 //!

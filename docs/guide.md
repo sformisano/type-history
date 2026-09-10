@@ -33,7 +33,8 @@ source version, and matching historical data without separate metadata arguments
 The application chooses storage and a Serde format supporting maps and named payload fields.
 JSON and MessagePack's `to_vec_named` support that representation.
 
-Declare the identity with `stable_id` and keep its exact value after freezing.
+The first freeze records `stable_id` in the ledger. Builds and lifecycle commands
+reject later changes to that value.
 Renaming a Rust type or moving its module does not change that identity.
 
 ## Add conversions that use earlier fields

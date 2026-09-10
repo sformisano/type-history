@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- State explicitly that builds reject changes to a frozen `stable_id`.
 - Clarify how numbered structs relate to the current type alias, with a
   generated alias example in the README and matching API documentation.
 - Accept simple stable IDs such as `receipt_created` and optional namespaces
