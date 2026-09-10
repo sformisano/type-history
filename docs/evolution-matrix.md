@@ -121,14 +121,14 @@ Case IDs identify behavior families; this document is not a test-run report.
 | M110 | Redactable wrapper or nested history field | S | Core-owned transparent schema adapters and generated nested schema contracts |
 | M111 | Renamed Typehistory without direct Redactable | S | Generated records use runtime reexports |
 | M112 | Upstream Redactable derive on supporting record | S | Requires direct Redactable 0.12.0 dependency; renamed dependency supported |
-| M113 | Frontend-owned Axis error projection | S | Generic GenerationPaths.error constructors receive concrete owned callback errors |
+| M113 | Frontend-owned error projection | S | Generic GenerationPaths.error constructors receive concrete owned callback errors |
 
 ## Versioned values and stable identity
 
 | ID | Case | Class | Rule / expected outcome |
 |---|---|---|---|
 | M120 | `stable_id` declaration | S | Exact identity stays unchanged after freezing, including across Rust renames and module moves |
-| M121 | Former `id` argument | R | Change the argument spelling to `stable_id`; preserve the identity value and existing ledger |
+| M121 | Unknown struct argument | R | Only documented history argument keys are accepted |
 | M122 | Current value serialized as `Versioned<T>` | S | `into_versioned` stamps the current identity and version; callers cannot replace metadata independently |
 | M123 | Historical `Versioned<T>` converted through current alias | S | Deserialization selects the exact retained payload; `from_versioned` applies adjacent conversions with source context |
 | M124 | Historical envelope serialized without conversion | S | Keep its historical version and matching data; wrap the converted current value to emit the latest version |

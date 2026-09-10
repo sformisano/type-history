@@ -6,19 +6,27 @@ Cargo combines dependency features, so enabling the feature alone never selects 
 
 ## Setup
 
-Enable `features = ["redactable"]` on both `typehistory` and `typehistory-build` in the consuming package.
+Enable the feature on both dependencies in `Cargo.toml`:
+
+```toml
+[dependencies]
+typehistory = { version = "0.1", features = ["redactable"] }
+
+[build-dependencies]
+typehistory-build = { version = "0.1", features = ["redactable"] }
+```
+
 Keep the regular `build.rs`, `typehistory.toml`, and ledger setup from the main tutorial.
-Build the CLI with the same capability:
+Install the CLI with the same feature:
 
 ```sh
-cargo install --path "$TYPEHISTORY_CHECKOUT/crates/cargo-typehistory" --locked --features redactable
+cargo install cargo-typehistory --version 0.1 --locked --features redactable
 ```
 
 All six Typehistory crates expose the default-disabled feature.
 The runtime enables its core and procedural macro capabilities.
 The build hook and CLI propagate the capability through code generation.
 Without this feature, the resolved dependency graph contains no Redactable package.
-The repository lockfile still records optional packages so both configurations can use `--locked`.
 
 The integration pins **Redactable 0.12.0** with `default-features = false` and `features = ["redaction"]`.
 Its released runtime and derive sources define the supported contracts:
@@ -109,8 +117,7 @@ The fixed generated `Debug` does not execute that code.
 Ordinary Serde serialization always writes the original field values.
 This also applies to `Versioned`, whose envelope preserves the historical payload's strict codecs.
 Never persist `to_redacted().json()` as a historical payload.
-Keep the exact `stable_id` value when updating the former `id` argument spelling.
-The ledger format and frozen payload schemas do not change.
+Keep the history's `stable_id` unchanged after freezing.
 
 A field policy applies across that field's complete retained lifetime.
 Added fields acquire the policy at their first version.
@@ -170,7 +177,7 @@ They fall back to `::redactable` when discovery fails and do not discover Typehi
 Unlike Typehistory's shorthand, upstream derives require an explicit policy, such as `#[sensitive(redactable::Secret)]`.
 Use the same pinned release to avoid distinct trait versions.
 
-## Axis and other macro frontends
+## Custom macro frontends
 
 `RecordInput.redacted` selects record contracts for `generate_history`.
 `GenerationPaths.support` supplies the runtime facade; opted records require its `redactable` reexport.
@@ -185,9 +192,7 @@ upcast<E>(identity: TypeIdentity, stored: PayloadVersion,
 ```
 
 The frontend owns the generic bound on `E` and projects the concrete error in `upcast`.
-Axis can require its own `ToRedactedError`, preserving structured error-tree fields before erasure.
-Redactable's `ToRedacted` returns a `RedactedValue`; it is not Axis's `ToRedactedError` contract.
-Axis error trees, event traits, and metadata stay in Axis.
+This lets a framework preserve its own structured errors before erasing their concrete types.
 Public `DecodeContext` constructors support frontend-owned error storage without requiring a shared error-tree abstraction.
 
 The standalone macro adds `Versioned` support through the separate `generate_versioned` entry point.
@@ -195,8 +200,5 @@ Existing `generate_history` consumers keep their raw codecs and frontend-owned c
 
 `redaction::record` in `typehistory-codegen` generates only redaction traits for a concrete named supporting record.
 The caller supplies `Clone`, `Serialize`, and its own codecs and schema implementations.
-This interface does not implement Axis event traits or an enum/value macro frontend.
 
 The standalone consumer suite exercises these generation interfaces with a frontend-owned structured error.
-The Axis extraction checkout still calls removed helpers and uses different constructor signatures.
-This integration does not establish that the existing Axis checkout builds against these changes.

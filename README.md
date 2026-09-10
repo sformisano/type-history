@@ -44,8 +44,7 @@ Compile-time checks cover:
 - [Modules, dependency names, and nested values](#modules-dependency-names-and-nested-values)
 - [Supported types and limits](#supported-scope)
 - [Optional Redactable integration](#optional-redactable-integration)
-- [Origin in Axis](#axis-integration)
-- [Crates and development](#crates-and-development)
+- [Crates and further reading](#crates-and-further-reading)
 
 ## When to use Typehistory
 
@@ -85,55 +84,46 @@ The tutorial follows this change from start to finish:
 
 ### 1. Create the package
 
-The crates are not yet published on crates.io. This tutorial uses a local
-checkout of the private repository, which requires repository access.
-You can also [depend on an exact Git revision](#use-a-git-revision).
+Install the Cargo subcommand from crates.io:
 
-Three packages have different jobs:
+```sh
+cargo install cargo-typehistory --version 0.1 --locked
+```
+
+Typehistory requires Rust 1.97 or later. Three packages have different jobs:
 
 | Package | Why the example needs it |
 | --- | --- |
-| `typehistory` | Provides the history declaration, generated types, and decoder |
+| `typehistory` | Provides the history declaration, generated types, and versioned values |
 | `typehistory-build` | Makes Cargo check that previously frozen versions remain intact |
 | `cargo-typehistory` | Creates the schema file and freezes new versions |
 
-Use the repository's pinned Rust 1.97.1 toolchain. Choose a directory outside
-this repository's workspace for the new package.
-
-Set `TYPEHISTORY_CHECKOUT` to the absolute path of your checkout.
+Create a library package:
 
 ```sh
-export RUSTUP_TOOLCHAIN=1.97.1
-export TYPEHISTORY_CHECKOUT=/absolute/path/to/typehistory
-cargo install --path "$TYPEHISTORY_CHECKOUT/crates/cargo-typehistory" --locked
 cargo new --lib receipt-history --edition 2024
 cd receipt-history
 ```
 
-Replace `Cargo.toml` with this manifest.
+Replace `Cargo.toml` with this manifest:
 
 ```toml
 [package]
 name = "receipt-history"
-version = "0.0.0"
+version = "0.1.0"
 edition = "2024"
-publish = false
-build = "build.rs"
-
-[workspace]
 
 [dependencies]
-typehistory = { path = "/absolute/path/to/typehistory/crates/typehistory" }
+typehistory = "0.1"
 serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0.149"
+serde_json = "1.0"
 
 [build-dependencies]
-typehistory-build = { path = "/absolute/path/to/typehistory/crates/typehistory-build" }
+typehistory-build = "0.1"
 ```
 
-Replace both checkout paths with your actual absolute path. Cargo does not expand
-environment variables inside TOML. The tests use `serde_json` to write receipts.
-The nested record example later in this README also uses Serde derives.
+The tests use `serde_json` to write receipts. The nested record example later in
+this README also uses Serde derives.
 
 ### 2. Initialize the schema file
 
@@ -351,34 +341,6 @@ cargo build --release --locked
 The ledger now records both V1 and V2. Commit its update with the changed
 declaration and conversion tests. The next change can introduce V3.
 
-### Use a Git revision
-
-An exact Git revision can replace the local checkout dependencies. Both library
-packages and the installed CLI must come from that revision.
-
-Replace the dependency sections in `Cargo.toml` with these entries:
-
-```toml
-[dependencies]
-typehistory = { git = "ssh://git@github.com/sformisano/typehistory.git", rev = "FULL_COMMIT_ID" }
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0.149"
-
-[build-dependencies]
-typehistory-build = { git = "ssh://git@github.com/sformisano/typehistory.git", rev = "FULL_COMMIT_ID" }
-```
-
-Replace `FULL_COMMIT_ID` with one full revision containing the unpublished crates.
-
-Install the CLI from that revision:
-
-```sh
-cargo install --git ssh://git@github.com/sformisano/typehistory.git \
-  --rev FULL_COMMIT_ID --locked cargo-typehistory
-```
-
-Update the lockfile and fetch dependencies before the next lifecycle command.
-
 ## Design principles
 
 The receipt example uses a few rules that also apply to longer histories:
@@ -428,9 +390,7 @@ A history identity such as `billing.invoice.issued` follows these rules:
   letters, digits, or underscores.
 - At most 255 ASCII bytes in total.
 
-Declare it with `stable_id = "billing.invoice.issued"`. The `id =` spelling is unsupported.
-When updating an existing declaration, change only the argument name; keep the exact identity value.
-The ledger format and frozen payload schemas remain unchanged.
+Declare it with `stable_id = "billing.invoice.issued"`.
 Once frozen, the identity belongs to that history and must survive Rust renames and module moves.
 Builds and lifecycle commands check it against the committed ledger, just as they
 check historical field shapes. Resetting a schema does not allow changing its identity.
@@ -451,7 +411,7 @@ This example covers:
 Create a fresh package called `invoice-history`. It needs its own ledger so you
 can declare and freeze V1 before adding V2.
 
-Choose a directory outside both `receipt-history` and this repository's workspace.
+Create it alongside `receipt-history`, in a separate directory.
 
 ```sh
 cargo new --lib invoice-history --edition 2024
@@ -1216,18 +1176,7 @@ for redacted histories. Persist those payloads; use redacted output for display.
 The guide covers field policies, nested records, callback errors, and renamed
 dependencies, with examples using Redactable 0.12.0.
 
-## Axis integration
-
-Typehistory was extracted from Axis's event history implementation. The
-[Axis authoring guide at the extraction revision](https://github.com/sformisano/axis/blob/af7b96c3f0744cdfd170c50bb321d5dfd02be8ea/docs/design/domain-authoring-macros.md#event-field-history)
-describes its original use in `aggregate!` declarations.
-
-The [generation interfaces](docs/redactable.md#axis-and-other-macro-frontends)
-allow an integrating framework to supply its own errors and traits.
-A standalone consumer tests the interfaces intended for Axis. Updating Axis's
-own macros to use them is separate integration work.
-
-## Crates and development
+## Crates and further reading
 
 Applications normally depend on `typehistory` and `typehistory-build`.
 The workspace separates runtime code, code generation, and development tooling:
@@ -1247,39 +1196,9 @@ For more detail:
 - The [example guide](docs/guide.md) explains what the receipt and invoice tests check.
 - The [tutorial integration tests](crates/cargo-typehistory/tests/standalone/tutorial.rs) check intermediate edits and expected failures.
 
-The [invoice reference application](examples/invoice/README.md) is a runnable
-Cargo package with a committed history ledger. Try it with
-`cargo run -p invoice-history --locked`.
-
-Install the pinned Rust toolchain with rustup. Git is needed to clone the repository.
-Set `TMPDIR` to a short disk path with room for disposable consumer builds.
-
-Run from the repository root:
-
-```sh
-cargo fetch --locked
-cargo fmt --all --check
-cargo clippy --workspace --all-targets --no-default-features --locked --target-dir target/clippy -- -Dwarnings
-cargo test --workspace --all-targets --no-default-features --locked
-cargo test --workspace --doc --no-default-features --locked
-cargo doc --workspace --no-deps --no-default-features --locked
-cargo build --workspace --release --no-default-features --locked
-
-cargo clippy --workspace --all-targets --all-features --locked --target-dir target/clippy -- -Dwarnings
-cargo test --workspace --all-targets --all-features --locked
-cargo test --workspace --doc --all-features --locked
-cargo doc --workspace --no-deps --all-features --locked
-cargo build --workspace --release --all-features --locked
-
-cargo run -p invoice-history --release --locked
-cargo run -p cargo-typehistory --locked -- check --package invoice-history
-```
-
-Set `RUSTDOCFLAGS=-Dwarnings` when checking documentation, as CI does.
-GitHub Actions runs these Cargo checks in both feature modes. Workspace tests
-include the reference application and Rust integration tests that compile the
-marked README blocks directly, exercise lifecycle commands, and check expected
-failures. Normal builds use `target`; Clippy uses `target/clippy`.
+The [invoice reference application](examples/invoice/README.md) includes a complete
+history declaration, frozen ledger, and tests. See [Contributing](CONTRIBUTING.md)
+for repository build and test commands.
 
 ## License
 

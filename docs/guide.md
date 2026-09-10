@@ -33,7 +33,6 @@ JSON and MessagePack's `to_vec_named` support that representation.
 
 Declare the identity with `stable_id` and keep its exact value after freezing.
 Renaming a Rust type or moving its module does not change that identity.
-Updating the former `id` spelling changes neither the ledger format nor frozen payload schemas.
 
 ## Add conversions that use earlier fields
 
@@ -112,14 +111,11 @@ V1 through V3 from the invoice walkthrough.
 
 ## Run the executable checks
 
-Run `cargo test -p cargo-typehistory --test standalone tutorial --locked` from
-the repository root. The tests extract the marked Rust blocks directly from the
-README and run the receipt and invoice sequences in owned temporary consumers.
-Each expected failure must produce both a nonzero exit and the expected diagnostic.
-Temporary consumers are removed when their fixtures are dropped.
+Run `cargo test` in each tutorial package to check its conversion examples.
+The repository's [contributor guide](../CONTRIBUTING.md) covers the full suite,
+including tests that compile the README examples and check rejected declarations.
 
-The [reference application](../examples/invoice/README.md) is a separate runnable
-Cargo package with a committed frozen ledger. Use `cargo run -p invoice-history`
-to see historical decoding and current serialization without changing sources.
+The [reference application](../examples/invoice/README.md) includes the completed
+invoice history, its frozen ledger, and conversion tests.
 Conversion tests for a real application still need representative records and
 the application's own business rules.

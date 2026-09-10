@@ -2,8 +2,7 @@
 
 This Cargo package reads a stored V1 invoice into the current V3 type, then
 serializes a new current invoice. Its [declaration](src/lib.rs), build hook,
-configuration, and frozen schema ledger are committed, so it runs from a fresh
-checkout without initialization or freezing.
+configuration, and frozen schema ledger are included in the example.
 
 Run from the repository root:
 

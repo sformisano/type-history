@@ -2,8 +2,8 @@
 
 ## Unreleased
 
-- Rename the history argument `id` to `stable_id`. Keep the same identity value
-  when updating declarations; frozen identities and ledger files remain unchanged.
+- Document crates.io dependencies and CLI installation in the setup guides.
+- Add `stable_id` declarations checked against the frozen history ledger.
 - Add `Versioned<T>` with generated `into_versioned` and `from_versioned`
   methods on the current alias. Identity, version, and data travel together;
   deserialization selects the historical type before conversion to the current
@@ -25,7 +25,6 @@
   safe callback errors for opted histories. Payload serialization and frozen
   wire schemas remain independent of redaction policies.
 - Document custom frontend error projection through `GenerationPaths.error`.
-  A standalone consumer exercises the intended Axis interface; the existing
-  Axis checkout still requires its own integration changes.
+  A standalone consumer exercises the interface with structured errors.
 - Extend repository checks to both feature modes, including external consumers,
   documentation examples, doctests, and release builds.

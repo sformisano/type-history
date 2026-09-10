@@ -12,8 +12,18 @@
 //! The identity is frozen with the schemas. Keep its value when renaming a Rust
 //! type: changing it would make earlier data belong to a different history.
 //!
-//! A standalone library requires `typehistory.toml`, a build dependency on
-//! `typehistory-build`, and `typehistory_build::compile()` in `build.rs`.
+//! Add the runtime and build hook to `Cargo.toml`:
+//!
+//! ```toml
+//! [dependencies]
+//! typehistory = "0.1"
+//!
+//! [build-dependencies]
+//! typehistory-build = "0.1"
+//! ```
+//!
+//! Install the CLI with `cargo install cargo-typehistory --version 0.1 --locked`.
+//! Configure `typehistory.toml` and call `typehistory_build::compile()` from `build.rs`.
 //! Before declaring histories, initialize the empty ledger with
 //! `cargo typehistory init --package YOUR_PACKAGE`. Replace `YOUR_PACKAGE` with
 //! the library package's name. The [guide](https://github.com/sformisano/typehistory/blob/main/README.md)
