@@ -60,10 +60,8 @@ uses today. Common examples include:
 - **Versioned documents:** Read records with different stored versions through
   one current Rust type.
 
-Your application stores each record's identity, version, and JSON bytes.
-Typehistory reads those bytes and applies the conversions needed to produce the
-current type. Your application handles storage, event replay, and any writes
-back to the database.
+Your application decides how records are stored and retrieved. Typehistory
+provides the versioned Rust types and conversions needed to work with earlier records.
 
 ## Quick example
 
@@ -269,7 +267,8 @@ A V1 receipt can be represented as this JSON:
 {"amount_cents":1200}
 ```
 
-Pass these bytes to `decode::<Receipt>` with the stored identity and version.
+This example uses Typehistory's JSON decoder. Pass these bytes to
+`decode::<Receipt>` with the history identity and version V1.
 The decoder then:
 
 1. Checks that the identity matches `Receipt::TYPE`.
@@ -326,7 +325,8 @@ These tests check two uses of the same current type:
 
 The backfill runs only when converting older records. New `Receipt` values must
 supply their currency explicitly. Decoding leaves the stored bytes unchanged.
-When saving a record, keep its identity, version, and bytes together.
+The decoder needs the history identity and version alongside its JSON input.
+Your application decides how to store or obtain that information.
 
 Run the tests:
 
@@ -810,14 +810,16 @@ The [evolution matrix](docs/evolution-matrix.md) records the supported and rejec
 
 ## Decode stored records and handle failures
 
-Use `decode::<Invoice>(&identity, version, bytes)` to read a stored invoice into
-the current type. Supply the metadata saved with those bytes:
+The current `decode` API accepts JSON. Use
+`decode::<Invoice>(&identity, version, bytes)` with these inputs:
 
-- **Identity:** Which history the record belongs to. Convert an identity read
-  from storage with `TypeIdentity::try_from(String)`.
-- **Version:** Which version wrote the record. Convert a raw number with
+- **Identity:** Which history the record belongs to. Validate an identity obtained
+  at runtime with `TypeIdentity::try_from(String)`.
+- **Version:** Which version the input represents. Convert a raw number with
   `PayloadVersion::try_from_raw(u32)`; zero is invalid.
 - **Bytes:** The record's JSON payload.
+
+Your application prepares these inputs from its own storage representation.
 
 The decoder checks the identity and version before parsing JSON. It then reads
 the matching historical type and applies each conversion up to the current version.
