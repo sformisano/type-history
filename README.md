@@ -1,17 +1,27 @@
 # Typehistory
 
-Typehistory describes how a Rust record changes over time. You keep its field
-additions, changes, removals, and conversion rules in one declaration. Typehistory
-generates the earlier record types and the conversions between consecutive versions.
+Typehistory is a Rust library that lets you evolve structs while preserving
+support for data written using earlier versions.
 
-This keeps earlier versions available while application code uses the latest
-type. Once you freeze a version, Typehistory saves its schema in a committed
-file. Later Cargo builds reject changes to that frozen schema or deletion of
-history that the file still records.
+It works in three steps:
 
-Typehistory also reads earlier records into the current type. Its current decoder
-uses JSON and an explicit version number to choose the starting type. Your
-application handles storage and delivery.
+1. You describe field changes and conversion rules through attributes on your
+   struct’s fields.
+2. Typehistory generates a Rust type for each supported version and the code that
+   applies your conversion rules between versions.
+3. Compile-time checks reject struct changes that lack the required Typehistory
+   attributes, so you catch those mistakes before deployment rather than at
+   runtime in production.
+
+Compile-time checks cover additions, type changes, and removals.
+
+- When you add a new field, an attribute records which version introduced it and
+  what fallback value to use when reading older records.
+- When a field changes type, an attribute records which version changed that type
+  and provides a conversion from the old type to the new type.
+- When you remove a field, an attribute records which version removed it. Earlier
+  versions retain the field so older data can still be read. The current type
+  omits it, so consumer code that still accesses it fails to compile.
 
 ## Table of contents
 
