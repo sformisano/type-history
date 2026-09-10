@@ -1,0 +1,12 @@
+[package]
+name = "typehistory"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+typehistory-core = { path = "../core", version = "0.1.0" }
+typehistory-macros = { path = "../macros", version = "0.1.0" }

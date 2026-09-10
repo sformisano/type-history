@@ -1,0 +1,4 @@
+/target/
+**/target/
+**/typehistory/.schemas.lock
+.DS_Store
