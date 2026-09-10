@@ -99,7 +99,7 @@ Case IDs identify behavior families; this document is not a test-run report.
 | M73 | Dev draft vs release draft | S/R | Warning in dev; hard error in release family and strict dev |
 | M75 | Decode old record requiring backfill despite current serde permissiveness | S | Decode exact old type then explicit adjacent addition; never try current first |
 | M76 | Omitted Option key versus explicit null | S | Preserve existing exact-type serde behavior; omission may deserialize as None |
-| M77 | Missing required field/unknown JSON key/invalid newtype | R | Exact Vn decoder fails; ordinary errors retain the JSON source, redacted errors capture a fixed safe message |
+| M77 | Missing required field/unknown JSON key/invalid newtype | R | Exact historical decoder fails; `Versioned` returns the format's error, while low-level ordinary JSON errors retain their source |
 | M78 | Duplicate JSON object key | R | Feed raw bytes to exact typed decoder, preserving existing duplicate-field rejection; do not preprocess into map/Value |
 | M79 | Requested below-floor/future version | R | Unsupported version, no speculative current decode |
 | M83 | Failed adjacent conversion | R | Preserve stored version and failing step; ordinary errors retain the original source, redacted errors retain only the safe projection |
@@ -117,11 +117,26 @@ Case IDs identify behavior families; this document is not a test-run report.
 | M106 | Nested type with raw or panicking Debug | S | Generated redacted Debug never reads fields |
 | M107 | Add, convert, or remove a policy-bearing field | S | Policy follows its retained lifetime and is checked for every retained type |
 | M108 | Edit formatting policy only | S | Revalidate policies without changing frozen wire schemas |
-| M109 | Redacted callback/JSON failure | R | Preserve identity and version context; capture only safe causes and terminate raw source chains |
+| M109 | Redacted callback or low-level JSON failure | R | Preserve identity and version context; capture only safe causes and terminate raw source chains |
 | M110 | Redactable wrapper or nested history field | S | Core-owned transparent schema adapters and generated nested schema contracts |
 | M111 | Renamed Typehistory without direct Redactable | S | Generated records use runtime reexports |
 | M112 | Upstream Redactable derive on supporting record | S | Requires direct Redactable 0.12.0 dependency; renamed dependency supported |
 | M113 | Frontend-owned Axis error projection | S | Generic GenerationPaths.error constructors receive concrete owned callback errors |
+
+## Versioned values and stable identity
+
+| ID | Case | Class | Rule / expected outcome |
+|---|---|---|---|
+| M120 | `stable_id` declaration | S | Exact identity stays unchanged after freezing, including across Rust renames and module moves |
+| M121 | Former `id` argument | R | Change the argument spelling to `stable_id`; preserve the identity value and existing ledger |
+| M122 | Current value serialized as `Versioned<T>` | S | `into_versioned` stamps the current identity and version; callers cannot replace metadata independently |
+| M123 | Historical `Versioned<T>` converted through current alias | S | Deserialization selects the exact retained payload; `from_versioned` applies adjacent conversions with source context |
+| M124 | Historical envelope serialized without conversion | S | Keep its historical version and matching data; wrap the converted current value to emit the latest version |
+| M125 | Empty envelope, extra map entries, wrong identity, or invalid version | R | Two single-entry maps are required; check identity and supported version before decoding payload fields |
+| M126 | JSON or MessagePack with named fields | S | Serde reads maps directly through the exact historical codecs; no generic value buffer |
+| M127 | Format using payload struct arrays | U | The generated payload decoder requires maps; support depends on the format and field types |
+| M128 | Redacted `Versioned` parse failure | R | Discard raw errors inside `Deserialize`; serializer and external trailing-input errors remain outside that boundary |
+| M129 | Raw JSON supplied as a versioned envelope | R | Existing raw JSON needs the low-level decoder and separately stored metadata |
 
 ## Verification and limits
 

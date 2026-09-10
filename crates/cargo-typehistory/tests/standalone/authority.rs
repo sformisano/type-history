@@ -81,7 +81,7 @@ pub struct Details { pub quantity: u32 }
         "src/lib.rs",
         r#"
 mod details;
-#[history_api::history(id = "billing.invoice.issued")]
+#[history_api::history(stable_id = "billing.invoice.issued")]
 pub struct Invoice { pub details: details::Details }
 "#,
     );
@@ -138,7 +138,7 @@ serde = {{ version = "1.0", features = ["derive"] }}
     fixture.write(
         "src/lib.rs",
         r#"
-#[history_api::history(id = "billing.invoice.issued")]
+#[history_api::history(stable_id = "billing.invoice.issued")]
 pub struct Invoice { pub details: history_details::Details }
 "#,
     );

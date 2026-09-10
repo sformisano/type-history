@@ -13,6 +13,7 @@ pub mod redaction;
 pub use redactable;
 mod identity;
 pub mod resolved;
+mod versioned;
 
 pub use error::{decode, DecodeError, HasHistory, ReadError};
 pub use history::{DecodeContext, DecodeFailureKind, History};
@@ -20,6 +21,9 @@ pub use identity::{InvalidPayloadVersion, InvalidTypeIdentity, PayloadVersion, T
 pub use resolved::{
     ConstantShape, FieldSchema, JsonSchemaField, ResolvedSchema, SchemaShape, WireNode,
 };
+pub use versioned::Versioned;
+#[doc(hidden)]
+pub use versioned::VersionedHistory;
 
 #[doc(hidden)]
 pub use {schemars, serde, serde_json};

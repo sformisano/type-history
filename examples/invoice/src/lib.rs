@@ -14,7 +14,7 @@ impl Display for ConvertError {
 
 impl Error for ConvertError {}
 
-#[typehistory::history(id = "billing.invoice.issued")]
+#[typehistory::history(stable_id = "billing.invoice.issued")]
 pub struct Invoice {
     #[history(removed_at = v2)]
     pub legacy: String,

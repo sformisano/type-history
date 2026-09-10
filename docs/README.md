@@ -2,7 +2,11 @@
 
 These crates implement declarative histories for Rust record types. The
 [repository README](../README.md) starts with a complete Receipt tutorial and
-continues with field rules, lifecycle commands, decoding, and supported types.
+continues with `Versioned`, field rules, lifecycle commands, and supported types.
+
+Applications serialize `receipt.into_versioned()` with a supported Serde format.
+They deserialize a `Versioned<Receipt>` and call `Receipt::from_versioned` to obtain the current type.
+Typehistory keeps identity and version with the matching data; the application owns storage.
 
 The [guide](guide.md) explains the changes in the Receipt and Invoice examples
 and what their tests establish. The [reference application](../examples/invoice/README.md)

@@ -31,11 +31,11 @@ Its released runtime and derive sources define the supported contracts:
 This example belongs in an initialized consumer library:
 
 ```rust
-use typehistory::{history, PayloadVersion};
+use std::error::Error;
+use typehistory::history;
 use typehistory::redactable::ToRedacted;
-use typehistory::redaction::{self, HasRedactedHistory, RedactedReadError};
 
-#[history(id = "billing.receipt.recorded", redacted)]
+#[history(stable_id = "billing.receipt.recorded", redacted)]
 pub struct Receipt {
     #[sensitive]
     pub customer: String,
@@ -43,10 +43,9 @@ pub struct Receipt {
     pub amount: u32,
 }
 
-pub fn read_receipt(bytes: &[u8]) -> Result<Receipt, RedactedReadError> {
-    let receipt = redaction::decode::<Receipt>(
-        &Receipt::TYPE, PayloadVersion::INITIAL, bytes,
-    )?;
+pub fn read_receipt(bytes: &[u8]) -> Result<Receipt, Box<dyn Error>> {
+    let stored = serde_json::from_slice(bytes)?;
+    let receipt = Receipt::from_versioned(stored)?;
     let safe_json = receipt.to_redacted().json();
     assert_eq!(safe_json["customer"], "[REDACTED]");
     Ok(receipt)
@@ -54,9 +53,20 @@ pub fn read_receipt(bytes: &[u8]) -> Result<Receipt, RedactedReadError> {
 ```
 
 The external consumer suite compiles this example from this document.
+Its input is a complete stored record:
+
+```json
+{"billing.receipt.recorded":{"1":{"customer":"Alice","amount":42}}}
+```
+
+Write a current receipt with `serde_json::to_vec(&receipt.into_versioned())`.
+Both generated methods use the current alias and need no trait imports.
+`Versioned` keeps the stable identity, source version, and historical data together.
+The application owns storage and chooses a format supporting maps and named payload fields.
+
 The ordinary `HasHistory`, `decode`, `DecodeError`, and `ReadError` remain unchanged.
-Redacted histories instead implement `redaction::HasRedactedHistory` and use `redaction::decode`.
-Their descriptor is `History<T, RedactedDecodeError>`.
+For existing raw JSON with separate metadata, redacted histories retain `redaction::decode` and the `redaction::HasRedactedHistory` trait.
+Their low-level descriptor is `History<T, RedactedDecodeError>`.
 
 ## Record traits and field policies
 
@@ -97,8 +107,10 @@ The fixed generated `Debug` does not execute that code.
 ## Payloads, nested records, and policy edits
 
 Ordinary Serde serialization always writes the original field values.
-It remains separate from redacted output and preserves payload bytes and strict decoding rules.
+This also applies to `Versioned`, whose envelope preserves the historical payload's strict codecs.
 Never persist `to_redacted().json()` as a historical payload.
+Keep the exact `stable_id` value when updating the former `id` argument spelling.
+The ledger format and frozen payload schemas do not change.
 
 A field policy applies across that field's complete retained lifetime.
 Added fields acquire the policy at their first version.
@@ -120,7 +132,8 @@ The adapters live in `typehistory-core`, which owns the schema traits and can le
 ## Callback errors and causes
 
 Ordinary callbacks still require `Error + Send + Sync + 'static`.
-Their concrete callback errors and JSON errors remain available through `Error::source()`.
+Their concrete errors remain available through `Error::source()` after `from_versioned` fails.
+The low-level JSON API also preserves original JSON errors.
 This contract stays unchanged in a graph containing both ordinary and redacted consumers.
 
 Redacted callbacks require only `ToRedacted`.
@@ -128,12 +141,21 @@ The generated call passes the concrete error into `RedactedDecodeError::upcast` 
 The constructor projects it once and drops the raw value.
 The safe wrapper never stores a raw error for later formatting.
 
-Redacted JSON failures discard the raw decoder error and retain a fixed safe message.
+`Receipt::from_versioned` returns `RedactedDecodeError` when a conversion fails.
 `Debug`, `Display`, Serde output, and `ToRedacted` expose only validated metadata and captured safe causes.
 Metadata includes identity, stored version, failure kind, and failing adjacent versions.
 `RedactedDecodeError::source()` returns `None`; `redacted_cause()` exposes the captured safe value.
 `RedactedReadError::source()` exposes only its `RedactedDecodeError`, whose source chain ends there.
 An identity mismatch has no source.
+
+For a redacted history, `Versioned::deserialize` discards parser errors without formatting them and returns a fixed safe message.
+The caller receives that message in the selected format's error type.
+This boundary covers identity, version, envelope, and historical payload decoding.
+It does not cover errors raised outside the implementation, including a format's trailing-input checks.
+Serialization also writes real data, and serializer errors are not universally redacted.
+Do not treat every error from the example's `Box<dyn Error>` as safe to log.
+
+The low-level `redaction::decode` API continues to discard raw JSON errors and retain a fixed safe cause.
 
 ## Renamed dependencies and derives
 
@@ -167,6 +189,9 @@ Axis can require its own `ToRedactedError`, preserving structured error-tree fie
 Redactable's `ToRedacted` returns a `RedactedValue`; it is not Axis's `ToRedactedError` contract.
 Axis error trees, event traits, and metadata stay in Axis.
 Public `DecodeContext` constructors support frontend-owned error storage without requiring a shared error-tree abstraction.
+
+The standalone macro adds `Versioned` support through the separate `generate_versioned` entry point.
+Existing `generate_history` consumers keep their raw codecs and frontend-owned contracts.
 
 `redaction::record` in `typehistory-codegen` generates only redaction traits for a concrete named supporting record.
 The caller supplies `Clone`, `Serialize`, and its own codecs and schema implementations.

@@ -158,8 +158,8 @@ fn standalone_import_requires_explicit_floor_and_complete_candidate() {
     fixture.write(
         "src/lib.rs",
         &V1.replace(
-            "id = \"billing.invoice.issued\"",
-            "id = \"billing.invoice.issued\", retained_from = v4",
+            "stable_id = \"billing.invoice.issued\"",
+            "stable_id = \"billing.invoice.issued\", retained_from = v4",
         ),
     );
     fixture.write(

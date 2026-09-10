@@ -6,7 +6,7 @@ use syn::parse_quote;
 
 fn main() {
     let (input, identity) = input::parse(
-        parse_quote!(id = "fixture.axis.record", redacted),
+        parse_quote!(stable_id = "fixture.axis.record", redacted),
         parse_quote! {
             pub struct AxisRecord {
                 #[sensitive]

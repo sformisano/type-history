@@ -21,10 +21,19 @@ After V2 is added, one declaration generates `ReceiptV1` and `ReceiptV2`.
 `Receipt` becomes an alias of `ReceiptV2`. The conversion fills V2's new currency
 field while leaving V1's generated type unchanged.
 
-The [receipt tests](../README.md#6-read-v1-and-write-v2) read V1 bytes and
-check the resulting V2 amount and currency. They also construct a new V2 receipt
-with `"EUR"` and serialize it. That second case shows that the backfill does not
-override a currency supplied by current application code.
+The [receipt tests](../README.md#6-read-v1-and-write-v2) deserialize a V1 `Versioned<Receipt>` and pass it to `Receipt::from_versioned`.
+They check the current amount and currency. They also construct a new `Receipt`
+with `"EUR"` and serialize `receipt.into_versioned()`.
+That second case shows that the backfill does not override a currency supplied by current application code.
+
+Application code uses `Receipt` throughout. `Versioned` carries the stable identity,
+source version, and matching historical data without separate metadata arguments.
+The application chooses storage and a Serde format supporting maps and named payload fields.
+JSON and MessagePack's `to_vec_named` support that representation.
+
+Declare the identity with `stable_id` and keep its exact value after freezing.
+Renaming a Rust type or moving its module does not change that identity.
+Updating the former `id` spelling changes neither the ledger format nor frozen payload schemas.
 
 ## Add conversions that use earlier fields
 
@@ -61,6 +70,10 @@ That error follows ordinary Rust error handling. The callback's error type imple
 `std::error::Error + Send + Sync + 'static`, and Typehistory preserves it as the cause.
 Version metadata tells the caller where conversion stopped; the cause explains
 why the callback rejected that value.
+
+Deserialization errors come from the selected Serde format. Conversion errors come
+from `Invoice::from_versioned`, after the complete stored record has been decoded.
+Reading a `Versioned` does not rewrite stored bytes or automatically run conversions.
 
 ## Check schemas and conversion results
 

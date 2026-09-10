@@ -11,18 +11,22 @@ use quote::{format_ident, quote};
 use std::path::PathBuf;
 use syn::{parse_macro_input, DeriveInput, Error, Ident, ItemStruct, Path, Result};
 use typehistory_codegen::{
-    generate::{generate_history, GenerationPaths},
+    generate::{generate_history, generate_versioned, GenerationPaths},
     history::HistoryPlan,
     ledger::{HistoryLedger, RecordMetadata, SchemaIdentity},
 };
 
 /// Replace a record inventory with its authorized retained versions.
 ///
-/// Requires `id = "billing.invoice.issued"` and package authority from the
+/// Requires `stable_id = "billing.invoice.issued"` and package authority from the
 /// Typehistory build hook. The optional `retained_from = vN` requires explicit
 /// import authority. Field `#[history(...)]` records describe additions, updates,
 /// and removals newest first. The macro supplies record traits and the current
 /// alias; additional derives on its input are rejected.
+/// The alias provides `into_versioned` and `from_versioned` methods. They keep
+/// identity and version metadata with the data and load the current type without
+/// requiring application code to select numbered types. The `stable_id` value
+/// is frozen with the schemas and must survive Rust type and module renames.
 ///
 /// Ordinary records implement `Clone`, `PartialEq`, and field-wise `Debug`.
 /// The optional `redacted` argument requires the `redactable` feature on the
@@ -106,6 +110,7 @@ fn expand(arguments: Arguments, item: ItemStruct) -> Result<Tokens> {
         helper_prefix: helper_prefix(&input.name),
     };
     let generated = generate_history(&input, &identity, &history, &paths)?;
+    let stored_record = generate_versioned(&input, &identity, &history, &paths)?;
     let items = generated.items;
     let current = generated.latest;
     let decoder = generated.decoder;
@@ -127,6 +132,7 @@ fn expand(arguments: Arguments, item: ItemStruct) -> Result<Tokens> {
     Ok(quote! {
         const _: &str = include_str!(#ledger_path);
         #items
+        #stored_record
         impl #history_trait for #current {
             const TYPE: #facade::TypeIdentity = #facade::TypeIdentity::new(#identity);
             const VERSION: #facade::PayloadVersion = match #facade::PayloadVersion::try_from_raw(#head) {

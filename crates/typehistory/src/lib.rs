@@ -1,9 +1,16 @@
 //! Versioned Rust records with explicit field conversions and frozen schema checks.
 //!
 //! `#[history]` generates a Rust struct for each supported version of a record.
-//! The original name aliases the latest struct, which implements [`HasHistory`].
-//! [`decode`] checks the stored identity and version before reading the JSON bytes.
-//! It then converts between consecutive versions until it reaches the latest type.
+//! The original name aliases the latest struct. Use its `into_versioned` method to
+//! create a [`Versioned`] containing the data and its generated metadata.
+//! Serialize that record with your chosen Serde format and storage. After
+//! deserialization, the alias's `from_versioned` method applies the declared
+//! conversions and returns the latest type. Application code does not select a
+//! numbered type or supply version metadata.
+//!
+//! Declare the history's identity with `#[history(stable_id = "shop.receipt.created")]`.
+//! The identity is frozen with the schemas. Keep its value when renaming a Rust
+//! type: changing it would make earlier data belong to a different history.
 //!
 //! A standalone library requires `typehistory.toml`, a build dependency on
 //! `typehistory-build`, and `typehistory_build::compile()` in `build.rs`.
@@ -12,7 +19,8 @@
 //! the library package's name. The [guide](https://github.com/sformisano/typehistory/blob/main/README.md)
 //! contains the setup walkthrough, field grammar, lifecycle commands, and error handling.
 //!
-//! Validate stored identity and version metadata before selecting a history:
+//! For existing storage that keeps JSON payloads and metadata separately, the
+//! low-level [`decode`] API remains available. Validate metadata at that boundary:
 //!
 //! ```
 //! # use std::error::Error;
@@ -31,16 +39,17 @@
 //! derive supplies the field contract for supporting named records.
 //!
 //! The optional `redactable` feature enables explicit `#[history(..., redacted)]`
-//! histories. Enable it on the build hook and CLI too. These histories use
-//! `redaction::HasRedactedHistory` and `redaction::decode`, with separate safe
-//! errors. Ordinary histories retain the contracts above in every feature mode.
+//! histories. Enable it on the build hook and CLI too. These histories use the
+//! same record methods with separate safe conversion errors. Their low-level
+//! JSON API is `redaction::decode`. Ordinary histories retain their error
+//! contracts in every feature mode.
 
 extern crate self as typehistory;
 
 pub use typehistory_core::resolved::{FieldSchema, JsonSchemaField, ResolvedSchema};
 pub use typehistory_core::{
     decode, DecodeContext, DecodeError, DecodeFailureKind, HasHistory, History,
-    InvalidPayloadVersion, InvalidTypeIdentity, PayloadVersion, ReadError, TypeIdentity,
+    InvalidPayloadVersion, InvalidTypeIdentity, PayloadVersion, ReadError, TypeIdentity, Versioned,
 };
 #[cfg(feature = "redactable")]
 pub use typehistory_core::{redactable, redaction};

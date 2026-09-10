@@ -13,9 +13,14 @@ cargo test -p invoice-history --locked
 cargo run -p invoice-history --release --locked
 ```
 
-The application prints the converted record and the current payload's identity,
-version, and JSON. Its [tests](tests/history.rs) check historical conversion,
-current payload round trips, strict decoding, and preserved callback errors.
+The application uses `Invoice` throughout. It wraps current values with
+`into_versioned`, serializes them, then calls `Invoice::from_versioned` after
+deserialization. It prints the resulting invoices.
+
+The [versioned value tests](tests/versioned.rs) cover JSON and MessagePack,
+historical conversion, metadata validation, and preserved callback errors.
+The [raw JSON tests](tests/history.rs) cover the existing low-level API for
+applications that already keep metadata separately.
 
 The [README tutorial](../../README.md#evolve-an-invoice-through-v1-v2-and-v3)
 explains how to author and freeze each version. Those intermediate edits,

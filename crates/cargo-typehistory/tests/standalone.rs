@@ -10,10 +10,14 @@ mod hygiene;
 mod lifecycle;
 #[path = "standalone/source_discovery.rs"]
 mod source_discovery;
+#[path = "standalone/stable_identity.rs"]
+mod stable_identity;
 #[path = "standalone/support.rs"]
 mod support;
 #[path = "standalone/tutorial.rs"]
 mod tutorial;
+#[path = "standalone/versioned.rs"]
+mod versioned;
 
 #[cfg(feature = "redactable")]
 #[path = "standalone/redaction.rs"]

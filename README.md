@@ -60,8 +60,9 @@ uses today. Common examples include:
 - **Versioned documents:** Read records with different stored versions through
   one current Rust type.
 
-Your application decides how records are stored and retrieved. Typehistory
-provides the versioned Rust types and conversions needed to work with earlier records.
+Your application chooses its storage and a supported Serde format. Typehistory
+keeps each record's stable identity, version, and data together in `Versioned`.
+Application code uses the current alias to write records and read earlier versions.
 
 ## Quick example
 
@@ -194,7 +195,7 @@ Write this complete `src/lib.rs`:
 
 <!-- quick-example:v1.rs -->
 ```rust
-#[typehistory::history(id = "shop.receipt.created")]
+#[typehistory::history(stable_id = "shop.receipt.created")]
 pub struct Receipt {
     pub amount_cents: u64,
 }
@@ -202,7 +203,7 @@ pub struct Receipt {
 
 This declaration gives Typehistory two pieces of information:
 
-- **Identity:** `shop.receipt.created` identifies this history in stored records.
+- **Stable identity:** `shop.receipt.created` identifies this history in stored records.
   Keep it unchanged when renaming the Rust type or moving its module.
 - **Initial fields:** `amount_cents` belongs to V1. Fields without history
   attributes exist from V1 by default.
@@ -232,7 +233,7 @@ Replace `src/lib.rs` with this complete declaration:
 
 <!-- quick-example:v2.rs -->
 ```rust
-#[typehistory::history(id = "shop.receipt.created")]
+#[typehistory::history(stable_id = "shop.receipt.created")]
 pub struct Receipt {
     pub amount_cents: u64,
 
@@ -261,19 +262,19 @@ sees both fields.
 
 ### 6. Read V1 and write V2
 
-A V1 receipt can be represented as this JSON:
+A V1 `Versioned<Receipt>` has this JSON representation:
 
 ```json
-{"amount_cents":1200}
+{"shop.receipt.created":{"1":{"amount_cents":1200}}}
 ```
 
-This example uses Typehistory's JSON decoder. Pass these bytes to
-`decode::<Receipt>` with the history identity and version V1.
-The decoder then:
+The outer map identifies the history. The inner map identifies the payload version.
+Both maps contain exactly one entry. The payload keeps its original fields.
 
-1. Checks that the identity matches `Receipt::TYPE`.
-2. Uses the version to read the JSON as `ReceiptV1`.
-3. Converts it into `ReceiptV2`, assigning `"USD"` to the new field.
+Deserialize the bytes, then pass the result to `Receipt::from_versioned`.
+Typehistory checks the identity and selects V1 before reading the payload.
+`from_versioned` converts it into the current `Receipt`, assigning `"USD"` to the new field.
+Application code supplies neither a numbered Rust type nor separate metadata.
 
 Append these tests to `src/lib.rs`:
 
@@ -282,20 +283,16 @@ Append these tests to `src/lib.rs`:
 #[cfg(test)]
 mod receipt_tests {
     use super::Receipt;
-    use typehistory::{HasHistory, PayloadVersion, decode};
 
     #[test]
     fn read_an_old_receipt() {
-        let receipt = decode::<Receipt>(
-            &Receipt::TYPE,
-            PayloadVersion::INITIAL,
-            br#"{"amount_cents":1200}"#,
-        )
-        .unwrap();
+        let stored = serde_json::from_slice(
+            br#"{"shop.receipt.created":{"1":{"amount_cents":1200}}}"#,
+        ).unwrap();
+        let receipt = Receipt::from_versioned(stored).unwrap();
 
         assert_eq!(receipt.amount_cents, 1200);
         assert_eq!(receipt.currency, "USD");
-        assert_eq!(Receipt::VERSION.get(), 2);
     }
 
     #[test]
@@ -304,13 +301,12 @@ mod receipt_tests {
             amount_cents: 3000,
             currency: "EUR".to_owned(),
         };
-        let identity = Receipt::TYPE;
-        let version = Receipt::VERSION;
-        let bytes = serde_json::to_vec(&receipt).unwrap();
+        let stored = receipt.into_versioned();
+        let bytes = serde_json::to_vec(&stored).unwrap();
 
-        // Persist identity, version, and bytes together in your storage format.
-        let restored = decode::<Receipt>(&identity, version, &bytes).unwrap();
-        assert_eq!(restored, receipt);
+        // The application stores and retrieves these bytes.
+        let restored = Receipt::from_versioned(serde_json::from_slice(&bytes).unwrap()).unwrap();
+        assert_eq!(restored.amount_cents, 3000);
         assert_eq!(restored.currency, "EUR");
     }
 }
@@ -325,8 +321,13 @@ These tests check two uses of the same current type:
 
 The backfill runs only when converting older records. New `Receipt` values must
 supply their currency explicitly. Decoding leaves the stored bytes unchanged.
-The decoder needs the history identity and version alongside its JSON input.
-Your application decides how to store or obtain that information.
+`into_versioned` stamps the current identity and version automatically.
+`Versioned<Receipt>` keeps them with the matching data and provides no metadata setters.
+No trait import is needed for `into_versioned` or `from_versioned`.
+
+Existing raw JSON such as `{"amount_cents":1200}` has no identity or version.
+It remains readable through the [low-level JSON API](#existing-raw-json-payloads).
+It does not become a `Versioned` automatically.
 
 Run the tests:
 
@@ -385,7 +386,7 @@ The receipt example uses a few rules that also apply to longer histories:
 - **One history, one identity:** The identity connects stored records to their
   history even when Rust type names change.
 - **One Rust type per version:** Earlier types keep the fields that existed in
-  that version. Application code can use the current alias or a specific version.
+  that version. Application code reads and writes through the current alias.
 - **One conversion per step:** Reading V1 as V3 first converts V1 to V2, then V2
   to V3. Each new version builds on the existing conversions.
 - **Explicit values for old data:** You choose what an added field means for
@@ -404,6 +405,8 @@ types your application uses. In the receipt example, those are `ReceiptV1`,
 | --- | --- |
 | `ReceiptV1`, `ReceiptV2`, and later types | One struct with the fields and types for that version |
 | `Receipt` | Alias of the latest generated type, including an allowed draft |
+| `Receipt::into_versioned()` | Wraps a current value in `Versioned<Receipt>` with its generated identity and version |
+| `Receipt::from_versioned(...)` | Converts a deserialized `Versioned<Receipt>` into the current `Receipt` |
 | Record implementations | `Clone`, `Debug`, `PartialEq`, Serde serialization and deserialization, and schema support |
 | `HasHistory` on the current type | `TYPE` identifies the history, `VERSION` identifies the current version, and `history()` provides its decoder |
 | `History<Receipt>` | Lists supported versions and decodes their bytes into the current `Receipt` |
@@ -424,6 +427,13 @@ A history identity such as `billing.invoice.issued` follows these rules:
 - Each segment starts with a lowercase letter and contains only lowercase
   letters, digits, or underscores.
 - At most 255 ASCII bytes in total.
+
+Declare it with `stable_id = "billing.invoice.issued"`. The `id =` spelling is unsupported.
+When updating an existing declaration, change only the argument name; keep the exact identity value.
+The ledger format and frozen payload schemas remain unchanged.
+Once frozen, the identity belongs to that history and must survive Rust renames and module moves.
+Builds and lifecycle commands check it against the committed ledger, just as they
+check historical field shapes. Resetting a schema does not allow changing its identity.
 
 ## Evolve an invoice through V1, V2, and V3
 
@@ -471,7 +481,7 @@ Write this complete `src/lib.rs`:
 
 <!-- example:versions/v1.rs -->
 ```rust
-#[typehistory::history(id = "billing.invoice.issued")]
+#[typehistory::history(stable_id = "billing.invoice.issued")]
 pub struct Invoice {
     pub legacy: String,
     pub count: u32,
@@ -515,7 +525,7 @@ impl Display for ConvertError {
 
 impl Error for ConvertError {}
 
-#[typehistory::history(id = "billing.invoice.issued")]
+#[typehistory::history(stable_id = "billing.invoice.issued")]
 pub struct Invoice {
     #[history(removed_at = v2)]
     pub legacy: String,
@@ -583,7 +593,7 @@ impl Display for ConvertError {
 
 impl Error for ConvertError {}
 
-#[typehistory::history(id = "billing.invoice.issued")]
+#[typehistory::history(stable_id = "billing.invoice.issued")]
 pub struct Invoice {
     #[history(removed_at = v2)]
     pub legacy: String,
@@ -632,23 +642,20 @@ Append this test module to `src/lib.rs`:
 ```rust
 #[cfg(test)]
 mod tests {
-    use super::{ConvertError, Invoice, InvoiceV3};
+    use super::{ConvertError, Invoice};
     use std::error::Error;
-    use typehistory::{decode, DecodeFailureKind, HasHistory, PayloadVersion, ReadError};
+    use typehistory::DecodeFailureKind;
 
     #[test]
     fn old_bytes_reach_the_current_type() {
-        let value = decode::<Invoice>(
-            &Invoice::TYPE,
-            PayloadVersion::INITIAL,
-            br#"{"legacy":"INV-42","count":42}"#,
-        )
-        .unwrap();
+        let stored = serde_json::from_slice(
+            br#"{"billing.invoice.issued":{"1":{"legacy":"INV-42","count":42}}}"#,
+        ).unwrap();
+        let value = Invoice::from_versioned(stored).unwrap();
         assert_eq!(value.count, "42");
         assert_eq!(value.label, "INV-42");
         assert_eq!(value.revision, 7);
-        assert_eq!(Invoice::VERSION.get(), 3);
-        let _: Invoice = InvoiceV3 {
+        let _: Invoice = Invoice {
             count: "42".to_owned(),
             label: "current".to_owned(),
             revision: 7,
@@ -657,15 +664,10 @@ mod tests {
 
     #[test]
     fn failure_keeps_the_original_version_and_failing_step() {
-        let failure = decode::<Invoice>(
-            &Invoice::TYPE,
-            PayloadVersion::INITIAL,
-            br#"{"legacy":"INV-13","count":13}"#,
-        )
-        .unwrap_err();
-        let ReadError::Decode(error) = &failure else {
-            panic!("expected a conversion failure");
-        };
+        let stored = serde_json::from_slice(
+            br#"{"billing.invoice.issued":{"1":{"legacy":"INV-13","count":13}}}"#,
+        ).unwrap();
+        let error = Invoice::from_versioned(stored).unwrap_err();
         assert_eq!(error.source_version().get(), 1);
         assert_eq!(error.adjacent_from().unwrap().get(), 2);
         assert_eq!(error.adjacent_to().unwrap().get(), 3);
@@ -706,7 +708,7 @@ the retained floor is also the current version.
 
 | Attribute key | Where it goes and what it declares |
 | --- | --- |
-| `id = "billing.invoice.issued"` | On the struct; identifies the history independently of its Rust name |
+| `stable_id = "billing.invoice.issued"` | On the struct; fixes the history's identity independently of its Rust name |
 | `retained_from = vN` | On the struct; starts an imported history at N; requires a matching ledger and explicit import |
 | `added_at = vN` | Field first exists in N; provide one backfill or conversion function |
 | `updated_at = vN` | Field changes in N; provide its previous type and one conversion function |
@@ -810,40 +812,58 @@ The [evolution matrix](docs/evolution-matrix.md) records the supported and rejec
 
 ## Decode stored records and handle failures
 
-The current `decode` API accepts JSON. Use
-`decode::<Invoice>(&identity, version, bytes)` with these inputs:
+Use `receipt.into_versioned()` to prepare a current value for serialization.
+Use `Receipt::from_versioned(stored)` after deserializing a `Versioned<Receipt>`.
+The generated methods need no trait imports or manually assembled metadata.
 
-- **Identity:** Which history the record belongs to. Validate an identity obtained
-  at runtime with `TypeIdentity::try_from(String)`.
-- **Version:** Which version the input represents. Convert a raw number with
-  `PayloadVersion::try_from_raw(u32)`; zero is invalid.
-- **Bytes:** The record's JSON payload.
+The application chooses where to save the serialized bytes and how to retrieve them.
+Typehistory does not call a database, filesystem, or transport.
 
-Your application prepares these inputs from its own storage representation.
+### Choose a Serde format
 
-The decoder checks the identity and version before parsing JSON. It then reads
-the matching historical type and applies each conversion up to the current version.
-The fields present in the JSON do not determine its version.
+`Versioned` uses two single-entry maps with string keys.
+The outer key is the exact stable identity. The inner key is a positive version written as a canonical decimal string.
+Its value is the unchanged historical payload.
 
-`Invoice::history().retained_versions()` lists the accepted versions.
-Calling `Invoice::history().decode(...)` directly skips the identity check, so
-use it only after selecting the correct history yourself.
+JSON supports this representation. MessagePack supports it with
+[`to_vec_named`](https://docs.rs/rmp-serde/1.3.1/rmp_serde/encode/fn.to_vec_named.html),
+which serializes structs with their field names:
+
+```rust
+let bytes = rmp_serde::to_vec_named(&receipt.into_versioned())?;
+let receipt = Receipt::from_versioned(rmp_serde::from_slice(&bytes)?)?;
+```
+
+This fragment assumes an existing `receipt`, an `rmp-serde` dependency, and a function that propagates errors.
+Use `serde_json::to_vec` and `serde_json::from_slice` for the equivalent JSON path.
+
+Not every Serde format supports the required maps and named payload fields.
+MessagePack's default struct-array encoding does not match the generated map-only payload decoder.
+Each chosen format must also support the field types used by the history.
+
+Deserializing selects the historical type but does not run conversions.
+`from_versioned` applies the declared adjacent conversions and returns the current alias.
+An unconverted `Versioned` retains its original version when serialized again.
+To write the current version, convert it and call `into_versioned` again.
+Neither operation changes bytes already held in storage.
 
 ### Invalid records
 
-Generated record decoders accept JSON objects. Reading fails for:
+Deserializing a `Versioned` fails for:
 
-- An unsupported version, before attempting to parse its bytes.
-- Malformed JSON or a sequence in place of a record object.
+- A different stable identity or an unsupported version, before reading the payload.
+- Empty maps, extra entries, or a noncanonical version such as `"01"`.
+- Malformed input or a sequence in place of a record map.
 - Unknown fields, duplicate fields, or missing required fields.
 
 A missing supported `Option` field may decode as `None`.
+The selected Serde format returns these errors. With JSON, their type is `serde_json::Error`.
+The fields present in a payload never determine its version.
 
 ### Conversion failures
 
-For ordinary histories, `ReadError` separates an identity mismatch from a
-`DecodeError`. A `DecodeError` identifies whether the version was unsupported,
-JSON decoding failed, or a conversion failed.
+`Receipt::from_versioned` returns a `DecodeError` if an ordinary history's conversion fails.
+This separate step preserves the callback's concrete error without reducing it to a Serde error message.
 
 When a conversion fails, its error includes:
 
@@ -854,14 +874,25 @@ When a conversion fails, its error includes:
 For example, reading V1 can fail in the V2-to-V3 conversion. The error still
 reports V1 as the source version, as the invoice test demonstrates.
 
-`ReadError` and `DecodeError` implement `Debug`, `Display`, and `std::error::Error`.
-The source chain preserves the original JSON or conversion error when one exists.
-These error types do not implement `Serialize`, `Clone`, or equality traits.
+`DecodeError` implements `Debug`, `Display`, and `std::error::Error`.
+It does not implement `Serialize`, `Clone`, or equality traits.
 Histories that opt into Redactable use [separate error types](docs/redactable.md).
 
-Decoding returns a current record or an error. It neither rewrites stored bytes
-nor checks a schema fingerprint at runtime. Your application decides what to do
-with the result.
+### Existing raw JSON payloads
+
+The low-level JSON APIs remain available for data whose metadata is already stored separately.
+Use `decode::<Invoice>(&identity, version, bytes)` with the original identity, source version, and raw JSON payload.
+Validate runtime metadata with `TypeIdentity::try_from(String)` and `PayloadVersion::try_from_raw(u32)`.
+
+This API checks identity and version before parsing the exact historical payload.
+It then applies adjacent conversions. `ReadError` distinguishes identity mismatch from `DecodeError`.
+The source chain preserves the original JSON or callback error when one exists.
+`Invoice::history().decode(...)` skips the identity check; `history()` requires the `HasHistory` trait in scope.
+
+The raw codecs and frozen payload schemas remain unchanged.
+Raw JSON has no record envelope, so deserializing it as `Versioned<Invoice>` fails.
+After loading it through the low-level API, `into_versioned` prepares the current value for the new representation.
+Any decision to replace stored data remains with the application.
 
 ## Frozen shapes and business meaning
 
@@ -871,6 +902,8 @@ This catches changes made through type aliases or dependencies as well as direct
 
 ### What builds reject
 
+- **Changed stable identity:** A frozen history must retain its exact `stable_id`
+  value, even when its Rust name or module changes.
 - **Changed historical fields:** A frozen version must keep its serialized field
   names, types, and nested structure.
 - **Deleted history:** A frozen history or retained version cannot disappear from
@@ -983,7 +1016,7 @@ Each imported floor above V1 requires a matching `--floor EXACT_ID=N` argument.
 The declaration must state the same floor:
 
 ```text
-#[typehistory::history(id = "billing.invoice.issued", retained_from = v4)]
+#[typehistory::history(stable_id = "billing.invoice.issued", retained_from = v4)]
 ```
 
 This fragment belongs to a separate history starting at V4. Unannotated fields
@@ -1106,24 +1139,20 @@ pub mod addresses {
         pub number: u32,
     }
 
-    #[typehistory::history(id = "billing.address.record")]
+    #[typehistory::history(stable_id = "billing.address.record")]
     pub struct AddressRecord {
         pub address: Address,
     }
 
     #[test]
     fn nested_values_keep_their_closed_codec() {
-        use typehistory::{HasHistory, PayloadVersion};
-
-        assert!(AddressRecord::history()
-            .decode(PayloadVersion::INITIAL, br#"{"address":{"number":7}}"#)
-            .is_ok());
-        assert!(AddressRecord::history()
-            .decode(
-                PayloadVersion::INITIAL,
-                br#"{"address":{"number":7,"unknown":1}}"#,
-            )
-            .is_err());
+        let stored = serde_json::from_slice(
+            br#"{"billing.address.record":{"1":{"address":{"number":7}}}}"#,
+        ).unwrap();
+        assert!(AddressRecord::from_versioned(stored).is_ok());
+        assert!(serde_json::from_slice::<typehistory::Versioned<AddressRecord>>(
+            br#"{"billing.address.record":{"1":{"address":{"number":7,"unknown":1}}}}"#,
+        ).is_err());
     }
 }
 ```
@@ -1175,8 +1204,8 @@ redacted output and errors for the histories you select. It is disabled by defau
 To use it:
 
 1. Enable the `redactable` feature on `typehistory`, `typehistory-build`, and the CLI.
-2. Select each history with `#[history(id = "billing.receipt.recorded", redacted)]`.
-3. Declare its field policies and use the redacted decoding API from the
+2. Select each history with `#[history(stable_id = "billing.receipt.recorded", redacted)]`.
+3. Declare its field policies and use `into_versioned` and `from_versioned` as shown in the
    [integration guide](docs/redactable.md).
 
 Enabling the feature alone does not change ordinary histories, even when another

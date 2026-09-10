@@ -42,7 +42,7 @@ mod records {
     #[allow(unused_imports)]
     use std::io::{self, Write as _};
 
-    #[api::history(id = "billing.invoice.issued")]
+    #[api::history(stable_id = "billing.invoice.issued")]
     pub struct Invoice {
         pub value: String,
     }
@@ -130,7 +130,7 @@ fn feature_selected_path_dependencies_are_captured_and_checked() {
     fixture.write("Cargo.toml", &toml::to_string(&manifest).unwrap());
     success(&fixture.cargo(&["generate-lockfile", "--offline"]));
     let source = r#"
-#[history_api::history(id = "billing.invoice.issued")]
+#[history_api::history(stable_id = "billing.invoice.issued")]
 pub struct Invoice {
     pub value: optional_support::Value,
 }

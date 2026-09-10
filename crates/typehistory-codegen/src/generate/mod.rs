@@ -4,6 +4,7 @@ mod decode;
 mod frozen;
 mod transitions;
 mod types;
+mod versioned;
 
 use crate::{
     history::{AuthorizedHistory, RetainedField},
@@ -96,6 +97,25 @@ pub fn generate_history(
         decoder: context.helper("decode_history"),
         versions,
     })
+}
+
+/// Generate the standalone versioned value bridge for an authorized history.
+///
+/// Emit these items alongside [`generate_history`]. The support facade must
+/// provide `VersionedHistory` and `Versioned`; other frontends remain unchanged.
+pub fn generate_versioned(
+    input: &RecordInput,
+    identity: &str,
+    history: &AuthorizedHistory,
+    paths: &GenerationPaths,
+) -> Result<TokenStream> {
+    let context = Context {
+        input,
+        history,
+        paths,
+        identity,
+    };
+    with_lints(&input.attributes, versioned::generate(&context))
 }
 
 struct Context<'a> {
