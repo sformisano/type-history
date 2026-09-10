@@ -13,6 +13,7 @@ pub(super) fn generate(context: &Context<'_>) -> TokenStream {
     let identity = context.identity();
     let version = format_ident!("__typehistory_source_version", span = Span::mixed_site());
     let bytes = format_ident!("__typehistory_bytes", span = Span::mixed_site());
+    let error = format_ident!("__typehistory_error", span = Span::mixed_site());
     if context.history.floor() == context.history.head() {
         let current = context.history.head();
         return quote! {
@@ -23,7 +24,7 @@ pub(super) fn generate(context: &Context<'_>) -> TokenStream {
                     return ::core::result::Result::Err(#error_type::unsupported(#identity, #version));
                 }
                 #support::serde_json::from_slice::<#latest>(#bytes)
-                    .map_err(|_| #error_type::decode(#identity, #version))
+                    .map_err(|#error| #error_type::decode(#identity, #version, #error))
             }
         };
     }
@@ -42,7 +43,7 @@ pub(super) fn generate(context: &Context<'_>) -> TokenStream {
         quote! {
             #number => #state_type::#variant(
                 #support::serde_json::from_slice::<#payload>(#bytes)
-                    .map_err(|_| #error_type::decode(#identity, #version))?
+                    .map_err(|#error| #error_type::decode(#identity, #version, #error))?
             )
         }
     });

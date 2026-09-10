@@ -1,4 +1,4 @@
-//! Static decoder descriptors and safe frontend failure storage.
+//! Static decoder descriptors and failure version context.
 
 use serde::Serialize;
 
@@ -46,7 +46,7 @@ impl<T, E> History<T, E> {
     }
 }
 
-/// Stable failure class without raw decoder or author error formatting.
+/// Stable classification of historical decoding failures.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub enum DecodeFailureKind {
     /// Stored version is outside the exact retained inventory.
@@ -68,6 +68,41 @@ pub struct DecodeContext {
 }
 
 impl DecodeContext {
+    pub(crate) fn unsupported(identity: TypeIdentity, source_version: PayloadVersion) -> Self {
+        Self {
+            identity,
+            source_version,
+            adjacent_from: None,
+            adjacent_to: None,
+            kind: DecodeFailureKind::UnsupportedVersion,
+        }
+    }
+
+    pub(crate) fn decode(identity: TypeIdentity, source_version: PayloadVersion) -> Self {
+        Self {
+            identity,
+            source_version,
+            adjacent_from: None,
+            adjacent_to: None,
+            kind: DecodeFailureKind::Decode,
+        }
+    }
+
+    pub(crate) fn upcast(
+        identity: TypeIdentity,
+        source_version: PayloadVersion,
+        adjacent_from: PayloadVersion,
+        adjacent_to: PayloadVersion,
+    ) -> Self {
+        Self {
+            identity,
+            source_version,
+            adjacent_from: Some(adjacent_from),
+            adjacent_to: Some(adjacent_to),
+            kind: DecodeFailureKind::Upcast,
+        }
+    }
+
     /// Stable logical record identity.
     pub fn identity(&self) -> &TypeIdentity {
         &self.identity
@@ -91,78 +126,6 @@ impl DecodeContext {
     /// Stable decode failure class.
     pub const fn kind(&self) -> DecodeFailureKind {
         self.kind
-    }
-}
-
-/// Shared storage for a frontend's already-safe failure cause.
-///
-/// Frontend adapters must convert author errors before constructing this value.
-/// This storage has no `Debug`, `Display`, or serialization implementation:
-/// each frontend owns rendering its concrete safe cause type.
-#[derive(Clone, PartialEq, Eq)]
-#[doc(hidden)]
-pub struct HistoryFailure<C> {
-    context: DecodeContext,
-    safe_cause: Option<C>,
-}
-
-impl<C> HistoryFailure<C> {
-    /// Store an unsupported version without inspecting its bytes.
-    pub fn unsupported(identity: TypeIdentity, source_version: PayloadVersion) -> Self {
-        Self {
-            context: DecodeContext {
-                identity,
-                source_version,
-                adjacent_from: None,
-                adjacent_to: None,
-                kind: DecodeFailureKind::UnsupportedVersion,
-            },
-            safe_cause: None,
-        }
-    }
-
-    /// Store a frontend's safe wire failure after discarding decoder details.
-    pub fn decode(identity: TypeIdentity, source_version: PayloadVersion, safe_cause: C) -> Self {
-        Self {
-            context: DecodeContext {
-                identity,
-                source_version,
-                adjacent_from: None,
-                adjacent_to: None,
-                kind: DecodeFailureKind::Decode,
-            },
-            safe_cause: Some(safe_cause),
-        }
-    }
-
-    /// Store a cause already captured through the frontend's redaction contract.
-    pub fn upcast(
-        identity: TypeIdentity,
-        source_version: PayloadVersion,
-        adjacent_from: PayloadVersion,
-        adjacent_to: PayloadVersion,
-        safe_cause: C,
-    ) -> Self {
-        Self {
-            context: DecodeContext {
-                identity,
-                source_version,
-                adjacent_from: Some(adjacent_from),
-                adjacent_to: Some(adjacent_to),
-                kind: DecodeFailureKind::Upcast,
-            },
-            safe_cause: Some(safe_cause),
-        }
-    }
-
-    /// Immutable original and adjacent version context.
-    pub const fn context(&self) -> &DecodeContext {
-        &self.context
-    }
-
-    /// Cause captured once by the frontend adapter.
-    pub fn safe_cause(&self) -> Option<&C> {
-        self.safe_cause.as_ref()
     }
 }
 

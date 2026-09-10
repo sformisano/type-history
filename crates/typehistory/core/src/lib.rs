@@ -11,11 +11,11 @@ mod identity;
 pub mod resolved;
 
 pub use error::{decode, DecodeError, HasHistory, ReadError};
-pub use history::{DecodeContext, DecodeFailureKind, History, HistoryFailure};
+pub use history::{DecodeContext, DecodeFailureKind, History};
 pub use identity::{InvalidPayloadVersion, InvalidTypeIdentity, PayloadVersion, TypeIdentity};
 pub use resolved::{
     ConstantShape, FieldSchema, JsonSchemaField, ResolvedSchema, SchemaShape, WireNode,
 };
 
 #[doc(hidden)]
-pub use {redactable, schemars, serde, serde_json};
+pub use {schemars, serde, serde_json};

@@ -36,7 +36,7 @@ pub(super) fn generate(context: &Context<'_>) -> TokenStream {
             assembled.push(quote!(#name: #local));
             let on_error = {
                 let error = format_ident!("__typehistory_error", span = Span::mixed_site());
-                quote!(|#error| #error_type::upcast(#identity, #source_version, #from, #to, &#error))
+                quote!(|#error| #error_type::upcast(#identity, #source_version, #from, #to, #error))
             };
             match field {
                 FieldTransition::Carry { name } => carried.push(with_field_lints(quote!(let #local = #previous.#name;))),

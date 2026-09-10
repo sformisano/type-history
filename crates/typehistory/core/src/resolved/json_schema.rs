@@ -1,6 +1,5 @@
 //! JSON Schema adapters for resolved field wire types.
 
-use redactable::BypassRedaction;
 use schemars::{generate::SchemaSettings, JsonSchema, Schema, SchemaGenerator};
 use serde_json::Value;
 use std::{borrow::Cow, marker::PhantomData};
@@ -71,12 +70,6 @@ impl<T: JsonSchemaField, const LENGTH: usize> JsonSchemaField for [T; LENGTH] {
             "minItems": LENGTH,
             "maxItems": LENGTH,
         })
-    }
-}
-
-impl<T: JsonSchemaField> JsonSchemaField for BypassRedaction<T> {
-    fn json_schema(generator: &mut SchemaGenerator) -> Schema {
-        T::json_schema(generator)
     }
 }
 

@@ -27,7 +27,7 @@ for source in versions/v1.rs versions/v2.rs versions/v3.rs runtime-tests.rs nest
     check_documented_source "example:$source" "$example_dir/$source"
 done
 quick_example="$example_dir/../quick-start"
-for source in v2.rs runtime-tests.rs; do
+for source in v1.rs v2.rs runtime-tests.rs; do
     check_documented_source "quick-example:$source" "$quick_example/$source"
 done
 
@@ -46,7 +46,6 @@ build = "build.rs"
 [workspace]
 [dependencies]
 typehistory = { path = "$repository/crates/typehistory/typehistory" }
-redactable = { version = "=0.12.0", features = ["json"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0.149"
 [build-dependencies]
@@ -68,21 +67,23 @@ touch "$consumer/src/lib.rs"
 (
     receipt_consumer="$invoice_tmp/receipt-history"
     mkdir -p "$receipt_consumer/src"
-    cp "$consumer/Cargo.toml" "$consumer/typehistory.toml" "$consumer/build.rs" "$receipt_consumer/"
+    cp "$consumer/typehistory.toml" "$consumer/build.rs" "$receipt_consumer/"
+    sed 's/name = "invoice-history"/name = "receipt-history"/' "$consumer/Cargo.toml" > "$receipt_consumer/Cargo.toml.next"
+    mv "$receipt_consumer/Cargo.toml.next" "$receipt_consumer/Cargo.toml"
     touch "$receipt_consumer/src/lib.rs"
     cd "$receipt_consumer"
     cargo generate-lockfile --offline
-    cargo typehistory init --package invoice-history
+    cargo typehistory init --package receipt-history
     cp "$quick_example/v1.rs" src/lib.rs.next
     mv src/lib.rs.next src/lib.rs
     cargo build --locked --offline
-    cargo typehistory freeze --package invoice-history
+    cargo typehistory freeze --package receipt-history
     cat "$quick_example/v2.rs" "$quick_example/runtime-tests.rs" > src/lib.rs.next
     mv src/lib.rs.next src/lib.rs
     cargo test --lib --locked --offline
-    cargo typehistory freeze --package invoice-history --type shop.receipt.created --version 2
+    cargo typehistory freeze --package receipt-history --type shop.receipt.created --version 2
     cargo build --release --locked --offline
-    cargo typehistory check --package invoice-history
+    cargo typehistory check --package receipt-history
     printf '%s\n' 'Receipt quick example completed: read V1, write V2, freeze, and release.'
 )
 

@@ -280,9 +280,27 @@ fn cfg_attr_changes_shape(meta: &Meta) -> bool {
     };
     !matches!(
         (name.as_str(), meta),
-        ("doc", Meta::NameValue(_))
-            | ("allow" | "warn" | "deny", Meta::List(_))
-            | ("sensitive", Meta::Path(_) | Meta::List(_))
-            | ("not_sensitive", Meta::Path(_))
+        ("doc", Meta::NameValue(_)) | ("allow" | "warn" | "deny", Meta::List(_))
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::has_shape_cfg;
+    use syn::{parse_quote, Attribute};
+
+    #[test]
+    fn conditional_attributes_allow_only_documentation_and_lints() {
+        let supported: Attribute = parse_quote!(
+            #[cfg_attr(all(), doc = "record", allow(dead_code), warn(unused), deny(deprecated))]
+        );
+        assert!(!has_shape_cfg(&[supported]).expect("supported attributes"));
+        for attribute in [
+            parse_quote!(#[cfg_attr(all(), sensitive)]),
+            parse_quote!(#[cfg_attr(all(), sensitive(crate::Policy))]),
+            parse_quote!(#[cfg_attr(all(), not_sensitive)]),
+        ] {
+            assert!(has_shape_cfg(&[attribute]).expect("unsupported conditional attribute"));
+        }
+    }
 }

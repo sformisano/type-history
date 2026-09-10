@@ -1,37 +1,44 @@
 use std::{
-    fmt::{Debug, Display, Formatter, Result as FmtResult},
+    convert::Infallible,
+    error::Error,
+    fmt::{Display, Formatter, Result as FmtResult},
+    io::{Error as IoError, ErrorKind},
+    ptr,
     sync::{
         atomic::{AtomicUsize, Ordering},
         Arc,
     },
 };
 
-use redactable::{BypassTextRedaction, RedactedValue, ToRedacted};
-use serde_json::json;
+use serde_json::Error as JsonError;
 
 use crate::{
     decode, DecodeError, DecodeFailureKind, HasHistory, History, PayloadVersion, ReadError,
     TypeIdentity,
 };
 
-struct SecretError(Arc<AtomicUsize>);
+#[derive(Debug)]
+struct ConversionError {
+    rejected_value: u32,
+    source: IoError,
+    drops: Arc<AtomicUsize>,
+}
 
-impl Debug for SecretError {
+impl Display for ConversionError {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
-        formatter.write_str("SECRET_RAW_DEBUG_SENTINEL")
+        write!(formatter, "cannot convert value {}", self.rejected_value)
     }
 }
 
-impl Display for SecretError {
-    fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
-        formatter.write_str("SECRET_RAW_DISPLAY_SENTINEL")
+impl Error for ConversionError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        Some(&self.source)
     }
 }
 
-impl ToRedacted for SecretError {
-    fn to_redacted(&self) -> RedactedValue {
-        self.0.fetch_add(1, Ordering::SeqCst);
-        BypassTextRedaction("rejected conversion".to_owned()).to_redacted()
+impl Drop for ConversionError {
+    fn drop(&mut self) {
+        self.drops.fetch_add(1, Ordering::SeqCst);
     }
 }
 
@@ -40,43 +47,52 @@ fn version(raw: u32) -> PayloadVersion {
 }
 
 #[test]
-fn author_error_is_captured_once_and_all_renderers_retain_safe_context() {
-    let captures = Arc::new(AtomicUsize::new(0));
+fn upcast_owns_the_original_error_and_preserves_each_source() {
+    let drops = Arc::new(AtomicUsize::new(0));
     let error = DecodeError::upcast(
         TypeIdentity::new("billing.invoice.issued"),
         version(1),
         version(2),
         version(3),
-        &SecretError(Arc::clone(&captures)),
+        ConversionError {
+            rejected_value: 13,
+            source: IoError::new(ErrorKind::InvalidData, "invalid conversion input"),
+            drops: Arc::clone(&drops),
+        },
     );
     assert_eq!(error.kind(), DecodeFailureKind::Upcast);
     assert_eq!(error.source_version(), version(1));
     assert_eq!(error.adjacent_from(), Some(version(2)));
     assert_eq!(error.adjacent_to(), Some(version(3)));
     assert_eq!(error.identity().as_str(), "billing.invoice.issued");
-    let json = serde_json::to_value(&error).expect("serialize safe failure");
-    assert_eq!(
-        json,
-        json!({
-            "identity": "billing.invoice.issued",
-            "source_version": 1,
-            "adjacent_from": 2,
-            "adjacent_to": 3,
-            "kind": "Upcast",
-            "redacted_cause": {"message": "rejected conversion"},
-        })
-    );
-    for rendered in [
-        format!("{error}"),
-        format!("{error:?}"),
-        json.to_string(),
-        error.to_redacted().text(),
-        error.to_redacted().json().to_string(),
-        error.redacted_cause().expect("captured cause").text(),
-    ] {
-        assert!(!rendered.contains("SECRET_RAW_"));
-    }
-    assert_eq!(captures.load(Ordering::SeqCst), 1);
+    assert_eq!(error.context().identity(), error.identity());
+    assert_eq!(drops.load(Ordering::SeqCst), 0);
+
+    let failure = ReadError::Decode(error);
+    let wrapped = failure
+        .source()
+        .and_then(|source| source.downcast_ref::<DecodeError>())
+        .expect("read failure retains its decode error");
+    let original = wrapped
+        .source()
+        .and_then(|source| source.downcast_ref::<ConversionError>())
+        .expect("conversion error retains its concrete type");
+    assert_eq!(original.rejected_value, 13);
+    assert_eq!(original.to_string(), "cannot convert value 13");
+    let repeated = wrapped
+        .source()
+        .and_then(|source| source.downcast_ref::<ConversionError>())
+        .expect("repeated source access");
+    assert!(ptr::eq(original, repeated));
+    let nested = original
+        .source()
+        .and_then(|source| source.downcast_ref::<IoError>())
+        .expect("application error retains its own source");
+    assert_eq!(nested.kind(), ErrorKind::InvalidData);
+    assert_eq!(nested.to_string(), "invalid conversion input");
+
+    drop(failure);
+    assert_eq!(drops.load(Ordering::SeqCst), 1);
 }
 
 #[test]
@@ -93,42 +109,77 @@ fn identity_mismatch_returns_before_invoking_the_decoder() {
     }
 
     let wrong = TypeIdentity::new("billing.invoice.paid");
-    let failure = match decode::<Current>(&wrong, version(1), b"SECRET_RAW_PAYLOAD_SENTINEL") {
+    let failure = match decode::<Current>(&wrong, version(1), b"not JSON") {
         Err(failure) => failure,
         Ok(_) => panic!("wrong identity was accepted"),
     };
-    assert_eq!(
-        failure,
-        ReadError::TypeMismatch {
-            expected: Current::TYPE,
-            found: wrong
-        }
-    );
-    for rendered in [
-        format!("{failure}"),
-        format!("{failure:?}"),
-        serde_json::to_string(&failure).expect("serialize identity failure"),
-        failure.to_redacted().text(),
-        failure.to_redacted().json().to_string(),
-    ] {
-        assert!(!rendered.contains("SECRET_RAW_PAYLOAD_SENTINEL"));
-    }
+    let ReadError::TypeMismatch { expected, found } = &failure else {
+        panic!("expected identity mismatch");
+    };
+    assert_eq!(expected, &Current::TYPE);
+    assert_eq!(found, &wrong);
+    assert!(failure.source().is_none());
+    assert!(failure.to_string().contains(expected.as_str()));
+    assert!(failure.to_string().contains(found.as_str()));
 }
 
 #[test]
-fn decode_and_unknown_versions_have_fixed_safe_causes() {
-    let failure = DecodeError::decode(TypeIdentity::new("billing.invoice.issued"), version(4));
+fn wire_failure_preserves_the_decoder_error_and_location() {
+    let original = serde_json::from_slice::<Vec<u32>>(b"[\n  1,\n  invalid\n]")
+        .expect_err("invalid JSON value");
+    let expected = (
+        original.line(),
+        original.column(),
+        original.classify(),
+        original.to_string(),
+    );
+    let failure = DecodeError::decode(
+        TypeIdentity::new("billing.invoice.issued"),
+        version(4),
+        original,
+    );
     assert_eq!(failure.kind(), DecodeFailureKind::Decode);
     assert_eq!(failure.source_version(), version(4));
+    assert_eq!(failure.identity().as_str(), "billing.invoice.issued");
     assert_eq!(failure.adjacent_from(), None);
     assert_eq!(failure.adjacent_to(), None);
+    let source = failure
+        .source()
+        .and_then(|source| source.downcast_ref::<JsonError>())
+        .expect("original JSON error");
     assert_eq!(
-        failure.redacted_cause().expect("safe cause").text(),
-        "history wire decoding failed"
+        (
+            source.line(),
+            source.column(),
+            source.classify(),
+            source.to_string(),
+        ),
+        expected,
     );
+}
 
-    let unknown = DecodeError::unsupported(TypeIdentity::new("billing.invoice.issued"), version(5));
-    assert_eq!(unknown.kind(), DecodeFailureKind::UnsupportedVersion);
-    assert_eq!(unknown.source_version(), version(5));
-    assert!(unknown.redacted_cause().is_none());
+#[test]
+fn unsupported_version_has_context_without_a_source() {
+    let failure = DecodeError::unsupported(TypeIdentity::new("billing.invoice.issued"), version(5));
+    assert_eq!(failure.kind(), DecodeFailureKind::UnsupportedVersion);
+    assert_eq!(failure.source_version(), version(5));
+    assert_eq!(failure.identity().as_str(), "billing.invoice.issued");
+    assert_eq!(failure.adjacent_from(), None);
+    assert_eq!(failure.adjacent_to(), None);
+    assert!(failure.source().is_none());
+}
+
+#[test]
+fn error_wrappers_support_thread_transfer_and_infallible_callbacks() {
+    fn assert_error<T: Error + Send + Sync + 'static>() {}
+
+    assert_error::<DecodeError>();
+    assert_error::<ReadError>();
+    let _: fn(
+        TypeIdentity,
+        PayloadVersion,
+        PayloadVersion,
+        PayloadVersion,
+        Infallible,
+    ) -> DecodeError = DecodeError::upcast::<Infallible>;
 }

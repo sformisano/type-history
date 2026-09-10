@@ -71,7 +71,6 @@ build = "build.rs"
 [workspace]
 [dependencies]
 history_api = {{ package = "typehistory", path = {:?} }}
-redactable = {{ version = "=0.12.0", features = ["json"] }}
 serde = {{ version = "1.0", features = ["derive"] }}
 serde_json = "1.0.149"
 [build-dependencies]
@@ -185,7 +184,9 @@ opt-level = 2
         for package in packages {
             let name = package["name"].as_str().expect("package name");
             assert!(
-                !name.starts_with("axis-") && !name.starts_with("sqlx"),
+                !name.starts_with("axis-")
+                    && !name.starts_with("sqlx")
+                    && !name.starts_with("redactable"),
                 "forbidden dependency {name}"
             );
             let manifest = package["manifest_path"].as_str().expect("manifest path");
@@ -279,14 +280,7 @@ fn copy_family(vendor: &Path) {
     )
     .expect("root TOML");
     let mut dependencies = Table::new();
-    for name in [
-        "serde",
-        "serde_json",
-        "redactable",
-        "schemars",
-        "thiserror",
-        "sha2",
-    ] {
+    for name in ["serde", "serde_json", "schemars", "thiserror", "sha2"] {
         dependencies.insert(
             name.into(),
             manifest["workspace"]["dependencies"][name].clone(),

@@ -1,8 +1,9 @@
 # Field-history evolution matrix
 
-This matrix summarizes the shared [Typehistory contract](../../../README.md).
-Both standalone records and Axis aggregate events use this implementation.
-The [Axis matrix](https://github.com/sformisano/axis/blob/af7b96c3f0744cdfd170c50bb321d5dfd02be8ea/docs/design/event-evolution/evolution-matrix.md) owns aggregate-only cases.
+This matrix summarizes the [Typehistory contract](../../../README.md).
+Typehistory originated in Axis's event field-history implementation.
+The [Axis matrix at the extraction revision](https://github.com/sformisano/axis/blob/af7b96c3f0744cdfd170c50bb321d5dfd02be8ea/docs/design/event-evolution/evolution-matrix.md)
+documents that revision's aggregate-specific cases.
 S means supported, R means rejected, and U means outside the API.
 A compound class carries two of those outcomes for one case; the rule column says which letter covers which half.
 S/R means the case splits: the rule column names the supported half and the rejected half.
@@ -41,9 +42,9 @@ Case IDs identify behavior families; this document is not a test-run report.
 | M85 | Backfill expression uses return or ? | S/R | Typed zero-argument closure contains return; invalid Result propagation fails inside birth-value context and cannot escape transition |
 | M26 | Unknown/wrong callback predecessor type | R | Generated unconditional transition does not satisfy ordinary Rust signature |
 | M27 | Wrong callback output or borrowed output | R | Output must be owned exact destination field type |
-| M28 | Unredactable callback error | R | Error must meet existing safe error bounds; no raw formatting fallback |
+| M28 | Callback error without the required Rust traits | R | Errors must implement std::error::Error + Send + Sync + 'static |
 | M29 | Non-Copy field | S | Owned unchanged/value fields move; contextual helpers explicitly clone if needed |
-| M30 | Non-Clone field in generated record | R | Generated record Clone contract remains; isolated no-Clone transition proof does not change it |
+| M30 | Field missing a generated record trait | R | Every retained field type must implement Clone, PartialEq, and Debug |
 | M31 | Opaque value split by consuming ownership once, without cloning | U | No whole-payload ownership/caching DSL; generated fields already Clone, helpers may clone explicitly |
 | M32 | Cross-output computation requiring exactly-once shared side effect | U | Conversion code must be deterministic/pure; no framework shared cache or external transaction |
 
@@ -74,8 +75,8 @@ Case IDs identify behavior families; this document is not a test-run report.
 | M54 | Supported feature-selected alias | S | Selected compiler-resolved shape checked against same authority |
 | M55 | self/super type, callback, expression, array length | S | Original invocation module and spans retained |
 | M56 | Author field names that resemble helpers (`previous`, `value`, `json`, `__typehistory_*`, or `__axis_*`) | S | Generated identifiers hygienic; field names cannot shadow transition input/local bindings |
-| M57 | Field sensitivity over multiple type incarnations | S | One conservative policy must be valid for every retained type |
-| M58 | Per-version redaction/serde customization | U/R | No additional policy history language; unsupported attrs fail |
+| M57 | Field attributes outside history, documentation, and lints | R | The declaration parser rejects unsupported attributes |
+| M58 | Per-version derives or Serde customization | U/R | Generated versions use the same ordinary traits and strict codecs; unsupported attributes fail |
 | M59 | Asynchronous or capturing-closure callback | R | Ordinary synchronous function path required |
 
 ## Freeze, draft, decode, and delivery combinations
@@ -98,21 +99,19 @@ Case IDs identify behavior families; this document is not a test-run report.
 | M73 | Dev draft vs release draft | S/R | Warning in dev; hard error in release family and strict dev |
 | M75 | Decode old record requiring backfill despite current serde permissiveness | S | Decode exact old type then explicit adjacent addition; never try current first |
 | M76 | Omitted Option key versus explicit null | S | Preserve existing exact-type serde behavior; omission may deserialize as None |
-| M77 | Missing required field/unknown JSON key/invalid newtype | R | Exact Vn supported decoder fails safely |
+| M77 | Missing required field/unknown JSON key/invalid newtype | R | Exact Vn decoder returns its JSON error |
 | M78 | Duplicate JSON object key | R | Feed raw bytes to exact typed decoder, preserving existing duplicate-field rejection; do not preprocess into map/Value |
 | M79 | Requested below-floor/future version | R | Unsupported version, no speculative current decode |
-| M83 | Failed conversion with sensitive original data | R | No current value; redacted safe cause, source/step identities, no raw payload in safe rendering |
+| M83 | Failed adjacent conversion | R | No current value; preserve the original error through Error::source, the stored version, and the failing step |
 
 ## Verification and limits
 
-Shared parser tests live in [codegen](../codegen/src/history/tests.rs).
+Parser tests live in [codegen](../codegen/src/history/tests.rs).
 Real standalone compiler and lifecycle cases live in
-[cargo-typehistory](../cargo-typehistory/tests/standalone.rs). Axis retains its
-[consumer compiler suite](https://github.com/sformisano/axis/blob/af7b96c3f0744cdfd170c50bb321d5dfd02be8ea/crates/framework/tooling/cargo-axis/tests/event_evolution.rs)
-and aggregate delivery tests. The [invoice example](../examples/invoice/README.md)
+[cargo-typehistory](../cargo-typehistory/tests/standalone.rs). The [invoice example](../examples/invoice/README.md)
 executes the standalone README progression.
 
-Generated records require `Clone` for their fields. Transitions borrow the
+Generated records require `Clone`, `PartialEq`, and `Debug` for their fields. Transitions borrow the
 intact predecessor for contextual callbacks, then move values into the destination.
 A callback may explicitly clone a value; transitions add no cloning pass.
 

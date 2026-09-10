@@ -19,8 +19,6 @@ pub use constant::{
 pub use json_schema::{export_json_schema, FieldSchema, JsonSchemaField};
 pub use shape::{FieldPresence, SchemaField, SchemaShape, SchemaVariant, SchemaVariantShape};
 
-use redactable::BypassRedaction;
-
 use std::marker::PhantomData;
 
 /// Structural schema resolved through Rust trait selection.
@@ -442,10 +440,6 @@ impl<CurrentVariants, ExpectedVariants> SameSchema<Enumeration<ExpectedVariants>
 where
     CurrentVariants: SameSchema<ExpectedVariants>,
 {
-}
-
-impl<T: ResolvedSchema> ResolvedSchema for BypassRedaction<T> {
-    type Wire = T::Wire;
 }
 
 #[cfg(test)]

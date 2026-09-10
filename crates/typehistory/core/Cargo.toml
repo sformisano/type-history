@@ -9,7 +9,6 @@ license.workspace = true
 publish = false
 
 [dependencies]
-redactable = { workspace = true }
 schemars = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

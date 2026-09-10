@@ -1,14 +1,16 @@
-//! Standalone field histories with exact historical decoding.
+//! Versioned Rust records with explicit field conversions and frozen schema checks.
 //!
-//! `#[history]` replaces a named record inventory with retained version structs
-//! and a current alias implementing [`HasHistory`]. [`decode`] checks the stored
-//! identity and version before parsing bytes and applying adjacent conversions.
+//! `#[history]` generates a Rust struct for each supported version of a record.
+//! The original name aliases the latest struct, which implements [`HasHistory`].
+//! [`decode`] checks the stored identity and version before reading the JSON bytes.
+//! It then converts between consecutive versions until it reaches the latest type.
 //!
 //! A standalone library requires `typehistory.toml`, a build dependency on
 //! `typehistory-build`, and `typehistory_build::compile()` in `build.rs`.
-//! Initialize its empty ledger with `cargo typehistory init` before declaring
-//! histories. The [guide](https://github.com/sformisano/typehistory/blob/main/README.md)
-//! contains executable setup, field grammar, lifecycle commands, and safe-error boundaries.
+//! Before declaring histories, initialize the empty ledger with
+//! `cargo typehistory init --package YOUR_PACKAGE`. Replace `YOUR_PACKAGE` with
+//! the library package's name. The [guide](https://github.com/sformisano/typehistory/blob/main/README.md)
+//! contains the setup walkthrough, field grammar, lifecycle commands, and error handling.
 //!
 //! Validate stored identity and version metadata before selecting a history:
 //!

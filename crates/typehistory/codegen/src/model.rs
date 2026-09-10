@@ -1,8 +1,8 @@
-//! Neutral authored record input shared by the two macro frontends.
+//! Authored record input shared by the macro and source discovery.
 use std::collections::BTreeMap;
 use syn::{Attribute, Ident, Type, Visibility};
 
-/// One authored field and its history/sensitivity attributes.
+/// One authored field and its history, documentation, and lint attributes.
 #[derive(Clone)]
 pub struct NamedField {
     /// Authored field name.

@@ -1,27 +1,13 @@
-//! Shared mechanical contracts and strict codecs for authored records and values.
+//! Strict map-only codecs for generated named records.
 
 use crate::{lint_attributes::lint_attributes, model::NamedField};
 use proc_macro2::{Span, TokenStream};
 use quote::{format_ident, quote};
-use syn::{DeriveInput, Ident, Result};
+use syn::Ident;
 
-/// Emit mechanical record contracts and strict map-only serialization codecs.
-pub fn record(
-    name: &Ident,
-    fields: &[NamedField],
-    equality: bool,
-    support: &TokenStream,
-) -> Result<TokenStream> {
+/// Emit strict map-only serialization codecs without choosing ordinary record traits.
+pub fn record(name: &Ident, fields: &[NamedField], support: &TokenStream) -> TokenStream {
     let serde = quote!(#support::serde);
-    let redactable = quote!(#support::redactable);
-    let declarations = fields.iter().map(|field| {
-        let name = &field.name;
-        let ty = &field.ty;
-        let attrs = &field.attributes;
-        quote!(#(#attrs)* #name:#ty)
-    });
-    let input: DeriveInput = syn::parse2(quote!(struct #name {#(#declarations),*}))?;
-    let contract = crate::binding_contract::binding_contract(&input, &redactable, equality, false)?;
     let names = fields.iter().map(|field| &field.name).collect::<Vec<_>>();
     let helper_fields = fields.iter().map(|field| {
         let name = &field.name;
@@ -43,8 +29,7 @@ pub fn record(
     let decoder = format_ident!("__typehistory_deserializer", span = Span::mixed_site());
     let map = format_ident!("__typehistory_map", span = Span::mixed_site());
     let record = format_ident!("__typehistory_record", span = Span::mixed_site());
-    Ok(quote! {
-        #contract
+    quote! {
         #[derive(#serde::Deserialize)]
         #[serde(crate = #serde_path, deny_unknown_fields)]
         struct #helper {#(#helper_fields),*}
@@ -71,5 +56,5 @@ pub fn record(
                 #serde::Deserializer::deserialize_map(#decoder, #visitor)
             }
         }
-    })
+    }
 }

@@ -63,7 +63,7 @@ fn target_dependencies_enforce_drafts_and_frozen_inventory() {
 }
 
 #[test]
-fn standalone_adjacent_history_runtime_and_safe_errors() {
+fn standalone_adjacent_history_runtime_and_error_sources() {
     let fixture = Fixture::frozen();
     fixture.write("src/lib.rs", V2);
     success(&fixture.cargo(&["build", "--locked", "--offline"]));
@@ -96,6 +96,18 @@ fn standalone_compiler_checks_history_contracts_and_macro_hygiene() {
     let fixture = Fixture::frozen();
     let before = fixture.read(LEDGER);
     let cases = [
+        (
+            V2.replace("impl Error for ConvertError {}", ""),
+            "std::error::Error",
+        ),
+        (
+            V1.replace("pub count", "#[not_sensitive] pub count"),
+            "record fields support only documentation",
+        ),
+        (
+            V1.replace("pub count", "#[sensitive] pub count"),
+            "record fields support only documentation",
+        ),
         (
             V2.replace(", cast_from_previous_value = widen", ""),
             "cast_from_previous",
@@ -164,7 +176,7 @@ fn standalone_compiler_checks_history_contracts_and_macro_hygiene() {
         (
             V1.replace(
                 "pub count: u32,",
-                "pub r#count: u32,\n#[not_sensitive] pub count: u32,",
+                "pub r#count: u32,\npub count: u32,",
             ),
             "duplicate",
         ),
@@ -215,7 +227,7 @@ use history_api::history as evolve;
 mod nested {{
     use super::evolve;
     #[evolve(id = "example.raw.record")]
-    pub struct Raw {{ #[not_sensitive] pub r#type: u32 }}
+    pub struct Raw {{ pub r#type: u32 }}
 }}
 #[test]
 fn public_aliases_and_raw_names_are_usable() {{
@@ -272,7 +284,7 @@ fn standalone_removed_field_visibility_and_module_relative_callbacks() {
             r#"{V1}
 mod private {{
     #[history_api::history(id = "example.private.record")]
-    pub struct Hidden {{ #[not_sensitive] value: String }}
+    pub struct Hidden {{ value: String }}
 }}
 fn forbidden(value: private::Hidden) {{ let _ = value.value; }}
 "#

@@ -23,6 +23,9 @@ use typehistory_codegen::{
 /// import authority. Field `#[history(...)]` records describe additions, updates,
 /// and removals newest first. The macro supplies record traits and the current
 /// alias; additional derives on its input are rejected.
+///
+/// Generated records implement `Clone`, `PartialEq`, and ordinary `Debug`.
+/// `Debug` formats field values. Every retained field type must implement these traits.
 #[proc_macro_attribute]
 pub fn history(arguments: TokenStream, item: TokenStream) -> TokenStream {
     match expand(
@@ -36,7 +39,7 @@ pub fn history(arguments: TokenStream, item: TokenStream) -> TokenStream {
 
 /// Describe the structural wire shape of a concrete named record.
 ///
-/// Generates schema contracts without codecs, redaction, or business validation.
+/// Generates structural schema contracts. Authors supply codecs and business validation.
 /// Authors supply matching ordinary traits. Container `#[serde(deny_unknown_fields)]`
 /// is supported for a closed Serde record. Other wire-shaping attributes,
 /// generics, and non-record declarations are rejected.

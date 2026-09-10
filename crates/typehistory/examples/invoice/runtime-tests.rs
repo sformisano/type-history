@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
-    use super::{Invoice, InvoiceV3};
-    use redactable::ToRedacted;
+    use super::{ConvertError, Invoice, InvoiceV3};
+    use std::error::Error;
     use typehistory::{decode, DecodeFailureKind, HasHistory, PayloadVersion, ReadError};
 
     #[test]
@@ -9,11 +9,11 @@ mod tests {
         let value = decode::<Invoice>(
             &Invoice::TYPE,
             PayloadVersion::INITIAL,
-            br#"{"legacy":"PAYLOAD_SECRET","count":42}"#,
+            br#"{"legacy":"INV-42","count":42}"#,
         )
         .unwrap();
         assert_eq!(value.count, "42");
-        assert_eq!(value.label, "PAYLOAD_SECRET");
+        assert_eq!(value.label, "INV-42");
         assert_eq!(value.revision, 7);
         assert_eq!(Invoice::VERSION.get(), 3);
         let _: Invoice = InvoiceV3 {
@@ -21,8 +21,6 @@ mod tests {
             label: "current".to_owned(),
             revision: 7,
         };
-        assert!(!format!("{value:?}").contains("PAYLOAD_SECRET"));
-        assert!(!value.to_redacted().text().contains("PAYLOAD_SECRET"));
     }
 
     #[test]
@@ -30,7 +28,7 @@ mod tests {
         let failure = decode::<Invoice>(
             &Invoice::TYPE,
             PayloadVersion::INITIAL,
-            br#"{"legacy":"PAYLOAD_SECRET","count":13}"#,
+            br#"{"legacy":"INV-13","count":13}"#,
         )
         .unwrap_err();
         let ReadError::Decode(error) = &failure else {
@@ -40,7 +38,11 @@ mod tests {
         assert_eq!(error.adjacent_from().unwrap().get(), 2);
         assert_eq!(error.adjacent_to().unwrap().get(), 3);
         assert_eq!(error.kind(), DecodeFailureKind::Upcast);
-        assert!(failure.to_string().contains("safe conversion failure"));
-        assert!(!serde_json::to_string(&failure).unwrap().contains("PAYLOAD_SECRET"));
+        let cause = error
+            .source()
+            .unwrap()
+            .downcast_ref::<ConvertError>()
+            .unwrap();
+        assert_eq!(cause.0, 13);
     }
 }

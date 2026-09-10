@@ -136,7 +136,9 @@ pub enum SourceDiagnostic {
         path: String,
     },
     /// cfg_attr syntax was not auditable.
-    #[error("cfg_attr on a schema surface is not auditable; keep only documentation, lint, or redaction attributes")]
+    #[error(
+        "cfg_attr on a schema surface is not auditable; keep only documentation or lint attributes"
+    )]
     InvalidCfgAttr,
     /// Project source occupied a namespace reserved for generated authority.
     #[error("project item `{name}` in `{path}` uses a generated reserved prefix")]

@@ -254,7 +254,7 @@ mod tests {
             "use history_api::history as evolve; #[path=\"invoice.rs\"] mod invoice;",
         )
         .unwrap();
-        fs::write(root.path().join("src/invoice.rs"), "use crate::evolve; #[evolve(id=\"billing.invoice.issued\")] pub struct Invoice { #[not_sensitive] number: String }").unwrap();
+        fs::write(root.path().join("src/invoice.rs"), "use crate::evolve; #[evolve(id=\"billing.invoice.issued\")] pub struct Invoice { number: String }").unwrap();
         let source = discover(root.path(), &library, &["history_api".to_owned()]).unwrap();
         assert_eq!(source.declarations.len(), 1);
         assert_eq!(source.declarations[0].identity, "billing.invoice.issued");

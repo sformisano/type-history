@@ -61,7 +61,7 @@ pub fn parse(arguments: Arguments, item: ItemStruct) -> Result<(RecordInput, Str
         attributes.push(syn::parse_quote!(#[history(retained_from = #floor)]));
     }
     for attribute in &attributes {
-        if !allowed(attribute, true) {
+        if !allowed(attribute) {
             return Err(Error::new_spanned(attribute, "history owns record derives and wire contracts; only documentation, lints, and retained history metadata are supported"));
         }
     }
@@ -71,11 +71,13 @@ pub fn parse(arguments: Arguments, item: ItemStruct) -> Result<(RecordInput, Str
     let mut fields = Vec::new();
     for field in &named.named {
         for attribute in &field.attrs {
-            if !allowed(attribute, false) {
-                return Err(Error::new_spanned(attribute, "record fields support documentation, lints, sensitivity, and exactly `#[history(...)]`"));
+            if !allowed(attribute) {
+                return Err(Error::new_spanned(
+                    attribute,
+                    "record fields support only documentation, lints, and `#[history(...)]`",
+                ));
             }
         }
-        crate::sensitivity::parse_sensitivity_metadata(&field.attrs)?;
         let name = field.ident.clone().expect("named field");
         field_visibility.insert(
             name.to_string().trim_start_matches("r#").to_owned(),
@@ -98,14 +100,10 @@ pub fn parse(arguments: Arguments, item: ItemStruct) -> Result<(RecordInput, Str
     Ok((input, identity))
 }
 
-fn allowed(attribute: &Attribute, container: bool) -> bool {
+fn allowed(attribute: &Attribute) -> bool {
     ["doc", "allow", "warn", "deny", "history"]
         .iter()
         .any(|name| attribute.path().is_ident(name))
-        || (!container
-            && ["sensitive", "not_sensitive"]
-                .iter()
-                .any(|name| attribute.path().is_ident(name)))
 }
 
 /// Reject generic records outside the supported structural history subset.
@@ -117,4 +115,65 @@ pub fn reject_generics(generics: &Generics) -> Result<()> {
         ));
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse;
+    use syn::{parse_quote, Attribute};
+
+    #[test]
+    fn plain_fields_keep_documentation_lints_and_history() {
+        let (input, identity) = parse(
+            parse_quote!(id = "example.record.created"),
+            parse_quote! {
+                /// Current record.
+                #[allow(dead_code)]
+                pub struct Record {
+                    pub value: String,
+                    /// Added label.
+                    #[allow(deprecated)]
+                    #[history(added_at = v2, backfill_value = String::new())]
+                    pub label: String,
+                }
+            },
+        )
+        .expect("ordinary record fields");
+        assert_eq!(identity, "example.record.created");
+        assert!(input.fields[0].attributes.is_empty());
+        let attributes = &input.fields[1].attributes;
+        for name in ["doc", "allow", "history"] {
+            assert!(attributes
+                .iter()
+                .any(|attribute| attribute.path().is_ident(name)));
+        }
+    }
+
+    #[test]
+    fn redaction_markers_are_unsupported_field_attributes() {
+        let attributes: [Attribute; 4] = [
+            parse_quote!(#[sensitive]),
+            parse_quote!(#[sensitive(crate::Policy)]),
+            parse_quote!(#[not_sensitive]),
+            parse_quote!(#[cfg_attr(all(), not_sensitive)]),
+        ];
+        for attribute in attributes {
+            let result = parse(
+                parse_quote!(id = "example.record.created"),
+                parse_quote! {
+                    struct Record {
+                        #attribute
+                        value: String,
+                    }
+                },
+            );
+            let Err(error) = result else {
+                panic!("unsupported field attribute was accepted: {attribute:?}");
+            };
+            assert_eq!(
+                error.to_string(),
+                "record fields support only documentation, lints, and `#[history(...)]`",
+            );
+        }
+    }
 }

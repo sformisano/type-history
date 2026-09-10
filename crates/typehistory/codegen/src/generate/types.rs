@@ -1,4 +1,7 @@
 //! Retained records, their current alias, and schema expressions.
+//!
+//! Each retained record derives Clone, PartialEq, and ordinary Debug.
+//! Debug formats field values, so every retained field type must implement Debug.
 
 use crate::{
     lint_attributes::{lint_attributes, scoped_field_type},
@@ -48,7 +51,7 @@ pub(super) fn generate(context: &Context<'_>) -> Result<(TokenStream, Vec<Genera
             let schema = crate::json_schema_derive::field_attribute(&support, ty);
             quote!(#(#docs)* #(#lints)* #schema #field_visibility #name: #ty)
         });
-        let contract = crate::record::record(&name, &fields, true, &support)?;
+        let codecs = crate::record::record(&name, &fields, &support);
         let wire_type = crate::resolved_schema::record_wire_type(
             fields.iter().map(|field| (&field.name, &field.ty)),
             &support,
@@ -57,9 +60,10 @@ pub(super) fn generate(context: &Context<'_>) -> Result<(TokenStream, Vec<Genera
         declarations.push(quote! {
             #(#field_aliases)*
             #[doc(hidden)]
+            #[derive(::core::clone::Clone, ::core::cmp::PartialEq, ::core::fmt::Debug)]
             #schema_derive
             #visibility struct #name { #(#field_declarations),* }
-            #contract
+            #codecs
             #[doc(hidden)]
             #visibility struct #wire_marker;
             impl #support_path::WireNode for #wire_marker {

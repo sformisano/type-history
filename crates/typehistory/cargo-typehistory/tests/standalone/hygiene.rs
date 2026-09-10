@@ -1,7 +1,7 @@
 use super::support::{failure, success, Fixture};
 
 #[test]
-fn mapper_parameters_preserve_authored_types_and_policies() {
+fn generated_traits_preserve_authored_field_types_and_values() {
     let fixture = Fixture::empty();
     success(&fixture.cli(&["init", "--package", "standalone-history-consumer"]));
     fixture.write(
@@ -9,47 +9,41 @@ fn mapper_parameters_preserve_authored_types_and_policies() {
         r##"
 #![deny(non_camel_case_types)]
 
-pub mod field_alias {
-    type M = String;
+type M = String;
 
-    #[history_api::history(id = "example.field.alias")]
-    pub struct Record {
-        #[sensitive(redactable::Secret)]
-        pub value: M,
-        #[not_sensitive]
-        pub public: u32,
-    }
-}
-
-pub mod policy_alias {
-    use redactable::Secret as M;
-
-    #[history_api::history(id = "example.policy.alias")]
-    pub struct Record {
-        #[sensitive(M)]
-        pub value: String,
-    }
+#[history_api::history(id = "example.field.alias")]
+pub struct Record {
+    pub value: M,
+    pub count: u32,
 }
 
 #[test]
-fn aliased_fields_and_policies_still_redact() {
-    use history_api::{decode, HasHistory, PayloadVersion};
-    use redactable::{Redactable, ToRedacted};
+fn generated_records_use_ordinary_traits_and_preserve_decoder_errors() {
+    use history_api::{decode, DecodeFailureKind, HasHistory, PayloadVersion, ReadError};
+    use serde_json::Error as JsonError;
+    use std::error::Error;
 
-    let source = decode::<field_alias::Record>(
-        &field_alias::Record::TYPE,
+    let source = decode::<Record>(
+        &Record::TYPE,
         PayloadVersion::INITIAL,
-        br#"{"value":"FIELD_SECRET","public":7}"#,
+        br#"{"value":"INV-7","count":7}"#,
     ).unwrap();
-    assert_eq!(source.value, "FIELD_SECRET");
-    let safe = source.clone().redact();
-    assert_ne!(safe.value, source.value);
-    assert_eq!(safe.public, 7);
-    assert!(!format!("{source:?}").contains("FIELD_SECRET"));
-    assert!(!source.to_redacted().text().contains("FIELD_SECRET"));
+    let copied = source.clone();
+    assert_eq!(source, copied);
+    assert_eq!(copied.value, "INV-7");
+    assert_eq!(copied.count, 7);
+    let text = format!("{source:?}");
+    assert!(text.contains("value: \"INV-7\""));
+    assert!(text.contains("count: 7"));
 
-    let policy = policy_alias::Record { value: "POLICY_SECRET".to_owned() }.redact();
-    assert_ne!(policy.value, "POLICY_SECRET");
+    let ReadError::Decode(error) = decode::<Record>(
+        &Record::TYPE,
+        PayloadVersion::INITIAL,
+        br#"{"value":"INV-7","count":"wrong"}"#,
+    ).unwrap_err() else { panic!("expected a decoder error") };
+    assert_eq!(error.kind(), DecodeFailureKind::Decode);
+    assert_eq!(error.source_version(), PayloadVersion::INITIAL);
+    assert!(error.source().unwrap().is::<JsonError>());
 }
 "##,
     );
@@ -94,7 +88,7 @@ fn generated_records_and_schema_helpers_keep_authored_lint_scope() {
 
     let transition_source = LINT_SOURCE.replacen(
         "pub camelCase: u32,",
-        "pub camelCase: u32,\n    #[not_sensitive]\n    #[history(added_at = v2, backfill_value = INITIAL_REVISION)]\n    pub revision: u32,",
+        "pub camelCase: u32,\n    #[history(added_at = v2, backfill_value = INITIAL_REVISION)]\n    pub revision: u32,",
         1,
     );
     fixture.write("src/lib.rs", &transition_source);
@@ -121,20 +115,21 @@ fn deprecated_field_types_keep_their_field_allowances() {
 
     // One field's allowance must not relax a neighboring field's explicit deny,
     // either in a generated history or in a supporting schema record.
-    for field in [
-        "#[allow(deprecated)]\n    #[not_sensitive]\n    pub second: Old",
-        "#[allow(deprecated)]\n    pub second: Old",
-    ] {
+    for record in ["Record", "Supporting"] {
+        let field = "#[allow(deprecated)]\n    pub second: Old";
         let denied = field.replace("allow(deprecated)", "deny(deprecated)");
-        fixture.write("src/lib.rs", &DEPRECATED_SOURCE.replace(field, &denied));
+        let marker = format!("pub struct {record} {{");
+        let (prefix, body) = DEPRECATED_SOURCE.split_once(&marker).unwrap();
+        let source = format!("{prefix}{marker}{}", body.replacen(field, &denied, 1));
+        fixture.write("src/lib.rs", &source);
         failure(
             &fixture.cargo(&["build", "--locked", "--offline"]),
             "deprecated type alias `Old`",
         );
     }
 
-    let backfill = "    #[allow(deprecated)]\n    #[not_sensitive]\n    #[history(added_at = v2, backfill_value = INITIAL_REVISION)]\n    pub revision: u32,";
-    let callback = "    #[allow(deprecated)]\n    #[not_sensitive]\n    #[history(added_at = v2, cast_from_previous_payload = birth)]\n    pub copied: u32,";
+    let backfill = "    #[allow(deprecated)]\n    #[history(added_at = v2, backfill_value = INITIAL_REVISION)]\n    pub revision: u32,";
+    let callback = "    #[allow(deprecated)]\n    #[history(added_at = v2, cast_from_previous_payload = birth)]\n    pub copied: u32,";
     let updated = DEPRECATED_SOURCE.replacen(
         "pub value: Old,",
         "#[history(updated_at = v2, previous_type = Old, cast_from_previous_value = update)]\n    pub value: Old,",
@@ -167,7 +162,8 @@ fn deprecated_field_types_keep_their_field_allowances() {
 const DEPRECATED_SOURCE: &str = r##"
 #![deny(deprecated)]
 
-use redactable::{BypassTextRedaction, RedactedValue, ToRedacted};
+use std::error::Error;
+use std::fmt::{Display, Formatter, Result as FmtResult};
 
 #[deprecated]
 type Old = String;
@@ -175,10 +171,8 @@ type Old = String;
 #[history_api::history(id = "example.deprecated.field")]
 pub struct Record {
     #[allow(deprecated)]
-    #[not_sensitive]
     pub value: Old,
     #[allow(deprecated)]
-    #[not_sensitive]
     pub second: Old,
 }
 
@@ -193,11 +187,12 @@ pub struct Supporting {
 #[derive(Debug)]
 pub struct ConvertError;
 
-impl ToRedacted for ConvertError {
-    fn to_redacted(&self) -> RedactedValue {
-        BypassTextRedaction("conversion failed".to_owned()).to_redacted()
+impl Display for ConvertError {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
+        formatter.write_str("conversion failed")
     }
 }
+impl Error for ConvertError {}
 
 #[deprecated]
 pub fn update(value: String) -> Result<String, ConvertError> {
@@ -244,7 +239,6 @@ pub const INITIAL_REVISION: u32 = 1;
 #[allow(non_snake_case)]
 #[allow(deprecated)]
 pub struct ContainerAllowance {
-    #[not_sensitive]
     pub camelCase: u32,
 }
 
@@ -252,7 +246,6 @@ pub struct ContainerAllowance {
 #[allow(non_snake_case)]
 pub struct FieldAllowance {
     #[allow(non_snake_case)]
-    #[not_sensitive]
     pub camelCase: u32,
 }
 

@@ -44,7 +44,6 @@ mod records {
 
     #[api::history(id = "billing.invoice.issued")]
     pub struct Invoice {
-        #[not_sensitive]
         pub value: String,
     }
 }
@@ -133,7 +132,6 @@ fn feature_selected_path_dependencies_are_captured_and_checked() {
     let source = r#"
 #[history_api::history(id = "billing.invoice.issued")]
 pub struct Invoice {
-    #[not_sensitive]
     pub value: optional_support::Value,
 }
 "#;

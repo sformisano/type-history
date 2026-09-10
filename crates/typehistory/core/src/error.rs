@@ -1,59 +1,64 @@
-//! Standalone safe decoding errors and typed identity dispatch.
+//! Decoding errors with original sources and typed identity dispatch.
 
 use std::{
     error::Error,
-    fmt::{Debug, Display, Formatter, Result as FmtResult},
+    fmt::{Display, Formatter, Result as FmtResult},
 };
 
-use redactable::{BypassJsonRedaction, BypassTextRedaction, RedactedValue, ToRedacted};
-use serde::{ser::SerializeStruct, Serialize, Serializer};
+use serde_json::Error as JsonError;
 
-use crate::{
-    DecodeContext, DecodeFailureKind, History, HistoryFailure, PayloadVersion, TypeIdentity,
-};
+use crate::{DecodeContext, DecodeFailureKind, History, PayloadVersion, TypeIdentity};
 
-/// Observation-safe standalone failure with original and adjacent version context.
-#[derive(Clone, PartialEq, Eq)]
-pub struct DecodeError(HistoryFailure<RedactedValue>);
+/// Decoding failure with original and adjacent version context.
+///
+/// [`Error::source`] exposes the original decoder or conversion error.
+#[derive(Debug)]
+pub struct DecodeError {
+    context: DecodeContext,
+    source: Option<Box<dyn Error + Send + Sync + 'static>>,
+}
 
 impl DecodeError {
     /// Reject an unsupported stored version without inspecting its bytes.
     pub fn unsupported(identity: TypeIdentity, source_version: PayloadVersion) -> Self {
-        Self(HistoryFailure::unsupported(identity, source_version))
+        Self {
+            context: DecodeContext::unsupported(identity, source_version),
+            source: None,
+        }
     }
 
-    /// Discard raw decoder details and retain a fixed safe wire failure.
-    pub fn decode(identity: TypeIdentity, source_version: PayloadVersion) -> Self {
-        Self(HistoryFailure::decode(
-            identity,
-            source_version,
-            BypassTextRedaction("history wire decoding failed".to_owned()).to_redacted(),
-        ))
+    /// Retain the original JSON decoder error and stored version.
+    pub fn decode(
+        identity: TypeIdentity,
+        source_version: PayloadVersion,
+        error: JsonError,
+    ) -> Self {
+        Self {
+            context: DecodeContext::decode(identity, source_version),
+            source: Some(Box::new(error)),
+        }
     }
 
-    /// Capture an author's error through its declared safe output exactly once.
+    /// Retain an owned conversion error and the failing adjacent versions.
     pub fn upcast<E>(
         identity: TypeIdentity,
         source_version: PayloadVersion,
         adjacent_from: PayloadVersion,
         adjacent_to: PayloadVersion,
-        error: &E,
+        error: E,
     ) -> Self
     where
-        E: Debug + ToRedacted + Send + Sync + 'static,
+        E: Error + Send + Sync + 'static,
     {
-        Self(HistoryFailure::upcast(
-            identity,
-            source_version,
-            adjacent_from,
-            adjacent_to,
-            error.to_redacted(),
-        ))
+        Self {
+            context: DecodeContext::upcast(identity, source_version, adjacent_from, adjacent_to),
+            source: Some(Box::new(error)),
+        }
     }
 
     /// Immutable identity and version context.
     pub const fn context(&self) -> &DecodeContext {
-        self.0.context()
+        &self.context
     }
 
     /// Stable logical record identity.
@@ -80,63 +85,35 @@ impl DecodeError {
     pub const fn kind(&self) -> DecodeFailureKind {
         self.context().kind()
     }
-
-    /// Author-declared safe cause, or the fixed safe wire failure.
-    pub fn redacted_cause(&self) -> Option<&RedactedValue> {
-        self.0.safe_cause()
-    }
-}
-
-impl Serialize for DecodeError {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let mut record = serializer.serialize_struct("DecodeError", 6)?;
-        record.serialize_field("identity", self.identity())?;
-        record.serialize_field("source_version", &self.source_version())?;
-        record.serialize_field("adjacent_from", &self.adjacent_from())?;
-        record.serialize_field("adjacent_to", &self.adjacent_to())?;
-        record.serialize_field("kind", &self.kind())?;
-        record.serialize_field(
-            "redacted_cause",
-            &self.redacted_cause().map(RedactedValue::json),
-        )?;
-        record.end()
-    }
-}
-
-impl Debug for DecodeError {
-    fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
-        formatter
-            .debug_struct("DecodeError")
-            .field("identity", self.identity())
-            .field("source_version", &self.source_version())
-            .field("adjacent_from", &self.adjacent_from())
-            .field("adjacent_to", &self.adjacent_to())
-            .field("kind", &self.kind())
-            .field(
-                "redacted_cause",
-                &self.redacted_cause().map(RedactedValue::json),
-            )
-            .finish()
-    }
-}
-
-impl ToRedacted for DecodeError {
-    fn to_redacted(&self) -> RedactedValue {
-        // Serialization contains only validated metadata and captured safe JSON.
-        BypassJsonRedaction(self).to_redacted()
-    }
 }
 
 impl Display for DecodeError {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
-        formatter.write_str(&self.to_redacted().text())
+        let failure = match self.kind() {
+            DecodeFailureKind::UnsupportedVersion => "unsupported stored version",
+            DecodeFailureKind::Decode => "wire decoding failed",
+            DecodeFailureKind::Upcast => "conversion failed",
+        };
+        write!(
+            formatter,
+            "{failure} for {} at stored version {}",
+            self.identity(),
+            self.source_version(),
+        )?;
+        if let (Some(from), Some(to)) = (self.adjacent_from(), self.adjacent_to()) {
+            write!(formatter, " during version {from} to {to}")?;
+        }
+        Ok(())
     }
 }
 
-impl Error for DecodeError {}
+impl Error for DecodeError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        self.source
+            .as_deref()
+            .map(|source| source as &(dyn Error + 'static))
+    }
+}
 
 /// Current record with a generated exact-version history.
 pub trait HasHistory: Sized {
@@ -166,7 +143,7 @@ pub fn decode<T: HasHistory>(
 }
 
 /// A stored identity mismatch or an exact-version decoding failure.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug)]
 pub enum ReadError {
     /// Stored identity differs from the requested current record.
     TypeMismatch {
@@ -175,20 +152,24 @@ pub enum ReadError {
         /// Identity read from storage.
         found: TypeIdentity,
     },
-    /// Historical decoding or one adjacent conversion failed safely.
+    /// Historical decoding or one adjacent conversion failed.
     Decode(DecodeError),
-}
-
-impl ToRedacted for ReadError {
-    fn to_redacted(&self) -> RedactedValue {
-        // Both variants serialize only validated identities and safe failures.
-        BypassJsonRedaction(self).to_redacted()
-    }
 }
 
 impl Display for ReadError {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
-        formatter.write_str(&self.to_redacted().text())
+        match self {
+            Self::TypeMismatch { expected, found } => write!(
+                formatter,
+                "stored type {found} does not match expected type {expected}",
+            ),
+            Self::Decode(error) => write!(
+                formatter,
+                "cannot read {} at stored version {}",
+                error.identity(),
+                error.source_version(),
+            ),
+        }
     }
 }
 

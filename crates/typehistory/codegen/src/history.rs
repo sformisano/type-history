@@ -30,7 +30,7 @@ pub struct RetainedField {
     pub name: Ident,
     /// Resolved type at this version.
     pub ty: Type,
-    /// Attributes replayed on the generated field, redaction included.
+    /// Documentation and lint attributes replayed on the generated field.
     pub attributes: Vec<Attribute>,
 }
 

@@ -1,12 +1,6 @@
 pub mod addresses {
     #[derive(
-        Clone,
-        Debug,
-        PartialEq,
-        serde::Serialize,
-        serde::Deserialize,
-        redactable::NotSensitive,
-        typehistory::Schema,
+        Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize, typehistory::Schema,
     )]
     #[serde(deny_unknown_fields)]
     pub struct Address {

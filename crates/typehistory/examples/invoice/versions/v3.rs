@@ -1,27 +1,28 @@
-use redactable::{BypassTextRedaction, RedactedValue, ToRedacted};
+use std::{
+    error::Error,
+    fmt::{Display, Formatter, Result as FmtResult},
+};
 
 #[derive(Debug)]
-pub struct ConvertError;
+pub struct ConvertError(pub u64);
 
-impl ToRedacted for ConvertError {
-    fn to_redacted(&self) -> RedactedValue {
-        BypassTextRedaction("safe conversion failure".to_owned()).to_redacted()
+impl Display for ConvertError {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
+        write!(formatter, "count {} cannot be converted", self.0)
     }
 }
 
+impl Error for ConvertError {}
+
 #[typehistory::history(id = "billing.invoice.issued")]
 pub struct Invoice {
-    #[sensitive(redactable::Secret)]
     #[history(removed_at = v2)]
     pub legacy: String,
-    #[not_sensitive]
     #[history(updated_at = v3, previous_type = u64, cast_from_previous_value = stringify)]
     #[history(updated_at = v2, previous_type = u32, cast_from_previous_value = widen)]
     pub count: String,
-    #[sensitive(redactable::Secret)]
     #[history(added_at = v2, cast_from_previous_payload = label)]
     pub label: String,
-    #[not_sensitive]
     #[history(added_at = v2, backfill_value = 7_u32)]
     pub revision: u32,
 }
@@ -36,7 +37,7 @@ fn label(previous: &InvoiceV1) -> Result<String, ConvertError> {
 
 fn stringify(value: u64) -> Result<String, ConvertError> {
     if value == 13 {
-        Err(ConvertError)
+        Err(ConvertError(value))
     } else {
         Ok(value.to_string())
     }
