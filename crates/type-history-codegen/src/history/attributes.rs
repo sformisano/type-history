@@ -74,7 +74,7 @@ impl FieldHistoryRecord {
 
     pub(super) fn label(&self) -> &'static str {
         match self {
-            Self::Added { .. } => "added_at",
+            Self::Added { .. } => "added_in",
             Self::Updated { .. } => "updated_at",
             Self::Removed { .. } => "removed_at",
         }
@@ -216,7 +216,7 @@ impl Parse for ParsedRecord {
         reject_trailing(input, &marker)?;
 
         let record = match marker.to_string().as_str() {
-            "added_at" => {
+            "added_in" => {
                 if let Some(previous_type) = previous_type {
                     return Err(Error::new_spanned(
                         previous_type,
@@ -300,7 +300,7 @@ impl Parse for ParsedRecord {
                 return Err(Error::new_spanned(
                     &marker,
                     format!(
-                        "unknown history record `{other}`; use `added_at`, `updated_at`, `removed_at`, or `retained_from`"
+                        "unknown history record `{other}`; use `added_in`, `updated_at`, `removed_at`, or `retained_from`"
                     ),
                 ));
             }

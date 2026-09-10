@@ -75,7 +75,7 @@ fn normalize_indentation(source: &str) -> String {
 
 pub(super) fn receipt_v3() -> String {
     let v2 = documented("quick-example:v2.rs");
-    let old_currency = "    #[history(added_at = v2, backfill_value = \"USD\".to_owned())]\n    pub currency: String,";
+    let old_currency = "    #[history(added_in = v2, backfill_value = \"USD\".to_owned())]\n    pub currency: String,";
     assert_eq!(v2.matches(old_currency).count(), 1, "V2 currency field");
     let mut v3 = v2.replacen(old_currency, documented("reference:same-type-field.rs"), 1);
     let end = v3.rfind('}').expect("receipt declaration's closing brace");

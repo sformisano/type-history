@@ -20,7 +20,7 @@ fn source(version: u32) -> String {
     let label = if version == 1 {
         ""
     } else {
-        "#[sensitive] #[history(added_at = v2, cast_from_previous_payload = label)] pub label: String,"
+        "#[sensitive] #[history(added_in = v2, cast_from_previous_payload = label)] pub label: String,"
     };
     format!("{COMMON}\n#[history_api::versioned(stable_id = \"example.secure.record\", redacted)]\npub struct Secure {{\n{legacy}\n{count}\n{label}\n pub nested: Details,\n pub wrapped: SensitiveValue<String, WrapperSecret>,\n #[not_sensitive] pub public: String,\n}}\n")
 }

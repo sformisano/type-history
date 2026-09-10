@@ -13,7 +13,7 @@ fn main() {
                 #[history(updated_at = v2, previous_type = u32, cast_from_previous_value = convert)]
                 pub value: String,
                 #[not_sensitive]
-                #[history(added_at = v2, cast_from_previous_payload = inspect)]
+                #[history(added_in = v2, cast_from_previous_payload = inspect)]
                 pub inspected: bool,
             }
         },

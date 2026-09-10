@@ -37,7 +37,7 @@ fn frozen_inventory_rejects_an_update_that_invents_a_predecessor_field() {
     else {
         panic!("an update cannot invent a frozen predecessor field");
     };
-    assert!(error.to_string().contains("added_at"), "{error}");
+    assert!(error.to_string().contains("added_in"), "{error}");
 }
 
 #[test]
@@ -84,7 +84,7 @@ fn boundaries_infer_the_current_version() {
             parse_quote!(OwnerName),
         ),
         field(
-            vec![parse_quote!(#[history(added_at = v3, backfill_value = "und".to_owned())])],
+            vec![parse_quote!(#[history(added_in = v3, backfill_value = "und".to_owned())])],
             "preferred_locale",
             parse_quote!(String),
         ),
@@ -106,7 +106,7 @@ fn repeated_updates_reconstruct_each_predecessor_type() {
             parse_quote!(#[history(removed_at = v6)]),
             parse_quote!(#[history(updated_at = v5, previous_type = u32, cast_from_previous_value = widen_count_u32)]),
             parse_quote!(#[history(updated_at = v3, previous_type = u16, cast_from_previous_value = widen_count_u16)]),
-            parse_quote!(#[history(added_at = v2, backfill_value = 0_u16)]),
+            parse_quote!(#[history(added_in = v2, backfill_value = 0_u16)]),
         ],
         "count",
         parse_quote!(u64),
@@ -125,7 +125,7 @@ fn repeated_updates_reconstruct_each_predecessor_type() {
 fn a_reversed_record_order_is_rejected() {
     let fields = vec![field(
         vec![
-            parse_quote!(#[history(added_at = v2, backfill_value = 0_u16)]),
+            parse_quote!(#[history(added_in = v2, backfill_value = 0_u16)]),
             parse_quote!(#[history(updated_at = v3, previous_type = u16, cast_from_previous_value = widen)]),
         ],
         "count",
@@ -139,7 +139,7 @@ fn a_reversed_record_order_is_rejected() {
 
 #[test]
 fn an_addition_without_an_initializer_is_rejected() {
-    let attribute: Attribute = parse_quote!(#[history(added_at = v2)]);
+    let attribute: Attribute = parse_quote!(#[history(added_in = v2)]);
     let error = parse_field_history(&[attribute])
         .err()
         .expect("initializer");
@@ -180,7 +180,7 @@ fn the_old_from_key_is_not_a_previous_type_alias() {
 
 #[test]
 fn competing_assignment_rules_are_rejected() {
-    let attribute: Attribute = parse_quote!(#[history(added_at = v2, backfill_value = 0, cast_from_previous_payload = build)]);
+    let attribute: Attribute = parse_quote!(#[history(added_in = v2, backfill_value = 0, cast_from_previous_payload = build)]);
     let error = parse_field_history(&[attribute]).err().expect("conflict");
     assert!(
         error.to_string().contains("exactly one assignment rule"),
@@ -191,7 +191,7 @@ fn competing_assignment_rules_are_rejected() {
 #[test]
 fn a_previous_value_callback_on_an_addition_is_rejected() {
     let attribute: Attribute =
-        parse_quote!(#[history(added_at = v2, cast_from_previous_value = convert)]);
+        parse_quote!(#[history(added_in = v2, cast_from_previous_value = convert)]);
     let error = parse_field_history(&[attribute]).err().expect("addition");
     assert!(
         error.to_string().contains("no predecessor value"),
@@ -213,7 +213,7 @@ fn a_removal_rejects_a_callback() {
 #[test]
 fn a_boundary_at_or_below_the_floor_is_rejected() {
     let fields = vec![field(
-        vec![parse_quote!(#[history(added_at = v3, backfill_value = 0_u32)])],
+        vec![parse_quote!(#[history(added_in = v3, backfill_value = 0_u32)])],
         "count",
         parse_quote!(u32),
     )];
@@ -229,7 +229,7 @@ fn a_boundary_at_or_below_the_floor_is_rejected() {
 #[test]
 fn an_imported_floor_retains_only_its_real_history() {
     let fields = vec![field(
-        vec![parse_quote!(#[history(added_at = v4, backfill_value = 0_u32)])],
+        vec![parse_quote!(#[history(added_in = v4, backfill_value = 0_u32)])],
         "count",
         parse_quote!(u32),
     )];
@@ -266,12 +266,12 @@ fn a_removal_still_contributes_to_inference_with_an_empty_latest_payload() {
 fn an_identity_step_is_generated_for_an_unchanged_intermediate_version() {
     let fields = vec![
         field(
-            vec![parse_quote!(#[history(added_at = v2, backfill_value = 0_u32)])],
+            vec![parse_quote!(#[history(added_in = v2, backfill_value = 0_u32)])],
             "first",
             parse_quote!(u32),
         ),
         field(
-            vec![parse_quote!(#[history(added_at = v4, backfill_value = 0_u32)])],
+            vec![parse_quote!(#[history(added_in = v4, backfill_value = 0_u32)])],
             "second",
             parse_quote!(u32),
         ),
@@ -286,7 +286,7 @@ fn an_identity_step_is_generated_for_an_unchanged_intermediate_version() {
 
 #[test]
 fn a_version_zero_boundary_is_rejected() {
-    let attribute: Attribute = parse_quote!(#[history(added_at = v0, backfill_value = 0)]);
+    let attribute: Attribute = parse_quote!(#[history(added_in = v0, backfill_value = 0)]);
     let error = parse_field_history(&[attribute]).err().expect("v0");
     assert!(error.to_string().contains("positive"), "{error}");
 }
@@ -294,7 +294,7 @@ fn a_version_zero_boundary_is_rejected() {
 #[test]
 fn a_boundary_above_the_supported_range_is_rejected() {
     let attribute: Attribute =
-        parse_quote!(#[history(added_at = v99999999999, backfill_value = 0)]);
+        parse_quote!(#[history(added_in = v99999999999, backfill_value = 0)]);
     let error = parse_field_history(&[attribute]).err().expect("range");
     assert!(
         error.to_string().contains("supported positive range"),
@@ -304,7 +304,7 @@ fn a_boundary_above_the_supported_range_is_rejected() {
 
 #[test]
 fn an_unknown_history_key_is_rejected() {
-    let attribute: Attribute = parse_quote!(#[history(added_at = v2, initial = 0)]);
+    let attribute: Attribute = parse_quote!(#[history(added_in = v2, initial = 0)]);
     let error = parse_field_history(&[attribute]).err().expect("unknown");
     assert!(error.to_string().contains("unknown history key"), "{error}");
 }
@@ -335,7 +335,7 @@ fn a_retained_floor_on_a_field_is_rejected() {
 
 #[test]
 fn an_event_level_field_record_is_rejected() {
-    let attribute: Attribute = parse_quote!(#[history(added_at = v2, backfill_value = 0)]);
+    let attribute: Attribute = parse_quote!(#[history(added_in = v2, backfill_value = 0)]);
     let error = parse_retained_floor(&[attribute]).expect_err("record placement");
     assert!(
         error.to_string().contains("place it on the field"),

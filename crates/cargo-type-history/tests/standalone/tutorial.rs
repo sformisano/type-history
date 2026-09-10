@@ -51,7 +51,7 @@ fn receipt_tutorial_reads_old_bytes_and_writes_current_payloads() {
     success(&fixture.cli(&["freeze", "--package", PACKAGE]));
     let frozen_v1 = fixture.read(LEDGER);
     let v2 = documented("quick-example:v2.rs");
-    let currency_history = "#[history(added_at = v2, backfill_value = \"USD\".to_owned())]";
+    let currency_history = "#[history(added_in = v2, backfill_value = \"USD\".to_owned())]";
     assert_eq!(v2.matches(currency_history).count(), 1);
     fixture.write("src/lib.rs", &v2.replacen(currency_history, "", 1));
     failure(

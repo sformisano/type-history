@@ -150,8 +150,8 @@ fn standalone_compiler_checks_history_contracts_and_macro_hygiene() {
         ),
         (
             V2.replace(
-                "#[history(added_at = v2, backfill_value = 7_u32)]",
-                "#[history(added_at = v2)]",
+                "#[history(added_in = v2, backfill_value = 7_u32)]",
+                "#[history(added_in = v2)]",
             ),
             "backfill_value",
         ),

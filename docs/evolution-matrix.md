@@ -16,7 +16,7 @@ Case IDs identify behavior families; this document is not a test-run report.
 |---|---|---|---|
 | M01 | Unannotated V1 field | S | Present from default floor V1, declared type copied across unchanged versions |
 | M02 | Unannotated imported-floor field | S | Present from explicit authorized retained_from; no fabricated lower type |
-| M03 | Added ordinary field | S | added_at plus exactly one backfill expression or payload callback |
+| M03 | Added ordinary field | S | added_in plus exactly one backfill expression or payload callback |
 | M04 | Added Option<T> | S | Explicit backfill_value=None or callback; omission is an error |
 | M05 | Added Default type | S | Explicit backfill_value=Type::default(); trait presence changes no macro rule |
 | M06 | Added field with default omitted | R | Missing initializer fails even for Option/Default |
@@ -63,7 +63,7 @@ Case IDs identify behavior families; this document is not a test-run report.
 | M41 | Update before birth or at/after removal | R | No active predecessor/destination interval |
 | M42 | Multiple addition or removal records | R | One field lifetime only |
 | M43 | Removed field later reintroduced with same name | U/R | Reserved historical Rust/wire name; parser rejects repeated birth/duplicate declaration |
-| M44 | Business concept reintroduced under distinct field name | S | New added_at rule; prior field remains removed and readable historically |
+| M44 | Business concept reintroduced under distinct field name | S | New added_in rule; prior field remains removed and readable historically |
 | M45 | Raw identifier clashes with same canonical name | R | Canonicalize r# prefix before uniqueness and JSON key checks |
 | M46 | Both cast forms or backfill plus cast | R | Exactly one assignment producer required |
 | M47 | Added field uses cast_from_previous_value | R | No previous same-named field exists |

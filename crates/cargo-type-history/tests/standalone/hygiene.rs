@@ -88,7 +88,7 @@ fn generated_records_and_schema_helpers_keep_authored_lint_scope() {
 
     let transition_source = LINT_SOURCE.replacen(
         "pub camelCase: u32,",
-        "pub camelCase: u32,\n    #[history(added_at = v2, backfill_value = INITIAL_REVISION)]\n    pub revision: u32,",
+        "pub camelCase: u32,\n    #[history(added_in = v2, backfill_value = INITIAL_REVISION)]\n    pub revision: u32,",
         1,
     );
     fixture.write("src/lib.rs", &transition_source);
@@ -128,8 +128,8 @@ fn deprecated_field_types_keep_their_field_allowances() {
         );
     }
 
-    let backfill = "    #[allow(deprecated)]\n    #[history(added_at = v2, backfill_value = INITIAL_REVISION)]\n    pub revision: u32,";
-    let callback = "    #[allow(deprecated)]\n    #[history(added_at = v2, cast_from_previous_payload = birth)]\n    pub copied: u32,";
+    let backfill = "    #[allow(deprecated)]\n    #[history(added_in = v2, backfill_value = INITIAL_REVISION)]\n    pub revision: u32,";
+    let callback = "    #[allow(deprecated)]\n    #[history(added_in = v2, cast_from_previous_payload = birth)]\n    pub copied: u32,";
     let updated = DEPRECATED_SOURCE.replacen(
         "pub value: Old,",
         "#[history(updated_at = v2, previous_type = Old, cast_from_previous_value = update)]\n    pub value: Old,",

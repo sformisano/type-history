@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Rename the field-history attribute `added_at` to `added_in`.
+  Frozen schemas remain unchanged.
 - Show the generated structs and conversion before introducing the current
   type alias in the README overview.
 - Explain the README's struct and field attributes in the order they appear.

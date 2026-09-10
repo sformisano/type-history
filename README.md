@@ -55,7 +55,7 @@ use type_history::versioned;
 pub struct ReceiptCreated {
     pub amount_cents: u64,
 
-    #[history(added_at = v2, backfill_value = "USD".to_owned())]
+    #[history(added_in = v2, backfill_value = "USD".to_owned())]
     pub currency: String,
 }
 ```
@@ -64,7 +64,7 @@ pub struct ReceiptCreated {
   - Its `stable_id` argument identifies this type and its history.
   - Once frozen, changing it fails the build (more on how this works later).
 - `#[history(...)]` describes the change to the `currency` field.
-  - `added_at = v2` introduces `currency` in V2.
+  - `added_in = v2` introduces `currency` in V2.
   - `backfill_value` supplies `"USD"` when converting V1 events, because the shop accepted only US dollars then.
 
 ### 2. Generated types and conversions
@@ -537,9 +537,9 @@ pub struct Invoice {
     pub legacy: String,
     #[history(updated_at = v2, previous_type = u32, cast_from_previous_value = widen)]
     pub count: u64,
-    #[history(added_at = v2, cast_from_previous_payload = label)]
+    #[history(added_in = v2, cast_from_previous_payload = label)]
     pub label: String,
-    #[history(added_at = v2, backfill_value = 7_u32)]
+    #[history(added_in = v2, backfill_value = 7_u32)]
     pub revision: u32,
 }
 
@@ -607,9 +607,9 @@ pub struct Invoice {
     #[history(updated_at = v3, previous_type = u64, cast_from_previous_value = stringify)]
     #[history(updated_at = v2, previous_type = u32, cast_from_previous_value = widen)]
     pub count: String,
-    #[history(added_at = v2, cast_from_previous_payload = label)]
+    #[history(added_in = v2, cast_from_previous_payload = label)]
     pub label: String,
-    #[history(added_at = v2, backfill_value = 7_u32)]
+    #[history(added_in = v2, backfill_value = 7_u32)]
     pub revision: u32,
 }
 
@@ -743,7 +743,7 @@ the retained floor is also the current version.
 | --- | --- |
 | `stable_id = "billing.invoice.issued"` | On the struct; fixes the history's identity independently of its Rust name |
 | `retained_from = vN` | On the struct; starts an imported history at N; requires a matching ledger and explicit import |
-| `added_at = vN` | Field first exists in N; provide one backfill or conversion function |
+| `added_in = vN` | Field first exists in N; provide one backfill or conversion function |
 | `updated_at = vN` | Field changes in N; provide its previous type and one conversion function |
 | `removed_at = vN` | Field disappears in N; keep its source declaration for earlier versions |
 | `previous_type = Old` | Required on an update; the field's type in the immediately previous version |
@@ -772,7 +772,7 @@ adding a reference to `ReceiptCreated` in V3 could use `None`:
 
 <!-- reference:optional-field.rs -->
 ```rust
-#[history(added_at = v3, backfill_value = None)]
+#[history(added_in = v3, backfill_value = None)]
 pub reference: Option<String>,
 ```
 
@@ -814,7 +814,7 @@ field's value. For the invoice's rename, the field declarations are:
 #[history(removed_at = v2)]
 pub legacy: String,
 
-#[history(added_at = v2, cast_from_previous_payload = label)]
+#[history(added_in = v2, cast_from_previous_payload = label)]
 pub label: String,
 ```
 
@@ -850,7 +850,7 @@ example, V3 could require uppercase currency codes in the receipt:
 <!-- reference:same-type-field.rs -->
 ```rust
 #[history(updated_at = v3, previous_type = String, cast_from_previous_value = uppercase)]
-#[history(added_at = v2, backfill_value = "USD".to_owned())]
+#[history(added_in = v2, backfill_value = "USD".to_owned())]
 pub currency: String,
 ```
 
@@ -883,7 +883,7 @@ For example, this field says when `revision` appears but leaves its earlier valu
 undefined:
 
 ```text
-#[history(added_at = v2)]
+#[history(added_in = v2)]
 pub revision: u32,
 ```
 

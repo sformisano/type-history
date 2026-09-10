@@ -3,14 +3,14 @@ use history_api::versioned;
 #[versioned(stable_id = "receipt_created")]
 pub struct ReceiptCreated {
     pub amount: u32,
-    #[history(added_at = v2, backfill_value = 7_u32)]
+    #[history(added_in = v2, backfill_value = 7_u32)]
     pub revision: u32,
 }
 
 #[versioned(stable_id = "shop.receipt")]
 pub struct Receipt {
     pub amount: u32,
-    #[history(added_at = v2, backfill_value = 7_u32)]
+    #[history(added_in = v2, backfill_value = 7_u32)]
     pub revision: u32,
 }
 

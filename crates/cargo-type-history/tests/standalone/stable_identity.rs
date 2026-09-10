@@ -7,7 +7,7 @@ const CHANGED_ID: &str = "billing.invoice.reissued";
 fn simple_and_two_segment_ids_freeze_evolve_and_keep_their_identity() {
     const SOURCE: &str = include_str!("fixtures/short-ids.rs");
     const ADDED_FIELD: &str =
-        "    #[history(added_at = v2, backfill_value = 7_u32)]\n    pub revision: u32,\n";
+        "    #[history(added_in = v2, backfill_value = 7_u32)]\n    pub revision: u32,\n";
     const PACKAGE: &str = "standalone-history-consumer";
 
     let fixture = Fixture::empty();

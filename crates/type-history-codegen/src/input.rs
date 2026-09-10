@@ -171,7 +171,7 @@ mod tests {
                     pub value: String,
                     /// Added label.
                     #[allow(deprecated)]
-                    #[history(added_at = v2, backfill_value = String::new())]
+                    #[history(added_in = v2, backfill_value = String::new())]
                     pub label: String,
                 }
             },

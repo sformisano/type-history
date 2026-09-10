@@ -284,7 +284,7 @@ impl HistoryPlan {
                 let name = field.name.to_string();
                 let name = name.strip_prefix("r#").unwrap_or(&name);
                 if !expected.contains(name) {
-                    return Err(Error::new_spanned(&field.name, format!("{identity} V{} field `{name}` did not exist in frozen history; use added_at at its actual successor boundary instead of inventing an earlier field", version.version)));
+                    return Err(Error::new_spanned(&field.name, format!("{identity} V{} field `{name}` did not exist in frozen history; use added_in at its actual successor boundary instead of inventing an earlier field", version.version)));
                 }
             }
             if let Some(name) = expected.iter().find(|name| !actual.contains(**name)) {

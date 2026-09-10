@@ -17,9 +17,9 @@ pub struct Invoice {
     pub legacy: String,
     #[history(updated_at = v2, previous_type = u32, cast_from_previous_value = widen)]
     pub count: u64,
-    #[history(added_at = v2, cast_from_previous_payload = label)]
+    #[history(added_in = v2, cast_from_previous_payload = label)]
     pub label: String,
-    #[history(added_at = v2, backfill_value = 7_u32)]
+    #[history(added_in = v2, backfill_value = 7_u32)]
     pub revision: u32,
 }
 
