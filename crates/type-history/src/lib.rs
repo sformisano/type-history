@@ -40,8 +40,9 @@
 //! Configure `type-history.toml` and call `type_history_build::compile()` from `build.rs`.
 //! Before declaring histories, initialize the empty ledger with
 //! `cargo type-history init --package YOUR_PACKAGE`. Replace `YOUR_PACKAGE` with
-//! the library package's name. The [guide](https://github.com/sformisano/type-history/blob/main/README.md)
-//! contains the setup walkthrough, field grammar, lifecycle commands, and error handling.
+//! the library package's name. The [setup guide](https://github.com/sformisano/type-history/blob/main/docs/setup.md)
+//! walks through these steps. The [documentation index](https://github.com/sformisano/type-history/blob/main/docs/README.md)
+//! links to field rules, lifecycle commands, and error handling.
 //!
 //! For existing storage that keeps JSON payloads and metadata separately, the
 //! low-level [`decode`] API remains available. Validate metadata at that boundary:

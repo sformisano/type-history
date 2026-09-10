@@ -21,7 +21,7 @@ historical conversion, metadata validation, and preserved callback errors.
 The [raw JSON tests](tests/history.rs) cover the existing low-level API for
 applications that already keep metadata separately.
 
-The [README tutorial](../../README.md#evolve-an-invoice-through-v1-v2-and-v3)
+The [invoice walkthrough](../../docs/guide.md)
 explains how to author and freeze each version. Those intermediate edits,
 expected compiler failures, and lifecycle operations belong to the
 [Rust integration tests](../../crates/cargo-type-history/tests/standalone/tutorial.rs):
@@ -30,5 +30,5 @@ expected compiler failures, and lifecycle operations belong to the
 cargo test -p cargo-type-history --test standalone tutorial --locked
 ```
 
-These tests compile the exact marked Rust blocks from the README in temporary
+These tests compile the exact marked Rust blocks from the documentation in temporary
 consumer packages. No shell runner or extra scripting runtime is required.

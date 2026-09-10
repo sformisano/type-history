@@ -16,7 +16,7 @@ type-history = { version = "0.1", features = ["redactable"] }
 type-history-build = { version = "0.1", features = ["redactable"] }
 ```
 
-Keep the regular `build.rs`, `type-history.toml`, and ledger setup from the main tutorial.
+Keep the regular `build.rs`, `type-history.toml`, and ledger from [package setup](setup.md).
 Install the CLI with the same feature:
 
 ```sh

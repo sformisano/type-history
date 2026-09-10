@@ -1,6 +1,6 @@
 # Field-history evolution matrix
 
-This matrix summarizes the [Type History contract](../README.md).
+This matrix summarizes the [field history rules](field-history.md) and [lifecycle checks](lifecycle.md).
 Type History originated in Axis's event field-history implementation.
 The [Axis matrix at the extraction revision](https://github.com/sformisano/axis/blob/af7b96c3f0744cdfd170c50bb321d5dfd02be8ea/docs/design/event-evolution/evolution-matrix.md)
 documents that revision's aggregate-specific cases.
@@ -146,7 +146,7 @@ Parser tests live in [codegen](../crates/type-history-codegen/src/history/tests.
 Real standalone compiler and lifecycle cases live in
 [cargo-type-history](../crates/cargo-type-history/tests/standalone.rs). Its
 [tutorial tests](../crates/cargo-type-history/tests/standalone/tutorial.rs) execute
-the README progression. The [invoice reference application](../examples/invoice/README.md)
+the README progression and reference examples. The [invoice reference application](../examples/invoice/README.md)
 demonstrates a current consumer with its frozen ledger.
 
 Ordinary generated records require `Clone`, `PartialEq`, and `Debug` for their fields.

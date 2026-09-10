@@ -1,4 +1,4 @@
-//! Compile marked README fragments in the tutorial's existing consumers.
+//! Compile marked documentation fragments in the tutorial's existing consumers.
 
 use super::documented;
 
@@ -43,6 +43,68 @@ pub(super) fn receipt_tests() -> String {
         ),
     ));
     test_module(&cases)
+}
+
+pub(super) fn receipt_journey_tests() -> String {
+    test_module(&[
+        (
+            "read_v1_through_both_conversions",
+            format!(
+                "{}\n{}\nassert_eq!(receipt.into_versioned().source_version().get(), 3);",
+                documented("overview:deserialize.rs"),
+                documented("overview:read-old.rs")
+            ),
+        ),
+        (
+            "write_and_read_a_current_refund",
+            format!(
+                "{}\n{}",
+                documented("overview:write-current.rs"),
+                r#"
+use serde_json::from_slice;
+use type_history::Versioned;
+let stored: Versioned<ReceiptCreated> = from_slice(&bytes)?;
+assert_eq!(stored.source_version().get(), 3);
+assert_eq!(stored.stable_name().as_str(), "shop.receipt.created");
+let restored = ReceiptCreated::from_versioned(stored)?;
+assert_eq!(restored.amount_cents, -400);
+assert_eq!(restored.currency, "EUR");
+"#
+            ),
+        ),
+        (
+            "read_v2_without_replacing_its_currency",
+            r##"
+use serde_json::from_slice;
+let stored = from_slice(
+    br#"{"stable_name":"shop.receipt.created","version":2,"payload":{"amount_cents":1200,"currency":"GBP"}}"#,
+)?;
+let receipt = ReceiptCreated::from_versioned(stored)?;
+assert_eq!(receipt.amount_cents, 1200);
+assert_eq!(receipt.currency, "GBP");
+"##
+            .to_owned(),
+        ),
+        (
+            "overflow_reports_the_original_version_and_failing_step",
+            r##"
+use serde_json::from_str;
+use std::num::TryFromIntError;
+use type_history::DecodeFailureKind;
+let wire = format!(
+    r#"{{"stable_name":"shop.receipt.created","version":1,"payload":{{"amount_cents":{}}}}}"#,
+    u64::MAX
+);
+let error = ReceiptCreated::from_versioned(from_str(&wire)?).unwrap_err();
+assert_eq!(error.kind(), DecodeFailureKind::Upcast);
+assert_eq!(error.source_version().get(), 1);
+assert_eq!(error.adjacent_from().unwrap().get(), 2);
+assert_eq!(error.adjacent_to().unwrap().get(), 3);
+assert!(error.source().unwrap().is::<TryFromIntError>());
+"##
+            .to_owned(),
+        ),
+    ])
 }
 
 pub(super) fn invoice_tests() -> String {

@@ -1,4 +1,4 @@
-//! Compile the README's exact Rust blocks in ordinary external consumers.
+//! Compile the README and reference docs' exact Rust blocks in external consumers.
 
 #[path = "tutorial/snippets.rs"]
 mod snippets;
@@ -6,14 +6,29 @@ mod snippets;
 use super::support::{failure, success, Fixture, LEDGER};
 use toml::Value;
 
-const README: &str = include_str!("../../../../README.md");
+const DOCUMENTATION: &[&str] = &[
+    include_str!("../../../../README.md"),
+    include_str!("../../../../docs/guide.md"),
+    include_str!("../../../../docs/field-history.md"),
+    include_str!("../../../../docs/decoding.md"),
+    include_str!("../../../../docs/lifecycle.md"),
+    include_str!("../../../../docs/integration.md"),
+];
 const PACKAGE: &str = "standalone-history-consumer";
 
 fn documented(marker: &str) -> &str {
     let marker = format!("<!-- {marker} -->\n```rust\n");
-    assert_eq!(README.matches(&marker).count(), 1, "unique source marker");
-    README
-        .split_once(&marker)
+    assert_eq!(
+        DOCUMENTATION
+            .iter()
+            .map(|document| document.matches(&marker).count())
+            .sum::<usize>(),
+        1,
+        "unique source marker: {marker}"
+    );
+    DOCUMENTATION
+        .iter()
+        .find_map(|document| document.split_once(&marker))
         .expect("documented source")
         .1
         .split_once("```\n")
@@ -62,9 +77,8 @@ fn receipt_tutorial_reads_old_bytes_and_writes_current_payloads() {
     fixture.write(
         "src/lib.rs",
         &format!(
-            "{}{}{}",
+            "{}{}",
             documented("quick-example:v2.rs"),
-            documented("quick-example:runtime-tests.rs"),
             snippets::receipt_tests()
         ),
     );
@@ -82,6 +96,21 @@ fn receipt_tutorial_reads_old_bytes_and_writes_current_payloads() {
     success(&fixture.cli(&["check", "--package", PACKAGE]));
     fixture.write("src/lib.rs", &snippets::receipt_v3());
     success(&fixture.cargo(&["test", "--lib", "--locked", "--offline"]));
+
+    // The field reference and README explore different drafts after frozen V2.
+    // Exercise the README's signed amount before freezing its V3 for release.
+    fixture.write(
+        "src/lib.rs",
+        &format!(
+            "{}{}",
+            documented("overview:v3.rs"),
+            snippets::receipt_journey_tests()
+        ),
+    );
+    success(&fixture.cargo(&["test", "--lib", "--locked", "--offline"]));
+    success(&fixture.cli(&["freeze", "--package", PACKAGE]));
+    success(&fixture.cargo(&["build", "--release", "--locked", "--offline"]));
+    success(&fixture.cli(&["check", "--package", PACKAGE]));
 }
 
 #[test]

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Follow one receipt history from V1 through drafts, freezing, field changes,
+  compile-time checks, and reading older data in the README. Move setup and
+  detailed reference material into focused documentation pages.
 - Name each type's history with `stable_name` in declarations, generated APIs,
   and serialized `Versioned<T>` values. All values and versions share that name;
   builds reject changes after freezing.
