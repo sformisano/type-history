@@ -1,21 +1,14 @@
 # Typehistory
 
 Typehistory is a Rust library that lets you evolve structs while preserving
-support for data written using earlier versions.
-
-It works in three steps:
-
-1. You describe field changes and conversion rules through attributes on your
-   struct’s fields.
-2. Typehistory generates a Rust type for each supported version and the code that
-   applies your conversion rules between versions.
-3. Compile-time checks reject struct changes that lack the required Typehistory
-   attributes, so you catch those mistakes before deployment rather than at
-   runtime in production.
+support for data written using earlier versions. It uses simple field attributes
+to describe changes and compile-time checks to catch missing or incorrect
+attributes before they cause runtime failures in production.
 
 ## Table of contents
 
 - [When to use Typehistory](#when-to-use-typehistory)
+- [How it works](#how-it-works)
 - [Quick example](#quick-example)
 - [Start an empty package](#start-an-empty-package)
 - [Design principles](#design-principles)
@@ -44,6 +37,18 @@ uses today. Common examples include:
 - **Saved snapshots:** Restore a record written by an earlier application version.
 - **Versioned documents:** Read records with different stored versions through
   one current Rust type.
+
+## How it works
+
+It works in three steps:
+
+1. You describe field changes and conversion rules through attributes on your
+   struct’s fields.
+2. Typehistory generates a Rust type for each supported version and the code that
+   applies your conversion rules between versions.
+3. Compile-time checks reject struct changes that lack the required Typehistory
+   attributes, so you catch those mistakes before deployment rather than at
+   runtime in production.
 
 Your application chooses its storage and a supported Serde format. Typehistory
 keeps each record's stable identity, version, and data together in `Versioned`.

@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Document crates.io setup and explain field changes in the attribute reference.
+- Document crates.io setup and separate the introduction, workflow, and field reference.
 - Add `stable_id` declarations checked against the frozen history ledger.
 - Add `Versioned<T>` with generated `into_versioned` and `from_versioned`
   methods on the current alias. Identity, version, and data travel together;
