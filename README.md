@@ -67,19 +67,48 @@ pub struct ReceiptCreated {
   - `added_at = v2` introduces `currency` in V2.
   - `backfill_value` supplies `"USD"` when converting V1 events, because the shop accepted only US dollars then.
 
-### 2. Use the current type
+### 2. Generated types and conversions
 
-Type History generates `ReceiptCreatedV1` with `amount_cents`, `ReceiptCreatedV2`
-with both fields, and the conversion between them. It keeps the name you
-declared as an alias for the latest struct:
+Type History generates a struct for each version. Here are the fields in this
+example, with generated trait implementations omitted:
+
+```rust
+pub struct ReceiptCreatedV1 {
+    pub amount_cents: u64,
+}
+
+pub struct ReceiptCreatedV2 {
+    pub amount_cents: u64,
+    pub currency: String,
+}
+```
+
+It also generates the V1-to-V2 conversion. This simplified view of the internal
+helper omits its error handling:
+
+```rust
+fn convert_v1_to_v2(previous: ReceiptCreatedV1) -> ReceiptCreatedV2 {
+    ReceiptCreatedV2 {
+        amount_cents: previous.amount_cents,
+        currency: "USD".to_owned(),
+    }
+}
+```
+
+The conversion preserves `amount_cents` and fills `currency` with the declared
+backfill value.
+
+The macro keeps the original name as an alias for the latest generated struct:
 
 ```rust
 pub type ReceiptCreated = ReceiptCreatedV2;
 ```
 
-When you introduce V3, the generated alias changes to `ReceiptCreatedV3`.
-Application code keeps using `ReceiptCreated` to construct current values and
-read earlier data:
+When you introduce V3, Type History updates this alias to `ReceiptCreatedV3`
+automatically. Application code keeps using `ReceiptCreated` to construct current
+values and read earlier data, without choosing a numbered type.
+
+Its public `from_versioned` method runs the generated conversions:
 
 <!-- overview:read-old.rs -->
 ```rust

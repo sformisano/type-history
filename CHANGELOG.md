@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Show the generated structs and conversion before introducing the current
+  type alias in the README overview.
 - Explain the README's struct and field attributes in the order they appear.
 - State explicitly that builds reject changes to a frozen `stable_id`.
 - Clarify how numbered structs relate to the current type alias, with a
