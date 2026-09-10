@@ -1,4 +1,4 @@
-#[history_api::history(stable_id = "example.wide.record")]
+#[history_api::typehistory(stable_id = "example.wide.record")]
 pub struct Wide {
     pub unsigned: u128,
     pub signed: i128,

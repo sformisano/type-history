@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Rename the struct macro to `typehistory`; field attributes remain `history`.
+  Use explicit imports in the README, guides, and reference application.
 - Put a receipt example before setup and add tested field, decoding, and redaction
   snippets throughout the README.
 - Document crates.io setup and separate the introduction, workflow, and field reference.

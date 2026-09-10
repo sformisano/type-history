@@ -1,7 +1,7 @@
 //! Optional redacted histories. Ordinary [`crate::HasHistory`] remains unchanged.
 //!
 //! Enable `redactable` on the runtime, build hook, and CLI, then select
-//! `#[history(stable_id = "example.record.created", redacted)]`. Use [`HasRedactedHistory`]
+//! `#[typehistory(stable_id = "example.record.created", redacted)]`. Use [`HasRedactedHistory`]
 //! and [`decode`] for these histories. The selected Redactable release is 0.12.0.
 //!
 //! Callback errors can declare a safe projection without standard error traits:

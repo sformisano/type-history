@@ -34,8 +34,19 @@ use typehistory_codegen::{
 /// Redactable traits, and `HasRedactedHistory` instead of `HasHistory`.
 /// Field `#[sensitive]`, `#[sensitive(Policy)]`, and `#[not_sensitive]` policies
 /// apply across all retained occurrences. See the runtime's `redaction` module.
+///
+/// Import the public attribute in an initialized Typehistory library:
+///
+/// ```rust,ignore
+/// use typehistory::typehistory;
+///
+/// #[typehistory(stable_id = "billing.receipt.recorded")]
+/// pub struct Receipt {
+///     pub amount_cents: u64,
+/// }
+/// ```
 #[proc_macro_attribute]
-pub fn history(arguments: TokenStream, item: TokenStream) -> TokenStream {
+pub fn typehistory(arguments: TokenStream, item: TokenStream) -> TokenStream {
     match expand(
         parse_macro_input!(arguments as Arguments),
         parse_macro_input!(item as ItemStruct),

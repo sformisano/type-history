@@ -18,10 +18,20 @@ use super::{
     SourceDiagnostic,
 };
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
 struct Symbol {
     path: Vec<String>,
     facade: bool,
+}
+
+#[derive(Clone, Copy)]
+enum Namespace<'a> {
+    Module,
+    Macro(Option<&'a str>),
+}
+
+fn is_facade_macro(name: &str) -> bool {
+    matches!(name, "typehistory" | "Schema")
 }
 
 struct ConditionalBinding {
@@ -32,7 +42,7 @@ struct ConditionalBinding {
 
 /// Finite explicit facade import and re-export resolution for source selectors.
 pub struct ImportIndex {
-    bindings: BTreeMap<Vec<String>, Symbol>,
+    bindings: BTreeMap<Vec<String>, Vec<Symbol>>,
     conditional_bindings: BTreeMap<Vec<String>, ConditionalBinding>,
     conditional_unit_imports: BTreeMap<Vec<String>, Vec<Symbol>>,
     local_definitions: BTreeSet<Vec<String>>,
@@ -54,6 +64,7 @@ impl ImportIndex {
             globs: BTreeMap::new(),
             facades: facades.clone(),
         };
+        let mut pending_imports = Vec::new();
         for unit in units.iter().filter(|unit| !unit.conditional) {
             for item in &unit.items {
                 match item {
@@ -102,7 +113,7 @@ impl ImportIndex {
                             facade: output.facades.contains(&source),
                         };
                         if output.local_definitions.contains(&key)
-                            || output.bindings.insert(key.clone(), target).is_some()
+                            || output.bindings.insert(key.clone(), vec![target]).is_some()
                         {
                             return Err(SourceDiagnostic::AmbiguousImport {
                                 name: key.join("::"),
@@ -122,7 +133,7 @@ impl ImportIndex {
                     // Preserve enough explicit resolution for selectors to reject declarations
                     // inside conditional units, without admitting those units as authority.
                     for leaf in leaves {
-                        let target = output.normalize(&unit.module_path, &leaf.target)?;
+                        let target = output.normalize(&unit.module_path, &leaf.target, None)?;
                         if leaf.glob {
                             output
                                 .globs
@@ -156,7 +167,7 @@ impl ImportIndex {
                     continue;
                 }
                 for leaf in leaves {
-                    let target = output.normalize(&unit.module_path, &leaf.target)?;
+                    let target = output.normalize(&unit.module_path, &leaf.target, None)?;
                     if leaf.glob {
                         output
                             .globs
@@ -167,20 +178,68 @@ impl ImportIndex {
                     }
                     let mut key = unit.module_path.clone();
                     key.push(leaf.local.expect("non-glob leaf"));
-                    if output.local_definitions.contains(&key)
-                        || output.bindings.insert(key.clone(), target).is_some()
-                    {
-                        return Err(SourceDiagnostic::AmbiguousImport {
-                            name: key.join("::"),
-                        });
-                    }
+                    let targets = output.bindings.entry(key.clone()).or_default();
+                    pending_imports.push((
+                        key,
+                        targets.len(),
+                        unit.module_path.clone(),
+                        leaf.target,
+                    ));
+                    targets.push(target);
                 }
             }
         }
+        // A same-named macro can arrive through a reexport declared later.
+        // Revisit ordinary imports with the complete index so their crate
+        // prefixes are independent of declaration and module traversal order.
+        for _ in 0..=pending_imports.len() {
+            let mut changed = false;
+            for (key, index, module, raw) in &pending_imports {
+                let target = output.normalize(module, raw, None)?;
+                let stored = &mut output.bindings.get_mut(key).expect("pending import")[*index];
+                if *stored != target {
+                    *stored = target;
+                    changed = true;
+                }
+            }
+            if !changed {
+                break;
+            }
+        }
+        output.validate_namespaces()?;
         Ok(output)
     }
 
-    fn normalize(&self, module: &[String], raw: &[String]) -> Result<Symbol, SourceDiagnostic> {
+    fn validate_namespaces(&self) -> Result<(), SourceDiagnostic> {
+        for (key, targets) in &self.bindings {
+            if targets.len() < 2 && !self.local_definitions.contains(key) {
+                continue;
+            }
+            let mut module = self.local_definitions.contains(key);
+            let mut item = false;
+            for target in targets {
+                let imports_item =
+                    self.resolve(target.clone(), Namespace::Macro(None), &mut BTreeSet::new())?;
+                let imports_module =
+                    self.resolve(target.clone(), Namespace::Module, &mut BTreeSet::new())?;
+                if (item && imports_item) || (module && imports_module) {
+                    return Err(SourceDiagnostic::AmbiguousImport {
+                        name: key.join("::"),
+                    });
+                }
+                item |= imports_item;
+                module |= imports_module;
+            }
+        }
+        Ok(())
+    }
+
+    fn normalize(
+        &self,
+        module: &[String],
+        raw: &[String],
+        attribute: Option<&str>,
+    ) -> Result<Symbol, SourceDiagnostic> {
         let Some(first) = raw.first() else {
             return Err(SourceDiagnostic::AmbiguousImport {
                 name: "<empty>".to_owned(),
@@ -213,15 +272,36 @@ impl ImportIndex {
                         path: conditional.path.clone(),
                     });
                 }
-                if let Some(target) = self.bindings.get(&local) {
-                    let mut target = target.clone();
-                    target.path.extend(raw.iter().skip(1).cloned());
-                    return Ok(target);
+                if let Some(targets) = self.bindings.get(&local) {
+                    // Prefixes use the module namespace. A bare attribute uses
+                    // the macro namespace, regardless of its imported spelling.
+                    let namespace = if attribute.is_some() && raw.len() == 1 {
+                        Namespace::Macro(attribute)
+                    } else {
+                        Namespace::Module
+                    };
+                    for target in targets {
+                        if !self.resolve(target.clone(), namespace, &mut BTreeSet::new())? {
+                            continue;
+                        }
+                        let mut target = target.clone();
+                        target.path.extend(raw.iter().skip(1).cloned());
+                        return Ok(target);
+                    }
                 }
                 if self.local_definitions.contains(&local) {
                     path.extend(raw.iter().cloned());
                     return Ok(Symbol {
                         path,
+                        facade: false,
+                    });
+                }
+                if attribute.is_some()
+                    && raw.len() == 1
+                    && self.conditional_unit_imports.contains_key(&local)
+                {
+                    return Ok(Symbol {
+                        path: local,
                         facade: false,
                     });
                 }
@@ -247,18 +327,31 @@ impl ImportIndex {
         raw: &[String],
         entrypoint: &str,
     ) -> Result<bool, SourceDiagnostic> {
-        let symbol = self.normalize(module, raw)?;
-        self.resolve(symbol, entrypoint, &mut BTreeSet::new())
+        let symbol = self.normalize(module, raw, Some(entrypoint))?;
+        self.resolve(
+            symbol,
+            Namespace::Macro(Some(entrypoint)),
+            &mut BTreeSet::new(),
+        )
     }
 
     fn resolve(
         &self,
         symbol: Symbol,
-        entrypoint: &str,
+        namespace: Namespace<'_>,
         visiting: &mut BTreeSet<Vec<String>>,
     ) -> Result<bool, SourceDiagnostic> {
         if symbol.facade {
-            return Ok(symbol.path.last().is_some_and(|tail| tail == entrypoint));
+            return Ok(match namespace {
+                Namespace::Module => symbol.path.len() != 2 || !is_facade_macro(&symbol.path[1]),
+                Namespace::Macro(name) => {
+                    symbol.path.len() == 2
+                        && name.map_or_else(
+                            || is_facade_macro(&symbol.path[1]),
+                            |name| symbol.path[1] == name,
+                        )
+                }
+            });
         }
         let mut conditional_module = None;
         let mut resolved = None;
@@ -274,7 +367,7 @@ impl ImportIndex {
                     path: conditional.path.clone(),
                 });
             }
-            let Some(target) = self.bindings.get(prefix) else {
+            let Some(targets) = self.bindings.get(prefix) else {
                 continue;
             };
             // Track the binding, not its expanded path: a cyclic alias can grow
@@ -284,16 +377,19 @@ impl ImportIndex {
                     path: prefix.join("::"),
                 });
             }
-            let mut target = target.clone();
-            target.path.extend_from_slice(&symbol.path[length..]);
-            let result = self.resolve(target, entrypoint, visiting);
+            let mut result = false;
+            for target in targets {
+                let mut target = target.clone();
+                target.path.extend_from_slice(&symbol.path[length..]);
+                result |= self.resolve(target, namespace, visiting)?;
+            }
             visiting.remove(prefix);
-            resolved = Some(result?);
+            resolved = Some(result);
             break;
         }
         let resolved = match resolved {
             Some(resolved) => resolved,
-            None => self.resolve_conditional_import(&symbol.path, entrypoint, visiting)?,
+            None => self.resolve_conditional_import(&symbol.path, namespace, visiting)?,
         };
         if resolved {
             if let Some(conditional) = conditional_module {
@@ -309,7 +405,7 @@ impl ImportIndex {
     fn resolve_conditional_import(
         &self,
         path: &[String],
-        entrypoint: &str,
+        namespace: Namespace<'_>,
         visiting: &mut BTreeSet<Vec<String>>,
     ) -> Result<bool, SourceDiagnostic> {
         for length in (1..=path.len()).rev() {
@@ -325,14 +421,14 @@ impl ImportIndex {
             for target in targets {
                 let mut target = target.clone();
                 target.path.extend_from_slice(&path[length..]);
-                if self.resolve(target, entrypoint, visiting)? {
+                if self.resolve(target, namespace, visiting)? {
                     visiting.remove(prefix);
                     return Ok(true);
                 }
             }
             visiting.remove(prefix);
         }
-        Ok(false)
+        Ok(matches!(namespace, Namespace::Module))
     }
 
     /// Whether an unsupported glob could supply an otherwise unresolved entrypoint.
@@ -344,7 +440,11 @@ impl ImportIndex {
         for glob in self.globs.get(module).into_iter().flatten() {
             let mut symbol = glob.clone();
             symbol.path.push(entrypoint.to_owned());
-            if self.resolve(symbol, entrypoint, &mut BTreeSet::new())? {
+            if self.resolve(
+                symbol,
+                Namespace::Macro(Some(entrypoint)),
+                &mut BTreeSet::new(),
+            )? {
                 return Ok(true);
             }
         }

@@ -39,11 +39,12 @@ Its released runtime and derive sources define the supported contracts:
 This example belongs in an initialized consumer library:
 
 ```rust
+use serde_json::from_slice;
 use std::error::Error;
-use typehistory::history;
 use typehistory::redactable::ToRedacted;
+use typehistory::typehistory;
 
-#[history(stable_id = "billing.receipt.recorded", redacted)]
+#[typehistory(stable_id = "billing.receipt.recorded", redacted)]
 pub struct Receipt {
     #[sensitive]
     pub customer: String,
@@ -52,7 +53,7 @@ pub struct Receipt {
 }
 
 pub fn read_receipt(bytes: &[u8]) -> Result<Receipt, Box<dyn Error>> {
-    let stored = serde_json::from_slice(bytes)?;
+    let stored = from_slice(bytes)?;
     let receipt = Receipt::from_versioned(stored)?;
     let safe_json = receipt.to_redacted().json();
     assert_eq!(safe_json["customer"], "[REDACTED]");
@@ -174,7 +175,8 @@ Generated code contains no `cfg(feature = "redactable")` check against the consu
 Authors who use upstream derives such as `Sensitive` on supporting types must add a direct Redactable dependency.
 Redactable 0.12.0 derives find that dependency with `proc_macro_crate`; it may be renamed.
 They fall back to `::redactable` when discovery fails and do not discover Typehistory's runtime reexport.
-Unlike Typehistory's shorthand, upstream derives require an explicit policy, such as `#[sensitive(redactable::Secret)]`.
+Upstream derives require an explicit policy. Import it with `use redactable::Secret;`
+and apply `#[sensitive(Secret)]`.
 Use the same pinned release to avoid distinct trait versions.
 
 ## Custom macro frontends

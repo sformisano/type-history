@@ -1,5 +1,6 @@
 use invoice_history::{ConvertError, Invoice};
-use serde_json::{json, Value};
+use rmp_serde::{from_slice as from_msgpack, to_vec_named};
+use serde_json::{from_slice, from_str, json, to_value, to_vec, Value};
 use std::error::Error;
 use typehistory::{DecodeFailureKind, Versioned};
 
@@ -7,16 +8,16 @@ const OLD: &[u8] = br#"{"billing.invoice.issued":{"1":{"legacy":"INV-42","count"
 
 #[test]
 fn application_uses_only_the_current_alias_for_reading_and_writing() {
-    let invoice = Invoice::from_versioned(serde_json::from_slice(OLD).unwrap()).unwrap();
+    let invoice = Invoice::from_versioned(from_slice(OLD).unwrap()).unwrap();
     assert_eq!(invoice.count, "42");
     assert_eq!(invoice.label, "INV-42");
     assert_eq!(invoice.revision, 7);
 
-    let bytes = serde_json::to_vec(&invoice.clone().into_versioned()).unwrap();
-    let restored = Invoice::from_versioned(serde_json::from_slice(&bytes).unwrap()).unwrap();
+    let bytes = to_vec(&invoice.clone().into_versioned()).unwrap();
+    let restored = Invoice::from_versioned(from_slice(&bytes).unwrap()).unwrap();
     assert_eq!(restored, invoice);
     assert_eq!(
-        serde_json::from_slice::<Value>(&bytes).unwrap(),
+        from_slice::<Value>(&bytes).unwrap(),
         json!({
             "billing.invoice.issued": {"3": {"count": "42", "label": "INV-42", "revision": 7}}
         })
@@ -25,25 +26,25 @@ fn application_uses_only_the_current_alias_for_reading_and_writing() {
 
 #[test]
 fn untouched_record_retains_its_original_version_and_data() {
-    let stored: Versioned<Invoice> = serde_json::from_slice(OLD).unwrap();
+    let stored: Versioned<Invoice> = from_slice(OLD).unwrap();
     assert_eq!(stored.stable_id().as_str(), "billing.invoice.issued");
     assert_eq!(stored.source_version().get(), 1);
     assert_eq!(
-        serde_json::to_value(stored.clone()).unwrap(),
-        serde_json::from_slice::<Value>(OLD).unwrap()
+        to_value(stored.clone()).unwrap(),
+        from_slice::<Value>(OLD).unwrap()
     );
     assert!(!format!("{stored:?}").contains("INV-42"));
 }
 
 #[test]
 fn binary_format_reads_old_records_and_round_trips_current_values() {
-    let stored: Versioned<Invoice> = serde_json::from_slice(OLD).unwrap();
-    let bytes = rmp_serde::to_vec_named(&stored).unwrap();
-    let invoice = Invoice::from_versioned(rmp_serde::from_slice(&bytes).unwrap()).unwrap();
+    let stored: Versioned<Invoice> = from_slice(OLD).unwrap();
+    let bytes = to_vec_named(&stored).unwrap();
+    let invoice = Invoice::from_versioned(from_msgpack(&bytes).unwrap()).unwrap();
     assert_eq!(invoice.label, "INV-42");
-    let bytes = rmp_serde::to_vec_named(&invoice.clone().into_versioned()).unwrap();
+    let bytes = to_vec_named(&invoice.clone().into_versioned()).unwrap();
     assert_eq!(
-        Invoice::from_versioned(rmp_serde::from_slice(&bytes).unwrap()).unwrap(),
+        Invoice::from_versioned(from_msgpack(&bytes).unwrap()).unwrap(),
         invoice
     );
 }
@@ -51,7 +52,7 @@ fn binary_format_reads_old_records_and_round_trips_current_values() {
 #[test]
 fn conversion_failure_keeps_the_concrete_source_and_original_version() {
     let bytes = br#"{"billing.invoice.issued":{"1":{"legacy":"INV-13","count":13}}}"#;
-    let stored = serde_json::from_slice(bytes).unwrap();
+    let stored = from_slice(bytes).unwrap();
     let error = Invoice::from_versioned(stored).unwrap_err();
     assert_eq!(error.kind(), DecodeFailureKind::Upcast);
     assert_eq!(error.source_version().get(), 1);
@@ -88,7 +89,7 @@ fn malformed_envelopes_and_payloads_are_rejected() {
         r#"{"billing.invoice.issued":{"1":{"legacy":"INV-42","count":42}}} trailing"#,
     ] {
         assert!(
-            serde_json::from_str::<Versioned<Invoice>>(bytes).is_err(),
+            from_str::<Versioned<Invoice>>(bytes).is_err(),
             "accepted {bytes}"
         );
     }
@@ -96,11 +97,10 @@ fn malformed_envelopes_and_payloads_are_rejected() {
 
 #[test]
 fn identity_or_version_mismatch_precedes_payload_parsing() {
-    let error = serde_json::from_str::<Versioned<Invoice>>(r#"{"another.invoice.issued": INVALID"#)
-        .unwrap_err();
+    let error =
+        from_str::<Versioned<Invoice>>(r#"{"another.invoice.issued": INVALID"#).unwrap_err();
     assert!(error.to_string().contains("stable identity"));
     let error =
-        serde_json::from_str::<Versioned<Invoice>>(r#"{"billing.invoice.issued":{"9": INVALID"#)
-            .unwrap_err();
+        from_str::<Versioned<Invoice>>(r#"{"billing.invoice.issued":{"9": INVALID"#).unwrap_err();
     assert!(error.to_string().contains("unsupported"));
 }

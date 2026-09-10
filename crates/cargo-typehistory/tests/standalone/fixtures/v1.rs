@@ -1,6 +1,6 @@
-use history_api::history;
+use history_api::typehistory;
 
-#[history(stable_id = "billing.invoice.issued")]
+#[typehistory(stable_id = "billing.invoice.issued")]
 pub struct Invoice {
     pub legacy: String,
     pub count: u32,

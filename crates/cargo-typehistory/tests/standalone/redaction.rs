@@ -22,7 +22,7 @@ fn source(version: u32) -> String {
     } else {
         "#[sensitive] #[history(added_at = v2, cast_from_previous_payload = label)] pub label: String,"
     };
-    format!("{COMMON}\n#[history_api::history(stable_id = \"example.secure.record\", redacted)]\npub struct Secure {{\n{legacy}\n{count}\n{label}\n pub nested: Details,\n pub wrapped: SensitiveValue<String, WrapperSecret>,\n #[not_sensitive] pub public: String,\n}}\n")
+    format!("{COMMON}\n#[history_api::typehistory(stable_id = \"example.secure.record\", redacted)]\npub struct Secure {{\n{legacy}\n{count}\n{label}\n pub nested: Details,\n pub wrapped: SensitiveValue<String, WrapperSecret>,\n #[not_sensitive] pub public: String,\n}}\n")
 }
 
 #[test]
@@ -104,24 +104,24 @@ fn invalid_redaction_declarations_fail_before_becoming_safe_output() {
             "Policy",
         ),
     ] {
-        fixture.write("src/lib.rs", &format!("#[history_api::history(stable_id = \"test.invalid.record\", redacted)] pub struct Invalid {{ {field} }}"));
+        fixture.write("src/lib.rs", &format!("#[history_api::typehistory(stable_id = \"test.invalid.record\", redacted)] pub struct Invalid {{ {field} }}"));
         failure(
             &fixture.cargo(&["build", "--locked", "--offline"]),
             expected,
         );
     }
-    fixture.write("src/lib.rs", "#[history_api::history(stable_id = \"test.invalid.record\")] pub struct Invalid { #[sensitive] pub value: String }");
+    fixture.write("src/lib.rs", "#[history_api::typehistory(stable_id = \"test.invalid.record\")] pub struct Invalid { #[sensitive] pub value: String }");
     failure(
         &fixture.cargo(&["build", "--locked", "--offline"]),
         "field redaction requires",
     );
-    fixture.write("src/lib.rs", "#[history_api::history(stable_id = \"test.invalid.record\", redacted)] pub struct Invalid { #[sensitive] pub value: String }");
+    fixture.write("src/lib.rs", "#[history_api::typehistory(stable_id = \"test.invalid.record\", redacted)] pub struct Invalid { #[sensitive] pub value: String }");
     success(&fixture.cli(&["freeze", "--package", PACKAGE]));
     fixture.write(
         "src/lib.rs",
         r#"
 use std::num::ParseIntError;
-#[history_api::history(stable_id = "test.invalid.record", redacted)]
+#[history_api::typehistory(stable_id = "test.invalid.record", redacted)]
 pub struct Invalid {
     #[sensitive]
     #[history(updated_at = v2, previous_type = String, cast_from_previous_value = convert)]

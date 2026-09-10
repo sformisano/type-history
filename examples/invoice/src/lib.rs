@@ -2,6 +2,7 @@ use std::{
     error::Error,
     fmt::{Display, Formatter, Result as FmtResult},
 };
+use typehistory::typehistory;
 
 #[derive(Debug)]
 pub struct ConvertError(pub u64);
@@ -14,7 +15,7 @@ impl Display for ConvertError {
 
 impl Error for ConvertError {}
 
-#[typehistory::history(stable_id = "billing.invoice.issued")]
+#[typehistory(stable_id = "billing.invoice.issued")]
 pub struct Invoice {
     #[history(removed_at = v2)]
     pub legacy: String,

@@ -49,7 +49,9 @@ should use:
 
 <!-- quick-example:v2.rs -->
 ```rust
-#[typehistory::history(stable_id = "shop.receipt.created")]
+use typehistory::typehistory;
+
+#[typehistory(stable_id = "shop.receipt.created")]
 pub struct Receipt {
     pub amount_cents: u64,
 
@@ -62,6 +64,9 @@ pub struct Receipt {
 - `added_at = v2` introduces `currency` in V2.
 - `backfill_value` supplies `"USD"` when converting V1 receipts, because all V1 receipts used US dollars.
 
+`#[typehistory(...)]` applies to the struct. Its `#[history(...)]` field attributes
+describe the individual changes.
+
 ### 2. Use the current type
 
 Typehistory generates the historical types and conversions. Application code
@@ -69,7 +74,9 @@ uses `Receipt`, which always names the latest version, to read earlier data:
 
 <!-- overview:read-old.rs -->
 ```rust
-let stored = serde_json::from_slice(
+use serde_json::from_slice;
+
+let stored = from_slice(
     br#"{"shop.receipt.created":{"1":{"amount_cents":1200}}}"#,
 )?;
 let receipt = Receipt::from_versioned(stored)?;
@@ -158,8 +165,10 @@ format = 1
 Create `build.rs`:
 
 ```rust
+use typehistory_build::compile;
+
 fn main() {
-    typehistory_build::compile();
+    compile();
 }
 ```
 
@@ -196,7 +205,9 @@ Write this complete `src/lib.rs`:
 
 <!-- quick-example:v1.rs -->
 ```rust
-#[typehistory::history(stable_id = "shop.receipt.created")]
+use typehistory::typehistory;
+
+#[typehistory(stable_id = "shop.receipt.created")]
 pub struct Receipt {
     pub amount_cents: u64,
 }
@@ -268,10 +279,11 @@ Append these tests to `src/lib.rs`:
 #[cfg(test)]
 mod receipt_tests {
     use super::Receipt;
+    use serde_json::{from_slice, to_vec};
 
     #[test]
     fn read_an_old_receipt() {
-        let stored = serde_json::from_slice(
+        let stored = from_slice(
             br#"{"shop.receipt.created":{"1":{"amount_cents":1200}}}"#,
         ).unwrap();
         let receipt = Receipt::from_versioned(stored).unwrap();
@@ -287,10 +299,10 @@ mod receipt_tests {
             currency: "EUR".to_owned(),
         };
         let stored = receipt.into_versioned();
-        let bytes = serde_json::to_vec(&stored).unwrap();
+        let bytes = to_vec(&stored).unwrap();
 
         // The application stores and retrieves these bytes.
-        let restored = Receipt::from_versioned(serde_json::from_slice(&bytes).unwrap()).unwrap();
+        let restored = Receipt::from_versioned(from_slice(&bytes).unwrap()).unwrap();
         assert_eq!(restored.amount_cents, 3000);
         assert_eq!(restored.currency, "EUR");
     }
@@ -436,7 +448,9 @@ Write this complete `src/lib.rs`:
 
 <!-- example:versions/v1.rs -->
 ```rust
-#[typehistory::history(stable_id = "billing.invoice.issued")]
+use typehistory::typehistory;
+
+#[typehistory(stable_id = "billing.invoice.issued")]
 pub struct Invoice {
     pub legacy: String,
     pub count: u32,
@@ -468,8 +482,9 @@ use std::{
     error::Error,
     fmt::{Display, Formatter, Result as FmtResult},
 };
+use typehistory::typehistory;
 
-#[typehistory::history(stable_id = "billing.invoice.issued")]
+#[typehistory(stable_id = "billing.invoice.issued")]
 pub struct Invoice {
     #[history(removed_at = v2)]
     pub legacy: String,
@@ -536,8 +551,9 @@ use std::{
     error::Error,
     fmt::{Display, Formatter, Result as FmtResult},
 };
+use typehistory::typehistory;
 
-#[typehistory::history(stable_id = "billing.invoice.issued")]
+#[typehistory(stable_id = "billing.invoice.issued")]
 pub struct Invoice {
     #[history(removed_at = v2)]
     pub legacy: String,
@@ -598,12 +614,13 @@ Append this test module to `src/lib.rs`:
 #[cfg(test)]
 mod tests {
     use super::{ConvertError, Invoice};
+    use serde_json::from_slice;
     use std::error::Error;
     use typehistory::DecodeFailureKind;
 
     #[test]
     fn old_bytes_reach_the_current_type() {
-        let stored = serde_json::from_slice(
+        let stored = from_slice(
             br#"{"billing.invoice.issued":{"1":{"legacy":"INV-42","count":42}}}"#,
         ).unwrap();
         let value = Invoice::from_versioned(stored).unwrap();
@@ -619,7 +636,7 @@ mod tests {
 
     #[test]
     fn failure_keeps_the_original_version_and_failing_step() {
-        let stored = serde_json::from_slice(
+        let stored = from_slice(
             br#"{"billing.invoice.issued":{"1":{"legacy":"INV-13","count":13}}}"#,
         ).unwrap();
         let error = Invoice::from_versioned(stored).unwrap_err();
@@ -850,14 +867,16 @@ versioned value back to the current type:
 
 <!-- decoding:json.rs -->
 ```rust
+use serde_json::{from_slice, to_vec};
+
 let receipt = Receipt {
     amount_cents: 3000,
     currency: "EUR".to_owned(),
 };
-let bytes = serde_json::to_vec(&receipt.into_versioned())?;
+let bytes = to_vec(&receipt.into_versioned())?;
 
 // After the application retrieves the bytes:
-let stored = serde_json::from_slice(&bytes)?;
+let stored = from_slice(&bytes)?;
 let restored = Receipt::from_versioned(stored)?;
 assert_eq!(restored.currency, "EUR");
 ```
@@ -880,8 +899,10 @@ which serializes structs with their field names:
 
 <!-- decoding:messagepack.rs -->
 ```rust
-let bytes = rmp_serde::to_vec_named(&receipt.into_versioned())?;
-let receipt = Receipt::from_versioned(rmp_serde::from_slice(&bytes)?)?;
+use rmp_serde::{from_slice, to_vec_named};
+
+let bytes = to_vec_named(&receipt.into_versioned())?;
+let receipt = Receipt::from_versioned(from_slice(&bytes)?)?;
 ```
 
 This fragment assumes an existing `receipt`, an `rmp-serde` dependency, and a function that propagates errors.
@@ -897,9 +918,10 @@ You can inspect the source version before choosing to convert:
 
 <!-- decoding:source-version.rs -->
 ```rust
+use serde_json::from_slice;
 use typehistory::Versioned;
 
-let stored: Versioned<Receipt> = serde_json::from_slice(
+let stored: Versioned<Receipt> = from_slice(
     br#"{"shop.receipt.created":{"1":{"amount_cents":1200}}}"#,
 )?;
 assert_eq!(stored.source_version().get(), 1);
@@ -919,10 +941,11 @@ The historical payload must match its declared version. For example, V1 has no
 
 <!-- decoding:invalid.rs -->
 ```rust
+use serde_json::from_slice;
 use typehistory::Versioned;
 
 let invalid = br#"{"shop.receipt.created":{"1":{"amount_cents":1200,"currency":"USD"}}}"#;
-assert!(serde_json::from_slice::<Versioned<Receipt>>(invalid).is_err());
+assert!(from_slice::<Versioned<Receipt>>(invalid).is_err());
 ```
 
 Deserializing a `Versioned` fails for:
@@ -946,9 +969,10 @@ invoice from V1 to inspect both the original version and the failed step:
 
 <!-- decoding:conversion-error.rs -->
 ```rust
+use serde_json::from_slice;
 use std::error::Error;
 
-let stored = serde_json::from_slice(
+let stored = from_slice(
     br#"{"billing.invoice.issued":{"1":{"legacy":"INV-13","count":13}}}"#,
 )?;
 let error = Invoice::from_versioned(stored).unwrap_err();
@@ -1138,7 +1162,9 @@ Each imported floor above V1 requires a matching `--floor EXACT_ID=N` argument.
 The declaration must state the same floor:
 
 ```text
-#[typehistory::history(stable_id = "billing.invoice.issued", retained_from = v4)]
+use typehistory::typehistory;
+
+#[typehistory(stable_id = "billing.invoice.issued", retained_from = v4)]
 ```
 
 This fragment belongs to a separate history starting at V4. Unannotated fields
@@ -1242,9 +1268,9 @@ Use that name in the module containing the history:
 
 <!-- reference:renamed-dependency.rs -->
 ```rust
-use history_api::history;
+use history_api::typehistory;
 
-#[history(stable_id = "shop.delivery.requested")]
+#[typehistory(stable_id = "shop.delivery.requested")]
 pub struct Delivery {
     pub postal_code: String,
 }
@@ -1280,26 +1306,30 @@ Add this module to an initialized library:
 <!-- example:nested-example.rs -->
 ```rust
 pub mod addresses {
-    #[derive(
-        Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize, typehistory::Schema,
-    )]
+    use serde::{Deserialize, Serialize};
+    use typehistory::{typehistory, Schema};
+
+    #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Schema)]
     #[serde(deny_unknown_fields)]
     pub struct Address {
         pub number: u32,
     }
 
-    #[typehistory::history(stable_id = "billing.address.record")]
+    #[typehistory(stable_id = "billing.address.record")]
     pub struct AddressRecord {
         pub address: Address,
     }
 
     #[test]
     fn nested_values_keep_their_closed_codec() {
-        let stored = serde_json::from_slice(
+        use serde_json::from_slice;
+        use typehistory::Versioned;
+
+        let stored = from_slice(
             br#"{"billing.address.record":{"1":{"address":{"number":7}}}}"#,
         ).unwrap();
         assert!(AddressRecord::from_versioned(stored).is_ok());
-        assert!(serde_json::from_slice::<typehistory::Versioned<AddressRecord>>(
+        assert!(from_slice::<Versioned<AddressRecord>>(
             br#"{"billing.address.record":{"1":{"address":{"number":7,"unknown":1}}}}"#,
         ).is_err());
     }
@@ -1359,7 +1389,9 @@ For example, this separate receipt history hides the customer in redacted output
 
 <!-- reference:redacted-history.rs -->
 ```rust
-#[typehistory::history(stable_id = "billing.receipt.recorded", redacted)]
+use typehistory::typehistory;
+
+#[typehistory(stable_id = "billing.receipt.recorded", redacted)]
 pub struct Receipt {
     #[sensitive]
     pub customer: String,

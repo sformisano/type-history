@@ -1,3 +1,4 @@
+use typehistory_build::compile;
 fn main() {
-    typehistory_build::compile();
+    compile();
 }

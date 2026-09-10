@@ -1,4 +1,4 @@
-use history_api::history;
+use history_api::typehistory;
 use std::error::Error;
 use std::fmt::{Display, Formatter, Result as FmtResult};
 
@@ -11,7 +11,7 @@ impl Display for ConvertError {
 }
 impl Error for ConvertError {}
 
-#[history(stable_id = "billing.invoice.issued")]
+#[typehistory(stable_id = "billing.invoice.issued")]
 pub struct Invoice {
     #[history(removed_at = v2)]
     pub legacy: String,

@@ -83,7 +83,7 @@ fn versioned_redacted_values_keep_safe_observations_and_raw_serialization() {
     fixture.write(
         "src/lib.rs",
         r#"
-#[history_api::history(stable_id = "example.stored.secret", redacted)]
+#[history_api::typehistory(stable_id = "example.stored.secret", redacted)]
 pub struct Secure { #[sensitive] pub value: String }
 "#,
     );

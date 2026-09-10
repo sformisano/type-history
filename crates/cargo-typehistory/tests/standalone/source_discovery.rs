@@ -42,7 +42,7 @@ mod records {
     #[allow(unused_imports)]
     use std::io::{self, Write as _};
 
-    #[api::history(stable_id = "billing.invoice.issued")]
+    #[api::typehistory(stable_id = "billing.invoice.issued")]
     pub struct Invoice {
         pub value: String,
     }
@@ -52,6 +52,80 @@ pub use history_api as api;
     );
     success(&fixture.cargo(&["build", "--locked", "--offline"]));
     reject_draft_and_freeze(&fixture);
+}
+
+#[test]
+fn macro_and_crate_namespaces_survive_aliases_and_grouped_imports() {
+    let fixture = Fixture::empty();
+    success(&fixture.cli(&["init", "--package", "standalone-history-consumer"]));
+    let original: Value = toml::from_str(&fixture.read("Cargo.toml")).unwrap();
+    let mut frozen = None;
+    for (facade, imports) in [
+        (
+            "history_api",
+            "use history_api::typehistory as history_api; use history_api::Schema;",
+        ),
+        (
+            "history_api",
+            "use history_api::Schema; use history_api::typehistory as history_api;",
+        ),
+        ("typehistory", "use typehistory::{typehistory, Schema};"),
+        ("typehistory", "use typehistory::{Schema, typehistory};"),
+        (
+            "typehistory",
+            "use ::typehistory::{self, typehistory, Schema};",
+        ),
+        (
+            "typehistory",
+            "use ::typehistory::{Schema, typehistory, self};",
+        ),
+    ] {
+        let mut manifest = original.clone();
+        let dependencies = manifest["dependencies"].as_table_mut().unwrap();
+        let runtime = dependencies.remove("history_api").unwrap();
+        dependencies.insert(facade.into(), runtime);
+        fixture.write("Cargo.toml", &toml::to_string(&manifest).unwrap());
+        success(&fixture.cargo(&["generate-lockfile", "--offline"]));
+        let source = r#"
+__IMPORTS__
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize, Schema)]
+#[serde(deny_unknown_fields)]
+pub struct Details { pub amount: u32 }
+
+#[__FACADE__(stable_id = "billing.invoice.issued")]
+pub struct Invoice { pub details: Details }
+
+#[__FACADE__::typehistory(stable_id = "billing.invoice.copied")]
+pub struct InvoiceCopy { pub amount: u32 }
+
+#[test]
+fn imported_and_qualified_macros_both_generate_readable_types() {
+    use serde_json::{from_slice, to_vec};
+
+    let invoice = Invoice { details: Details { amount: 7 } };
+    let bytes = to_vec(&invoice.into_versioned()).unwrap();
+    let restored = Invoice::from_versioned(from_slice(&bytes).unwrap()).unwrap();
+    assert_eq!(restored.details.amount, 7);
+
+    let copied = InvoiceCopy { amount: 9 };
+    let bytes = to_vec(&copied.into_versioned()).unwrap();
+    let restored = InvoiceCopy::from_versioned(from_slice(&bytes).unwrap()).unwrap();
+    assert_eq!(restored.amount, 9);
+}
+"#
+        .replace("__IMPORTS__", imports)
+        .replace("__FACADE__", facade);
+        fixture.write("src/lib.rs", &source);
+        success(&fixture.cli(&["freeze", "--package", "standalone-history-consumer"]));
+        success(&fixture.cargo(&["test", "--lib", "--locked", "--offline"]));
+        if let Some(expected) = &frozen {
+            assert_eq!(&fixture.read(LEDGER), expected);
+        } else {
+            frozen = Some(fixture.read(LEDGER));
+        }
+    }
 }
 
 #[test]
@@ -130,7 +204,7 @@ fn feature_selected_path_dependencies_are_captured_and_checked() {
     fixture.write("Cargo.toml", &toml::to_string(&manifest).unwrap());
     success(&fixture.cargo(&["generate-lockfile", "--offline"]));
     let source = r#"
-#[history_api::history(stable_id = "billing.invoice.issued")]
+#[history_api::typehistory(stable_id = "billing.invoice.issued")]
 pub struct Invoice {
     pub value: optional_support::Value,
 }

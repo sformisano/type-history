@@ -24,7 +24,7 @@ impl ToRedacted for ConversionError {
     }
 }
 
-#[history_api::history(stable_id = "example.stored.secret", redacted)]
+#[history_api::typehistory(stable_id = "example.stored.secret", redacted)]
 pub struct Secure {
     #[sensitive]
     #[history(updated_at = v2, previous_type = String, cast_from_previous_value = convert)]

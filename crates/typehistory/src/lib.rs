@@ -1,6 +1,6 @@
 //! Versioned Rust records with explicit field conversions and frozen schema checks.
 //!
-//! `#[history]` generates a Rust struct for each supported version of a record.
+//! `#[typehistory]` generates a Rust struct for each supported version of a record.
 //! The original name aliases the latest struct. Use its `into_versioned` method to
 //! create a [`Versioned`] containing the data and its generated metadata.
 //! Serialize that record with your chosen Serde format and storage. After
@@ -8,7 +8,17 @@
 //! conversions and returns the latest type. Application code does not select a
 //! numbered type or supply version metadata.
 //!
-//! Declare the history's identity with `#[history(stable_id = "shop.receipt.created")]`.
+//! Import the attribute and declare its stable identity in an initialized library:
+//!
+//! ```rust,ignore
+//! use typehistory::typehistory;
+//!
+//! #[typehistory(stable_id = "shop.receipt.created")]
+//! pub struct Receipt {
+//!     pub amount_cents: u64,
+//! }
+//! ```
+//!
 //! The identity is frozen with the schemas. Keep its value when renaming a Rust
 //! type: changing it would make earlier data belong to a different history.
 //!
@@ -48,7 +58,7 @@
 //! [`FieldSchema`] adapt those field types for schema export. The [`Schema`]
 //! derive supplies the field contract for supporting named records.
 //!
-//! The optional `redactable` feature enables explicit `#[history(..., redacted)]`
+//! The optional `redactable` feature enables explicit `#[typehistory(..., redacted)]`
 //! histories. Enable it on the build hook and CLI too. These histories use the
 //! same record methods with separate safe conversion errors. Their low-level
 //! JSON API is `redaction::decode`. Ordinary histories retain their error
@@ -63,7 +73,7 @@ pub use typehistory_core::{
 };
 #[cfg(feature = "redactable")]
 pub use typehistory_core::{redactable, redaction};
-pub use typehistory_macros::{history, Schema};
+pub use typehistory_macros::{typehistory, Schema};
 
 /// Dependencies addressed by generated code.
 #[doc(hidden)]

@@ -11,7 +11,7 @@ fn generated_traits_preserve_authored_field_types_and_values() {
 
 type M = String;
 
-#[history_api::history(stable_id = "example.field.alias")]
+#[history_api::typehistory(stable_id = "example.field.alias")]
 pub struct Record {
     pub value: M,
     pub count: u32,
@@ -168,7 +168,7 @@ use std::fmt::{Display, Formatter, Result as FmtResult};
 #[deprecated]
 type Old = String;
 
-#[history_api::history(stable_id = "example.deprecated.field")]
+#[history_api::typehistory(stable_id = "example.deprecated.field")]
 pub struct Record {
     #[allow(deprecated)]
     pub value: Old,
@@ -235,14 +235,14 @@ const LINT_SOURCE: &str = r##"
 #[deprecated]
 pub const INITIAL_REVISION: u32 = 1;
 
-#[history_api::history(stable_id = "example.container.lints")]
+#[history_api::typehistory(stable_id = "example.container.lints")]
 #[allow(non_snake_case)]
 #[allow(deprecated)]
 pub struct ContainerAllowance {
     pub camelCase: u32,
 }
 
-#[history_api::history(stable_id = "example.field.lints")]
+#[history_api::typehistory(stable_id = "example.field.lints")]
 #[allow(non_snake_case)]
 pub struct FieldAllowance {
     #[allow(non_snake_case)]

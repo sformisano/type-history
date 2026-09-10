@@ -11,7 +11,7 @@ use syn::{
 };
 use typehistory_core::TypeIdentity;
 
-/// Explicit identity and optional retained floor for the outer history attribute.
+/// Explicit identity and optional retained floor for the outer typehistory attribute.
 pub struct Arguments {
     stable_id: LitStr,
     floor: Option<Ident>,
@@ -33,19 +33,19 @@ impl Parse for Arguments {
                 "retained_from" if floor.is_none() => floor = Some(input.parse()?),
                 "redacted" if !redacted => redacted = true,
                 "stable_id" | "retained_from" | "redacted" => {
-                    return Err(Error::new_spanned(key, "duplicate history argument"))
+                    return Err(Error::new_spanned(key, "duplicate history argument"));
                 }
                 "id" => {
                     return Err(Error::new_spanned(
                         key,
                         "history argument `id` was renamed to `stable_id`",
-                    ))
+                    ));
                 }
                 _ => {
                     return Err(Error::new_spanned(
                         key,
                         "expected `stable_id`, `retained_from`, or `redacted`",
-                    ))
+                    ));
                 }
             }
             if input.is_empty() {
@@ -81,7 +81,10 @@ pub fn parse(arguments: Arguments, item: ItemStruct) -> Result<(RecordInput, Str
     }
     for attribute in &attributes {
         if !allowed(attribute) {
-            return Err(Error::new_spanned(attribute, "history owns record derives and wire contracts; only documentation, lints, and retained history metadata are supported"));
+            return Err(Error::new_spanned(
+                attribute,
+                "history owns record derives and wire contracts; only documentation, lints, and retained history metadata are supported",
+            ));
         }
     }
     let retained_floor = parse_retained_floor(&attributes)?;
@@ -92,7 +95,10 @@ pub fn parse(arguments: Arguments, item: ItemStruct) -> Result<(RecordInput, Str
         for attribute in &field.attrs {
             if crate::redaction::is_policy(attribute) {
                 if !arguments.redacted {
-                    return Err(Error::new_spanned(attribute, "field redaction requires `#[history(..., redacted)]` and the `redactable` feature"));
+                    return Err(Error::new_spanned(
+                        attribute,
+                        "field redaction requires `#[typehistory(..., redacted)]` and the `redactable` feature",
+                    ));
                 }
             } else if !allowed(attribute) {
                 return Err(Error::new_spanned(
@@ -234,7 +240,7 @@ mod tests {
             let expected = if attribute.path().is_ident("cfg_attr") {
                 "record fields support only documentation, lints, and `#[history(...)]`"
             } else {
-                "field redaction requires `#[history(..., redacted)]` and the `redactable` feature"
+                "field redaction requires `#[typehistory(..., redacted)]` and the `redactable` feature"
             };
             assert_eq!(error.to_string(), expected);
         }

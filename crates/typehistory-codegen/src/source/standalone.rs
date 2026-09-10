@@ -47,13 +47,13 @@ pub fn discover(
             let attributes = attributes(item);
             let mut selected = None;
             for (position, attribute) in attributes.iter().enumerate() {
-                if conditional_history(&attribute.meta, unit, &graph)? {
+                if conditional_typehistory(&attribute.meta, unit, &graph)? {
                     return Err(SourceDiagnostic::ConditionalSchema {
-                        construct: "history attribute",
+                        construct: "typehistory attribute",
                         path: relative(&graph.package_root, &unit.source_path),
                     });
                 }
-                if !is_history(attribute.path(), unit, &graph)? {
+                if !is_typehistory(attribute.path(), unit, &graph)? {
                     continue;
                 }
                 if selected.replace(position).is_some() {
@@ -112,7 +112,7 @@ pub fn discover(
     })
 }
 
-fn is_history(
+fn is_typehistory(
     path: &SynPath,
     unit: &SourceUnit,
     graph: &SourceGraph,
@@ -120,25 +120,25 @@ fn is_history(
     let path = path_segments(path);
     if graph
         .imports
-        .resolves_entrypoint(&unit.module_path, &path, "history")?
+        .resolves_entrypoint(&unit.module_path, &path, "typehistory")?
     {
         return Ok(true);
     }
     if path.len() == 1
-        && path[0] == "history"
+        && path[0] == "typehistory"
         && graph
             .imports
-            .glob_can_supply(&unit.module_path, "history")?
+            .glob_can_supply(&unit.module_path, "typehistory")?
     {
         return Err(SourceDiagnostic::GlobEntrypoint {
-            name: "history".to_owned(),
-            rewrite: "use <typehistory-dependency>::history;".to_owned(),
+            name: "typehistory".to_owned(),
+            rewrite: "use <typehistory-dependency>::typehistory;".to_owned(),
         });
     }
     Ok(false)
 }
 
-fn conditional_history(
+fn conditional_typehistory(
     meta: &Meta,
     unit: &SourceUnit,
     graph: &SourceGraph,
@@ -153,8 +153,8 @@ fn conditional_history(
         .parse_args_with(Punctuated::<Meta, Token![,]>::parse_terminated)
         .map_err(|_| SourceDiagnostic::InvalidCfgAttr)?;
     for attribute in nested.iter().skip(1) {
-        if is_history(attribute.path(), unit, graph)?
-            || conditional_history(attribute, unit, graph)?
+        if is_typehistory(attribute.path(), unit, graph)?
+            || conditional_typehistory(attribute, unit, graph)?
         {
             return Ok(true);
         }
@@ -193,7 +193,7 @@ fn declaration_error(graph: &SourceGraph, unit: &SourceUnit, source: Error) -> S
 #[cfg(test)]
 mod tests {
     use super::discover;
-    use crate::source::SourceDiagnostic;
+    use crate::source::{SourceDiagnostic, SourceGraph};
     use std::fs;
 
     #[test]
@@ -201,18 +201,24 @@ mod tests {
         let root = tempfile::tempdir().expect("package");
         let library = root.path().join("lib.rs");
         for source in [
-            "#[cfg_attr(feature=\"optional\", history_api::history(stable_id=\"billing.invoice.issued\"))] struct Invoice {}",
-            "use history_api::history as evolve; #[cfg_attr(feature=\"optional\", evolve(stable_id=\"billing.invoice.issued\"))] struct Invoice {}",
-            "#[cfg_attr(feature=\"optional\", cfg_attr(unix, history_api::history(stable_id=\"billing.invoice.issued\")))] struct Invoice {}",
-            "#[cfg(feature=\"optional\")] mod records { use history_api::history; #[history(stable_id=\"billing.invoice.issued\")] struct Invoice {} }",
-            "#[cfg(feature=\"optional\")] mod records { use history_api as api; #[api::history(stable_id=\"billing.invoice.issued\")] struct Invoice {} }",
-            "#![cfg(feature=\"optional\")] use history_api::history as evolve; #[evolve(stable_id=\"billing.invoice.issued\")] struct Invoice {}",
+            "#[cfg_attr(feature=\"optional\", history_api::typehistory(stable_id=\"billing.invoice.issued\"))] struct Invoice {}",
+            "use history_api::typehistory as evolve; #[cfg_attr(feature=\"optional\", evolve(stable_id=\"billing.invoice.issued\"))] struct Invoice {}",
+            "#[cfg_attr(feature=\"optional\", cfg_attr(unix, history_api::typehistory(stable_id=\"billing.invoice.issued\")))] struct Invoice {}",
+            "#[cfg(feature=\"optional\")] mod records { use history_api::typehistory; #[typehistory(stable_id=\"billing.invoice.issued\")] struct Invoice {} }",
+            "#[cfg(feature=\"optional\")] mod records { use history_api as api; #[api::typehistory(stable_id=\"billing.invoice.issued\")] struct Invoice {} }",
+            "#![cfg(feature=\"optional\")] use history_api::typehistory as evolve; #[evolve(stable_id=\"billing.invoice.issued\")] struct Invoice {}",
         ] {
             fs::write(&library, source).unwrap();
-            assert!(matches!(discover(root.path(), &library, &["history_api".to_owned()]), Err(SourceDiagnostic::ConditionalSchema { .. })), "{source}");
+            assert!(
+                matches!(
+                    discover(root.path(), &library, &["history_api".to_owned()]),
+                    Err(SourceDiagnostic::ConditionalSchema { .. })
+                ),
+                "{source}"
+            );
         }
         fs::write(&library, "#[cfg(feature=\"optional\")] mod records;").unwrap();
-        fs::write(root.path().join("records.rs"), "use history_api::history as evolve; #[evolve(stable_id=\"billing.invoice.issued\")] struct Invoice {}").unwrap();
+        fs::write(root.path().join("records.rs"), "use history_api::typehistory as evolve; #[evolve(stable_id=\"billing.invoice.issued\")] struct Invoice {}").unwrap();
         assert!(matches!(
             discover(root.path(), &library, &["history_api".to_owned()]),
             Err(SourceDiagnostic::ConditionalSchema { .. })
@@ -227,8 +233,8 @@ mod tests {
             &library,
             r#"
             #[cfg(test)] mod tests {
-                use history_api::history;
-                #[history(stable_id="billing.invoice.issued")] struct Invoice {}
+                use history_api::typehistory;
+                #[typehistory(stable_id="billing.invoice.issued")] struct Invoice {}
             }
             #[cfg(feature="optional")] mod unrelated {
                 use another_api::decorate;
@@ -251,7 +257,7 @@ mod tests {
         let library = root.path().join("src/lib.rs");
         fs::write(
             &library,
-            "use history_api::history as evolve; #[path=\"invoice.rs\"] mod invoice;",
+            "use history_api::typehistory as evolve; #[path=\"invoice.rs\"] mod invoice;",
         )
         .unwrap();
         fs::write(root.path().join("src/invoice.rs"), "use crate::evolve; #[evolve(stable_id=\"billing.invoice.issued\")] pub struct Invoice { number: String }").unwrap();
@@ -269,11 +275,11 @@ mod tests {
         let root = tempfile::tempdir().expect("package");
         let library = root.path().join("lib.rs");
         for source in [
-            "pub use history_api as api; mod records { use crate::api; #[api::history(stable_id=\"billing.invoice.issued\")] struct Invoice {} }",
-            "mod records { use crate::second as api; #[api::history(stable_id=\"billing.invoice.issued\")] struct Invoice {} } pub use crate::first as second; pub use history_api as first;",
-            "pub use history_api as api; #[crate::api::history(stable_id=\"billing.invoice.issued\")] struct Invoice {}",
-            "mod facade { pub use history_api::history; } use crate::facade::{self as api}; #[api::history(stable_id=\"billing.invoice.issued\")] struct Invoice {}",
-            "use std::fmt::{self, Write as _}; use std::io::{self, Write as _}; use history_api::{self as api}; #[api::history(stable_id=\"billing.invoice.issued\")] struct Invoice {}",
+            "pub use history_api as api; mod records { use crate::api; #[api::typehistory(stable_id=\"billing.invoice.issued\")] struct Invoice {} }",
+            "mod records { use crate::second as api; #[api::typehistory(stable_id=\"billing.invoice.issued\")] struct Invoice {} } pub use crate::first as second; pub use history_api as first;",
+            "pub use history_api as api; #[crate::api::typehistory(stable_id=\"billing.invoice.issued\")] struct Invoice {}",
+            "mod facade { pub use history_api::typehistory; } use crate::facade::{self as api}; #[api::typehistory(stable_id=\"billing.invoice.issued\")] struct Invoice {}",
+            "use std::fmt::{self, Write as _}; use std::io::{self, Write as _}; use history_api::{self as api}; #[api::typehistory(stable_id=\"billing.invoice.issued\")] struct Invoice {}",
         ] {
             fs::write(&library, source).unwrap();
             let found = discover(root.path(), &library, &["history_api".to_owned()]).unwrap();
@@ -282,17 +288,190 @@ mod tests {
     }
 
     #[test]
+    fn namespace_regression_renamed_facade_and_macro_alias() {
+        let root = tempfile::tempdir().expect("package");
+        let library = root.path().join("lib.rs");
+        for imports in [
+            "use history_api::typehistory as history_api;",
+            "use history_api::typehistory as history_api; use history_api::Schema;",
+            "use ::history_api::{self as history_api, typehistory as history_api, Schema};",
+            "use ::history_api::{typehistory as history_api, self as history_api, Schema};",
+            "use crate::exports::history_api; mod exports { pub use history_api::typehistory as history_api; }",
+            "use crate::exports::history_api; use history_api::Schema; mod exports { pub use history_api::typehistory as history_api; }",
+        ] {
+            fs::write(&library, format!("{imports} #[history_api(stable_id=\"billing.invoice.issued\")] struct Invoice {{}}")).unwrap();
+            let found = discover(root.path(), &library, &["history_api".to_owned()]).unwrap();
+            assert_eq!(found.declarations.len(), 1, "{imports}");
+        }
+    }
+
+    #[test]
+    fn namespace_regression_grouped_crate_and_macro_imports() {
+        let root = tempfile::tempdir().expect("package");
+        let library = root.path().join("lib.rs");
+        for imports in [
+            "use ::typehistory::{self, typehistory, Schema};",
+            "use ::typehistory::{typehistory, self, Schema};",
+            "use crate::exports::{typehistory, Schema}; mod exports { pub use ::typehistory::{self, typehistory, Schema}; }",
+            "use crate::exports::{typehistory, Schema}; mod exports { pub use ::typehistory::{typehistory, self, Schema}; }",
+        ] {
+            fs::write(&library, format!("{imports} #[typehistory(stable_id=\"billing.invoice.issued\")] struct Invoice {{}}")).unwrap();
+            let facades = ["typehistory".to_owned()];
+            let found = discover(root.path(), &library, &facades).unwrap();
+            assert_eq!(found.declarations.len(), 1, "{imports}");
+            let graph = SourceGraph::read(root.path(), &library, &facades).unwrap();
+            assert!(
+                graph
+                    .imports
+                    .resolves_entrypoint(&[], &["Schema".to_owned()], "Schema")
+                    .unwrap()
+            );
+        }
+    }
+
+    #[test]
+    fn duplicate_imports_in_the_same_namespace_are_rejected() {
+        let root = tempfile::tempdir().expect("package");
+        let library = root.path().join("lib.rs");
+        for imports in [
+            "use typehistory::{typehistory, typehistory};",
+            "use typehistory::{self, self};",
+            "use typehistory::{self, History as typehistory};",
+            "use typehistory::{typehistory, Schema as typehistory};",
+            "use typehistory as api; use typehistory as api;",
+            "mod api {} use typehistory as api;",
+        ] {
+            fs::write(&library, imports).unwrap();
+            assert!(
+                matches!(
+                    discover(root.path(), &library, &["typehistory".to_owned()]),
+                    Err(SourceDiagnostic::AmbiguousImport { .. })
+                ),
+                "{imports}"
+            );
+        }
+    }
+
+    #[test]
+    fn imported_attribute_and_same_named_crate_keep_their_namespaces() {
+        let root = tempfile::tempdir().expect("package");
+        let library = root.path().join("lib.rs");
+        for imports in [
+            "use typehistory::typehistory; use typehistory::Schema;",
+            "use typehistory::{typehistory, Schema};",
+            "use typehistory::{Schema, typehistory};",
+            "use typehistory::{self as api, typehistory, Schema};",
+            "use typehistory::typehistory; use typehistory as api; use api::Schema;",
+            "use crate::exports::{typehistory, Schema}; mod exports { pub use typehistory::{typehistory, Schema}; }",
+            "use crate::exports::typehistory; use typehistory::Schema; mod exports { pub use typehistory::typehistory; }",
+        ] {
+            let source = format!(
+                "{imports} #[typehistory(stable_id=\"billing.invoice.issued\")] struct Invoice {{}}"
+            );
+            fs::write(&library, &source).unwrap();
+            let facades = ["typehistory".to_owned()];
+            let found = discover(root.path(), &library, &facades).unwrap();
+            assert_eq!(found.declarations.len(), 1, "{source}");
+            let graph = SourceGraph::read(root.path(), &library, &facades).unwrap();
+            assert!(
+                graph
+                    .imports
+                    .resolves_entrypoint(&[], &["Schema".to_owned()], "Schema")
+                    .unwrap(),
+                "the macro import must not shadow the crate prefix: {source}"
+            );
+        }
+    }
+
+    #[test]
+    fn same_named_macro_supports_aliases_qualified_paths_and_nested_imports() {
+        let root = tempfile::tempdir().expect("package");
+        let library = root.path().join("lib.rs");
+        for source in [
+            "use typehistory::typehistory; #[typehistory::typehistory(stable_id=\"billing.invoice.issued\")] struct Invoice {}",
+            "use typehistory::typehistory; #[::typehistory::typehistory(stable_id=\"billing.invoice.issued\")] struct Invoice {}",
+            "use typehistory::typehistory as evolve; #[evolve(stable_id=\"billing.invoice.issued\")] struct Invoice {}",
+            "use typehistory::typehistory; use typehistory as api; #[api::typehistory(stable_id=\"billing.invoice.issued\")] struct Invoice {}",
+            "mod records { use typehistory::{typehistory, Schema}; #[typehistory(stable_id=\"billing.invoice.issued\")] struct Invoice {} }",
+            "pub use typehistory::typehistory; mod records { use crate::typehistory; #[typehistory(stable_id=\"billing.invoice.issued\")] struct Invoice {} }",
+        ] {
+            fs::write(&library, source).unwrap();
+            let found = discover(root.path(), &library, &["typehistory".to_owned()]).unwrap();
+            assert_eq!(found.declarations.len(), 1, "{source}");
+        }
+        fs::write(
+            &library,
+            "use history_api::{typehistory, Schema}; #[typehistory(stable_id=\"billing.invoice.issued\")] struct Invoice {}",
+        )
+        .unwrap();
+        assert_eq!(
+            discover(root.path(), &library, &["history_api".to_owned()])
+                .unwrap()
+                .declarations
+                .len(),
+            1
+        );
+    }
+
+    #[test]
+    fn crate_names_old_attributes_and_macro_prefixes_are_not_entrypoints() {
+        let root = tempfile::tempdir().expect("package");
+        let library = root.path().join("lib.rs");
+        for source in [
+            "#[typehistory(stable_id=\"billing.invoice.issued\")] struct Invoice {}",
+            "use typehistory::history; #[history(stable_id=\"billing.invoice.issued\")] struct Invoice {}",
+            "#[typehistory::history(stable_id=\"billing.invoice.issued\")] struct Invoice {}",
+            "#[typehistory::nested::typehistory(stable_id=\"billing.invoice.issued\")] struct Invoice {}",
+            "use typehistory::typehistory as evolve; #[evolve::typehistory(stable_id=\"billing.invoice.issued\")] struct Invoice {}",
+            "mod typehistory {} #[typehistory::typehistory(stable_id=\"billing.invoice.issued\")] struct Invoice {}",
+            "use typehistory::History as typehistory; #[typehistory::typehistory(stable_id=\"billing.invoice.issued\")] struct Invoice {}",
+        ] {
+            fs::write(&library, source).unwrap();
+            assert!(
+                discover(root.path(), &library, &["typehistory".to_owned()])
+                    .unwrap()
+                    .declarations
+                    .is_empty(),
+                "{source}"
+            );
+        }
+    }
+
+    #[test]
+    fn same_named_imports_in_conditional_modules_are_rejected() {
+        let root = tempfile::tempdir().expect("package");
+        let library = root.path().join("lib.rs");
+        for source in [
+            "#[cfg(feature=\"optional\")] mod records { use typehistory::typehistory; #[typehistory(stable_id=\"billing.invoice.issued\")] struct Invoice {} }",
+            "#[cfg(feature=\"optional\")] mod records { use typehistory::{typehistory, Schema}; #[typehistory(stable_id=\"billing.invoice.issued\")] struct Invoice {} }",
+            "#[cfg(feature=\"optional\")] use typehistory::typehistory; #[typehistory(stable_id=\"billing.invoice.issued\")] struct Invoice {}",
+        ] {
+            fs::write(&library, source).unwrap();
+            assert!(
+                matches!(
+                    discover(root.path(), &library, &["typehistory".to_owned()]),
+                    Err(SourceDiagnostic::ConditionalSchema { .. })
+                ),
+                "{source}"
+            );
+        }
+    }
+
+    #[test]
     fn prefix_cycles_and_conditional_reexports_fail_before_compilation() {
         let root = tempfile::tempdir().expect("package");
         let library = root.path().join("lib.rs");
         for source in [
-            "use crate::b as a; use crate::a as b; #[a::history(stable_id=\"billing.invoice.issued\")] struct Invoice {}",
-            "use crate::a::nested as a; #[a::history(stable_id=\"billing.invoice.issued\")] struct Invoice {}",
-            "#[cfg(feature=\"optional\")] pub use history_api as api; #[crate::api::history(stable_id=\"billing.invoice.issued\")] struct Invoice {}",
-            "#[cfg(feature=\"optional\")] mod api { pub use history_api::history; } #[crate::api::history(stable_id=\"billing.invoice.issued\")] struct Invoice {}",
+            "use crate::b as a; use crate::a as b; #[a::typehistory(stable_id=\"billing.invoice.issued\")] struct Invoice {}",
+            "use crate::a::nested as a; #[a::typehistory(stable_id=\"billing.invoice.issued\")] struct Invoice {}",
+            "#[cfg(feature=\"optional\")] pub use history_api as api; #[crate::api::typehistory(stable_id=\"billing.invoice.issued\")] struct Invoice {}",
+            "#[cfg(feature=\"optional\")] mod api { pub use history_api::typehistory; } #[crate::api::typehistory(stable_id=\"billing.invoice.issued\")] struct Invoice {}",
         ] {
             fs::write(&library, source).unwrap();
-            assert!(discover(root.path(), &library, &["history_api".to_owned()]).is_err(), "{source}");
+            assert!(
+                discover(root.path(), &library, &["history_api".to_owned()]).is_err(),
+                "{source}"
+            );
         }
     }
 
@@ -301,15 +480,18 @@ mod tests {
         let root = tempfile::tempdir().expect("package");
         let library = root.path().join("lib.rs");
         for source in [
-            "#[cfg(any())] #[history_api::history(stable_id=\"billing.invoice.issued\")] struct Invoice {}",
-            "use history_api::*; #[history(stable_id=\"billing.invoice.issued\")] struct Invoice {}",
-            "#[history_api::history(stable_id=\"billing.invoice.issued\")] enum Invoice {}",
-            "#[history_api::history(stable_id=\"billing.invoice.issued\")] struct Invoice {} #[history_api::history(stable_id=\"billing.invoice.issued\")] struct Other {}",
+            "#[cfg(any())] #[history_api::typehistory(stable_id=\"billing.invoice.issued\")] struct Invoice {}",
+            "use history_api::*; #[typehistory(stable_id=\"billing.invoice.issued\")] struct Invoice {}",
+            "#[history_api::typehistory(stable_id=\"billing.invoice.issued\")] enum Invoice {}",
+            "#[history_api::typehistory(stable_id=\"billing.invoice.issued\")] struct Invoice {} #[history_api::typehistory(stable_id=\"billing.invoice.issued\")] struct Other {}",
         ] {
             fs::write(&library, source).unwrap();
-            assert!(discover(root.path(), &library, &["history_api".to_owned()]).is_err(), "{source}");
+            assert!(
+                discover(root.path(), &library, &["history_api".to_owned()]).is_err(),
+                "{source}"
+            );
         }
-        fs::write(&library, "mod history_api {} #[history_api::history(stable_id=\"billing.invoice.issued\")] struct Invoice {}").unwrap();
+        fs::write(&library, "mod history_api {} #[history_api::typehistory(stable_id=\"billing.invoice.issued\")] struct Invoice {}").unwrap();
         assert!(discover(root.path(), &library, &["history_api".to_owned()])
             .unwrap()
             .declarations

@@ -1,5 +1,5 @@
 use invoice_history::{ConvertError, Invoice};
-use serde_json::Value;
+use serde_json::{from_slice, json, to_vec, Value};
 use std::error::Error;
 use typehistory::{decode, DecodeFailureKind, HasHistory, PayloadVersion, ReadError};
 
@@ -24,12 +24,12 @@ fn current_payload_round_trips_without_historical_backfills() {
         label: "INV-84".to_owned(),
         revision: 8,
     };
-    let bytes = serde_json::to_vec(&invoice).unwrap();
+    let bytes = to_vec(&invoice).unwrap();
     let restored = decode::<Invoice>(&Invoice::TYPE, Invoice::VERSION, &bytes).unwrap();
     assert_eq!(restored, invoice);
     assert_eq!(
-        serde_json::from_slice::<Value>(&bytes).unwrap(),
-        serde_json::json!({"count": "84", "label": "INV-84", "revision": 8})
+        from_slice::<Value>(&bytes).unwrap(),
+        json!({"count": "84", "label": "INV-84", "revision": 8})
     );
 }
 

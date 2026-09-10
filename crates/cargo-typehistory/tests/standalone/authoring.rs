@@ -6,7 +6,7 @@ use toml::{Table, Value};
 fn redaction_requires_the_disabled_by_default_capability() {
     let fixture = Fixture::empty();
     success(&fixture.cli(&["init", "--package", "standalone-history-consumer"]));
-    fixture.write("src/lib.rs", "#[history_api::history(stable_id = \"test.redacted.record\", redacted)] pub struct Record { #[sensitive] pub value: String }");
+    fixture.write("src/lib.rs", "#[history_api::typehistory(stable_id = \"test.redacted.record\", redacted)] pub struct Record { #[sensitive] pub value: String }");
     failure(
         &fixture.cargo(&["build", "--locked", "--offline"]),
         "redacted histories require the `redactable` feature",
@@ -175,8 +175,8 @@ fn standalone_compiler_checks_history_contracts_and_macro_hygiene() {
         ),
         (
             V1.replace(
-                "#[history(stable_id",
-                "#[derive(Clone)]\n#[history(stable_id",
+                "#[typehistory(stable_id",
+                "#[derive(Clone)]\n#[typehistory(stable_id",
             ),
             "derive",
         ),
@@ -198,13 +198,13 @@ fn standalone_compiler_checks_history_contracts_and_macro_hygiene() {
         (format!("{V1}\nstruct InvoiceV1;"), "InvoiceV1"),
         (
             format!(
-                "{V1}\n#[cfg_attr(any(), history_api::history(stable_id = \"example.optional.record\"))] struct Conditional {{}}"
+                "{V1}\n#[cfg_attr(any(), history_api::typehistory(stable_id = \"example.optional.record\"))] struct Conditional {{}}"
             ),
             "conditional",
         ),
         (
             format!(
-                "{V1}\n#[cfg(any())] mod conditional {{ use history_api::history; #[history(stable_id = \"example.optional.record\")] struct Conditional {{}} }}"
+                "{V1}\n#[cfg(any())] mod conditional {{ use history_api::typehistory; #[typehistory(stable_id = \"example.optional.record\")] struct Conditional {{}} }}"
             ),
             "conditional",
         ),
@@ -234,11 +234,11 @@ fn standalone_compiler_checks_history_contracts_and_macro_hygiene() {
         "src/lib.rs",
         &format!(
             r#"{V1}
-#[history_api::history(stable_id = "example.upper.record")]
+#[history_api::typehistory(stable_id = "example.upper.record")]
 pub struct AB {{}}
-#[history_api::history(stable_id = "example.mixed.record")]
+#[history_api::typehistory(stable_id = "example.mixed.record")]
 pub struct Ab {{}}
-use history_api::history as evolve;
+use history_api::typehistory as evolve;
 mod nested {{
     use super::evolve;
     #[evolve(stable_id = "example.raw.record")]
@@ -298,7 +298,7 @@ fn standalone_removed_field_visibility_and_module_relative_callbacks() {
         &format!(
             r#"{V1}
 mod private {{
-    #[history_api::history(stable_id = "example.private.record")]
+    #[history_api::typehistory(stable_id = "example.private.record")]
     pub struct Hidden {{ value: String }}
 }}
 fn forbidden(value: private::Hidden) {{ let _ = value.value; }}
