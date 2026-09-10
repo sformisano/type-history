@@ -1,6 +1,6 @@
 # Field-history evolution matrix
 
-This matrix summarizes the shared [Typehistory contract](../README.md).
+This matrix summarizes the shared [Typehistory contract](../../../README.md).
 Both standalone records and Axis aggregate events use this implementation.
 The [Axis matrix](https://github.com/sformisano/axis/blob/af7b96c3f0744cdfd170c50bb321d5dfd02be8ea/docs/design/event-evolution/evolution-matrix.md) owns aggregate-only cases.
 S means supported, R means rejected, and U means outside the API.

@@ -1,10 +1,10 @@
 # Build a standalone invoice history
 
-Start with the [Typehistory README](../README.md#start-an-empty-package). It owns
+Start with the [Typehistory README](../../../README.md#start-an-empty-package). It owns
 the package setup, field grammar, lifecycle reference, and build rules.
 This guide maps that setup to the complete [invoice example](../examples/invoice/README.md).
 
-The consumer starts outside the Axis workspace with an empty library. It has a
+The consumer starts outside this repository's workspace with an empty library. It has a
 Typehistory build hook and `typehistory.toml`, but no ledger or histories yet.
 Initialize it before adding the first declaration.
 
@@ -25,11 +25,14 @@ Initialize it before adding the first declaration.
 | Refreeze a reservation | Exact V3 reset and exact V3 freeze | Reservation is resolved explicitly |
 | Import | Complete current ledger into a second package with matching source | Imported source builds under release rules |
 
+The verifier first runs the README's receipt example in a separate package.
+It then follows the invoice sequence above.
+
 Run `verify.sh` using the example's documented environment. Each expected failure
 requires both a failed command and its diagnostic. A successful final line means
 that this invocation completed the sequence; retain its output for your tree.
 
-For a real history starting above V1, follow [retained-floor import](../README.md#import-a-retained-floor).
+For a real history starting above V1, follow [retained-floor import](../../../README.md#import-a-retained-floor).
 Do not rewrite this invoice's V1 floor. The standalone suite exercises a separate
 V4 import with an exact `--floor billing.invoice.issued=4` declaration.
 

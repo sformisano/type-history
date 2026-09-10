@@ -7,7 +7,7 @@
 //! A standalone library requires `typehistory.toml`, a build dependency on
 //! `typehistory-build`, and `typehistory_build::compile()` in `build.rs`.
 //! Initialize its empty ledger with `cargo typehistory init` before declaring
-//! histories. The [guide](https://github.com/sformisano/typehistory/blob/main/crates/typehistory/README.md)
+//! histories. The [guide](https://github.com/sformisano/typehistory/blob/main/README.md)
 //! contains executable setup, field grammar, lifecycle commands, and safe-error boundaries.
 //!
 //! Validate stored identity and version metadata before selecting a history:

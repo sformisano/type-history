@@ -1,8 +1,8 @@
 # Executable invoice history
 
-This example creates a standalone library outside the Axis workspace. It uses
+This example creates standalone libraries outside this repository's workspace. It uses
 Typehistory, Redactable, and Serde. The complete sources match the runnable
-blocks in the [Typehistory README](../../README.md).
+blocks in the [Typehistory README](../../../../README.md).
 
 Run from the repository root with Rust 1.97.1 and `rg` installed. Prepare an
 owned short temporary directory and use the checkout's existing Cargo target.
@@ -22,8 +22,12 @@ Use `cargo fetch --locked` before an offline run. Keep strict/export environment
 variables unset for the ordinary draft steps. The script sets explicit strict
 settings only on the commands that exercise them.
 
-`verify.sh` checks README/source equality, starts an empty library, initializes
-authority, and freezes V1. It exercises rejected compiler edits, evolves V2/V3,
+`verify.sh` checks README/source equality and runs the opening receipt example
+in its own package. It freezes receipt V1, tests V1 decoding and V2 writing,
+then freezes V2 and checks a release build.
+
+For the invoice, it starts an empty library, initializes the ledger, and freezes V1.
+It exercises rejected compiler edits, evolves V2/V3,
 and decodes V1 bytes into the current type. It also checks strict and custom
 profiles, source-based discard, reset, undo, exact refreeze, read-only checks,
 and import into another empty package. It removes its owned consumers on exit.

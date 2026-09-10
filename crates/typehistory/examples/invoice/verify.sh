@@ -12,15 +12,23 @@ trap 'rm -rf -- "$invoice_tmp"' EXIT
 consumer="$invoice_tmp/invoice-history"
 mkdir -p "$consumer/src"
 
-# Check that the complete README sources match the files used by this consumer.
-for source in versions/v1.rs versions/v2.rs versions/v3.rs runtime-tests.rs nested-example.rs; do
-    awk -v marker="<!-- example:$source -->" '
+# Check the canonical README before compiling the documented sources.
+check_documented_source() {
+    local marker="$1" source="$2"
+    awk -v marker="<!-- $marker -->" '
         $0 == marker { selected = 1; next }
         selected && /^```rust$/ { code = 1; next }
         code && /^```$/ { exit }
         code { print }
-    ' "$example_dir/../../README.md" > "$invoice_tmp/readme.rs"
-    cmp "$invoice_tmp/readme.rs" "$example_dir/$source"
+    ' "$repository/README.md" > "$invoice_tmp/readme.rs"
+    cmp "$invoice_tmp/readme.rs" "$source"
+}
+for source in versions/v1.rs versions/v2.rs versions/v3.rs runtime-tests.rs nested-example.rs; do
+    check_documented_source "example:$source" "$example_dir/$source"
+done
+quick_example="$example_dir/../quick-start"
+for source in v2.rs runtime-tests.rs; do
+    check_documented_source "quick-example:$source" "$quick_example/$source"
 done
 
 # Restrict the path before interpolation so no shell or TOML escapes are needed.
@@ -55,6 +63,29 @@ MANIFEST
 printf 'format = 1\n' > "$consumer/typehistory.toml"
 printf 'fn main() { typehistory_build::compile(); }\n' > "$consumer/build.rs"
 touch "$consumer/src/lib.rs"
+
+# The opening receipt example has its own ledger and retained history.
+(
+    receipt_consumer="$invoice_tmp/receipt-history"
+    mkdir -p "$receipt_consumer/src"
+    cp "$consumer/Cargo.toml" "$consumer/typehistory.toml" "$consumer/build.rs" "$receipt_consumer/"
+    touch "$receipt_consumer/src/lib.rs"
+    cd "$receipt_consumer"
+    cargo generate-lockfile --offline
+    cargo typehistory init --package invoice-history
+    cp "$quick_example/v1.rs" src/lib.rs.next
+    mv src/lib.rs.next src/lib.rs
+    cargo build --locked --offline
+    cargo typehistory freeze --package invoice-history
+    cat "$quick_example/v2.rs" "$quick_example/runtime-tests.rs" > src/lib.rs.next
+    mv src/lib.rs.next src/lib.rs
+    cargo test --lib --locked --offline
+    cargo typehistory freeze --package invoice-history --type shop.receipt.created --version 2
+    cargo build --release --locked --offline
+    cargo typehistory check --package invoice-history
+    printf '%s\n' 'Receipt quick example completed: read V1, write V2, freeze, and release.'
+)
+
 cd "$consumer"
 cargo generate-lockfile --offline
 cargo typehistory init --package invoice-history
