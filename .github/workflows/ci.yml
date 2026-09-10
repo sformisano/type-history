@@ -10,8 +10,11 @@ permissions:
 
 jobs:
   rust:
-    name: Standalone Rust workspace
+    name: Rust (${{ matrix.features }})
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        features: ["--no-default-features", "--all-features"]
     env:
       CARGO_TERM_COLOR: always
       CARGO_INCREMENTAL: "0"
@@ -24,15 +27,39 @@ jobs:
       - name: Install Rust toolchain
         run: rustup toolchain install 1.97.1 --profile minimal --component clippy --component rustfmt
 
-      - name: Install guide prerequisites
-        run: |
-          sudo apt-get update
-          sudo apt-get install --yes --no-install-recommends ripgrep
-
       - name: Fetch dependencies
         run: cargo fetch --locked
 
-      - name: Verify
+      - name: Check formatting
+        run: cargo fmt --all --check
+
+      - name: Clippy
+        env:
+          CARGO_TARGET_DIR: ${{ github.workspace }}/target/clippy
+        run: cargo clippy --workspace --all-targets ${{ matrix.features }} --locked -- -Dwarnings
+
+      - name: Unit and integration tests
         env:
           TMPDIR: ${{ runner.temp }}
-        run: bash scripts/verify.sh
+        run: cargo test --workspace --all-targets ${{ matrix.features }} --locked
+
+      - name: Documentation tests
+        env:
+          TMPDIR: ${{ runner.temp }}
+        run: cargo test --workspace --doc ${{ matrix.features }} --locked
+
+      - name: Public documentation
+        env:
+          RUSTDOCFLAGS: -Dwarnings
+        run: cargo doc --workspace --no-deps ${{ matrix.features }} --locked
+
+      - name: Release build
+        run: cargo build --workspace --release ${{ matrix.features }} --locked
+
+      - name: Reference application
+        run: cargo run -p invoice-history --release ${{ matrix.features }} --locked
+
+      - name: Check reference schemas
+        env:
+          TMPDIR: ${{ runner.temp }}
+        run: cargo run -p cargo-typehistory ${{ matrix.features }} --locked -- check --package invoice-history

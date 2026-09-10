@@ -1216,24 +1216,41 @@ For more detail:
 
 - The [evolution matrix](docs/evolution-matrix.md) lists supported and rejected cases.
 - The [example guide](docs/guide.md) explains what the receipt and invoice tests check.
-- The [example runner instructions](examples/invoice/README.md) show how to run those checks on their own.
+- The [tutorial integration tests](crates/cargo-typehistory/tests/standalone/tutorial.rs) check intermediate edits and expected failures.
 
-Install the pinned Rust toolchain with rustup, plus Bash, Git, and ripgrep.
+The [invoice reference application](examples/invoice/README.md) is a runnable
+Cargo package with a committed history ledger. Try it with
+`cargo run -p invoice-history --locked`.
+
+Install the pinned Rust toolchain with rustup. Git is needed to clone the repository.
 Set `TMPDIR` to a short disk path with room for disposable consumer builds.
 
 Run from the repository root:
 
 ```sh
 cargo fetch --locked
-bash scripts/verify.sh
+cargo fmt --all --check
+cargo clippy --workspace --all-targets --no-default-features --locked --target-dir target/clippy -- -Dwarnings
+cargo test --workspace --all-targets --no-default-features --locked
+cargo test --workspace --doc --no-default-features --locked
+cargo doc --workspace --no-deps --no-default-features --locked
+cargo build --workspace --release --no-default-features --locked
+
+cargo clippy --workspace --all-targets --all-features --locked --target-dir target/clippy -- -Dwarnings
+cargo test --workspace --all-targets --all-features --locked
+cargo test --workspace --doc --all-features --locked
+cargo doc --workspace --no-deps --all-features --locked
+cargo build --workspace --release --all-features --locked
+
+cargo run -p invoice-history --release --locked
+cargo run -p cargo-typehistory --locked -- check --package invoice-history
 ```
 
-The script runs Clippy, workspace tests, doctests, documentation builds, and release
-builds with the optional integration both disabled and enabled. It then runs the
-receipt and invoice examples. GitHub Actions uses the same script.
-
-Before running the examples, their verifier checks that the marked README code
-blocks match the source files. Normal builds use `target`; Clippy uses `target/clippy`.
+Set `RUSTDOCFLAGS=-Dwarnings` when checking documentation, as CI does.
+GitHub Actions runs these Cargo checks in both feature modes. Workspace tests
+include the reference application and Rust integration tests that compile the
+marked README blocks directly, exercise lifecycle commands, and check expected
+failures. Normal builds use `target`; Clippy uses `target/clippy`.
 
 ## License
 

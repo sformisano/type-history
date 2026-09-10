@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Replace shell verification runners with Cargo integration tests that compile
+  the README examples. Add a runnable invoice reference crate with a committed
+  frozen ledger, and run Cargo checks directly in CI.
+
 - Place each crate directly under `crates/`, using its package name. Move shared
   documentation and examples to root-level `docs/` and `examples/` directories.
 

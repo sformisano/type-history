@@ -1,0 +1,15 @@
+[package]
+name = "invoice-history"
+version = "0.0.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+description = "Reference application for reading and writing versioned invoices"
+
+[dependencies]
+typehistory = { path = "../../crates/typehistory" }
+serde_json.workspace = true
+
+[build-dependencies]
+typehistory-build = { path = "../../crates/typehistory-build" }

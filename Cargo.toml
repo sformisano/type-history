@@ -6,6 +6,7 @@ members = [
     "crates/typehistory",
     "crates/typehistory-build",
     "crates/cargo-typehistory",
+    "examples/invoice",
 ]
 resolver = "2"
 

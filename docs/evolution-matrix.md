@@ -127,8 +127,10 @@ Case IDs identify behavior families; this document is not a test-run report.
 
 Parser tests live in [codegen](../crates/typehistory-codegen/src/history/tests.rs).
 Real standalone compiler and lifecycle cases live in
-[cargo-typehistory](../crates/cargo-typehistory/tests/standalone.rs). The [invoice example](../examples/invoice/README.md)
-executes the standalone README progression.
+[cargo-typehistory](../crates/cargo-typehistory/tests/standalone.rs). Its
+[tutorial tests](../crates/cargo-typehistory/tests/standalone/tutorial.rs) execute
+the README progression. The [invoice reference application](../examples/invoice/README.md)
+demonstrates a current consumer with its frozen ledger.
 
 Ordinary generated records require `Clone`, `PartialEq`, and `Debug` for their fields.
 Opted redacted records require `Clone`, `PartialEq`, and the selected field policy contracts;

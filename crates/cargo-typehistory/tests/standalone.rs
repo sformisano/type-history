@@ -12,6 +12,8 @@ mod lifecycle;
 mod source_discovery;
 #[path = "standalone/support.rs"]
 mod support;
+#[path = "standalone/tutorial.rs"]
+mod tutorial;
 
 #[cfg(feature = "redactable")]
 #[path = "standalone/redaction.rs"]

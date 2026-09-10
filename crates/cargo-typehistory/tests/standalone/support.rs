@@ -149,6 +149,12 @@ opt-level = 2
     pub fn cli_env(&self, arguments: &[&str], environment: &[(&str, Option<&str>)]) -> Output {
         self.command_at(&self.root, &self.cli, arguments, environment)
     }
+    pub fn cargo_at(&self, root: &Path, arguments: &[&str]) -> Output {
+        self.command_at(root, "cargo", arguments, &[])
+    }
+    pub fn cli_at(&self, root: &Path, arguments: &[&str]) -> Output {
+        self.command_at(root, &self.cli, arguments, &[])
+    }
     fn command_at(
         &self,
         root: &Path,
@@ -282,6 +288,8 @@ fn copy_family(vendor: &Path) {
     let repository = repository();
     copy_tree(&repository.join("crates"), &vendor.join("crates"));
     copy_tree(&repository.join("docs"), &vendor.join("docs"));
+    fs::copy(repository.join("README.md"), vendor.join("README.md"))
+        .expect("preserve compiled tutorial source");
     let manifest: TomlValue = toml::from_str(
         &fs::read_to_string(repository.join("Cargo.toml")).expect("checked root manifest"),
     )
