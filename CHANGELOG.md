@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Put a receipt example before setup and add tested field, decoding, and redaction
+  snippets throughout the README.
 - Document crates.io setup and separate the introduction, workflow, and field reference.
 - Add `stable_id` declarations checked against the frozen history ledger.
 - Add `Versioned<T>` with generated `into_versioned` and `from_versioned`

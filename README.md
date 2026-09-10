@@ -9,7 +9,6 @@ attributes before they cause runtime failures in production.
 
 - [When to use Typehistory](#when-to-use-typehistory)
 - [How it works](#how-it-works)
-- [Quick example](#quick-example)
 - [Start an empty package](#start-an-empty-package)
 - [Design principles](#design-principles)
 - [What the macro generates](#what-the-macro-generates)
@@ -40,36 +39,57 @@ uses today. Common examples include:
 
 ## How it works
 
-It works in three steps:
+Suppose a shop originally accepted only US dollars. Its receipts stored an amount
+in cents. The shop now accepts other currencies, so receipts need a `currency` field.
 
-1. You describe field changes and conversion rules through attributes on your
-   struct’s fields.
-2. Typehistory generates a Rust type for each supported version and the code that
-   applies your conversion rules between versions.
-3. Compile-time checks reject struct changes that lack the required Typehistory
-   attributes, so you catch those mistakes before deployment rather than at
-   runtime in production.
+### 1. Describe the change
 
-Your application chooses its storage and a supported Serde format. Typehistory
-keeps each record's stable identity, version, and data together in `Versioned`.
-Application code uses the current alias to write records and read earlier versions.
+Field attributes describe when the field appeared and what value older receipts
+should use:
 
-## Quick example
+<!-- quick-example:v2.rs -->
+```rust
+#[typehistory::history(stable_id = "shop.receipt.created")]
+pub struct Receipt {
+    pub amount_cents: u64,
 
-Suppose a shop originally accepted only US dollars. Its `Receipt` record stored
-an amount in cents. The shop now accepts other currencies, so new receipts need
-a `currency` field as well.
+    #[history(added_at = v2, backfill_value = "USD".to_owned())]
+    pub currency: String,
+}
+```
 
-Earlier receipts have no currency field, but their amounts still mean US dollars.
-We can therefore assign `"USD"` when converting them to the new type.
-Typehistory records that rule alongside the field and generates both versions
-of `Receipt`.
+- `stable_id` identifies this history. Keep it unchanged when renaming the Rust type.
+- `added_at = v2` introduces `currency` in V2.
+- `backfill_value` supplies `"USD"` when converting V1 receipts, because all V1 receipts used US dollars.
 
-The tutorial follows this change from start to finish:
+### 2. Use the current type
 
-1. Declare the original receipt as V1 and freeze its schema.
-2. Add currency in V2, with `"USD"` as the value for older receipts.
-3. Test reading V1 and writing V2, then freeze V2 for release.
+Typehistory generates the historical types and conversions. Application code
+uses `Receipt`, which always names the latest version, to read earlier data:
+
+<!-- overview:read-old.rs -->
+```rust
+let stored = serde_json::from_slice(
+    br#"{"shop.receipt.created":{"1":{"amount_cents":1200}}}"#,
+)?;
+let receipt = Receipt::from_versioned(stored)?;
+
+assert_eq!(receipt.amount_cents, 1200);
+assert_eq!(receipt.currency, "USD");
+```
+
+This example uses JSON. Your application chooses storage and a supported Serde
+format. `Versioned<Receipt>` keeps the stable identity, version, and data together.
+
+### 3. Check changes at compile time
+
+Once V1 is frozen, adding `currency` without its history attribute fails the build:
+it would change V1 instead of introducing V2. A backfill with the wrong type also
+fails compilation. Conversion functions receive the same type checks.
+
+The setup below enables these checks and walks through freezing V1 before adding
+V2. Later snippets reuse these types; snippets with `?` belong in a function that
+returns a compatible `Result`.
 
 ## Start an empty package
 
@@ -210,24 +230,8 @@ would change frozen V1. Describe further changes in V2 so V1 remains available.
 
 ### 5. Add currency in V2
 
-Replace `src/lib.rs` with this complete declaration:
-
-<!-- quick-example:v2.rs -->
-```rust
-#[typehistory::history(stable_id = "shop.receipt.created")]
-pub struct Receipt {
-    pub amount_cents: u64,
-
-    #[history(added_at = v2, backfill_value = "USD".to_owned())]
-    pub currency: String,
-}
-```
-
-The new field's attribute describes both parts of the addition:
-
-- **Version:** `added_at = v2` introduces `currency` in V2.
-- **Value for older records:** `backfill_value` supplies `"USD"`
-  when converting a V1 receipt, because all V1 receipts used US dollars.
+Replace `src/lib.rs` with the [V2 `Receipt` declaration above](#1-describe-the-change).
+It adds `currency` with `"USD"` as the value for older receipts.
 
 One declaration now generates both record versions:
 
@@ -465,17 +469,6 @@ use std::{
     fmt::{Display, Formatter, Result as FmtResult},
 };
 
-#[derive(Debug)]
-pub struct ConvertError(pub u64);
-
-impl Display for ConvertError {
-    fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
-        write!(formatter, "count {} cannot be converted", self.0)
-    }
-}
-
-impl Error for ConvertError {}
-
 #[typehistory::history(stable_id = "billing.invoice.issued")]
 pub struct Invoice {
     #[history(removed_at = v2)]
@@ -495,6 +488,17 @@ fn widen(value: u32) -> Result<u64, ConvertError> {
 fn label(previous: &InvoiceV1) -> Result<String, ConvertError> {
     Ok(previous.legacy.clone())
 }
+
+#[derive(Debug)]
+pub struct ConvertError(pub u64);
+
+impl Display for ConvertError {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
+        write!(formatter, "count {} cannot be converted", self.0)
+    }
+}
+
+impl Error for ConvertError {}
 ```
 
 The two conversion functions take different inputs:
@@ -533,17 +537,6 @@ use std::{
     fmt::{Display, Formatter, Result as FmtResult},
 };
 
-#[derive(Debug)]
-pub struct ConvertError(pub u64);
-
-impl Display for ConvertError {
-    fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
-        write!(formatter, "count {} cannot be converted", self.0)
-    }
-}
-
-impl Error for ConvertError {}
-
 #[typehistory::history(stable_id = "billing.invoice.issued")]
 pub struct Invoice {
     #[history(removed_at = v2)]
@@ -572,6 +565,17 @@ fn stringify(value: u64) -> Result<String, ConvertError> {
         Ok(value.to_string())
     }
 }
+
+#[derive(Debug)]
+pub struct ConvertError(pub u64);
+
+impl Display for ConvertError {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
+        write!(formatter, "count {} cannot be converted", self.0)
+    }
+}
+
+impl Error for ConvertError {}
 ```
 
 The newest update appears first on `count`. Its history now describes `u32` in
@@ -699,15 +703,33 @@ For redacted histories, it must implement `ToRedacted`; see the
 [callback error contract](docs/redactable.md#callback-errors-and-causes).
 Return `Ok(value)` when a conversion cannot fail.
 
-Defaults are explicit choices:
+An optional field still needs an explicit value for older data. For example,
+adding a reference to `Receipt` in V3 could use `None`:
 
-- An added `Option` still needs `backfill_value = None` or a conversion function.
-- `backfill_value = Type::default()` is allowed when that default is right for older records.
+<!-- reference:optional-field.rs -->
+```rust
+#[history(added_at = v3, backfill_value = None)]
+pub reference: Option<String>,
+```
+
+This is a field fragment for the history declaration. New `Receipt` constructors
+must supply `reference`, even when its value is `None`.
+`backfill_value = Type::default()` is also allowed when that default is right for older records.
 
 ### Order and lifetime of a field
 
 A field can be added once, updated several times, and removed once.
-Write its history attributes newest first:
+Write its history attributes newest first, as on the invoice's `count` field:
+
+<!-- reference:ordered-field.rs -->
+```rust
+#[history(updated_at = v3, previous_type = u64, cast_from_previous_value = stringify)]
+#[history(updated_at = v2, previous_type = u32, cast_from_previous_value = widen)]
+pub count: String,
+```
+
+The field uses `String` in V3. The attributes preserve its earlier types: `u64` in
+V2 and `u32` in V1.
 
 - Each attribute uses a different version above the retained floor.
 - Updates follow the field's addition and precede its removal.
@@ -721,12 +743,34 @@ Each conversion then receives the type from the immediately previous version.
 
 Use `cast_from_previous_payload` when a new value depends on other fields.
 The conversion borrows the complete previous record and returns one destination
-field's value. It supports several kinds of change:
+field's value. For the invoice's rename, the field declarations are:
 
-- **Rename:** Remove the old field and add the new field in the same version.
-  The conversion reads the old name, as `label` reads `legacy` in the invoice example.
-- **Merge:** Remove the old fields and add a field whose conversion combines their values.
-- **Split:** Remove the old field and add new fields, each with its own conversion.
+<!-- reference:rename-fields.rs -->
+```rust
+#[history(removed_at = v2)]
+pub legacy: String,
+
+#[history(added_at = v2, cast_from_previous_payload = label)]
+pub label: String,
+```
+
+The callback reads `legacy` from the previous version:
+
+<!-- reference:rename-callback.rs -->
+```rust
+fn label(previous: &InvoiceV1) -> Result<String, ConvertError> {
+    Ok(previous.legacy.clone())
+}
+```
+
+The current `Invoice` has `label` and no `legacy` field. Code accessing
+`invoice.legacy` therefore fails compilation. Keep `legacy` in the declaration
+so Typehistory can still read V1.
+
+The same mechanism supports:
+
+- **Merging fields:** Remove the old fields and add a field whose conversion combines their values.
+- **Splitting a field:** Remove the old field and add new fields, each with its own conversion.
   Each conversion reads the original value from the previous record.
 
 All record callbacks run before fields move. They read the previous record's
@@ -736,8 +780,31 @@ Clone a value when the new field needs ownership.
 ### Changes that keep the same type
 
 A field can change meaning while keeping its Rust type. Record that change with
-`updated_at`, the same type as `previous_type`, and a conversion function.
-Fields without a change at that version carry their values forward.
+`updated_at`, the same type as `previous_type`, and a conversion function. For
+example, V3 could require uppercase currency codes in the receipt:
+
+<!-- reference:same-type-field.rs -->
+```rust
+#[history(updated_at = v3, previous_type = String, cast_from_previous_value = uppercase)]
+#[history(added_at = v2, backfill_value = "USD".to_owned())]
+pub currency: String,
+```
+
+The conversion is an ordinary function. `Infallible` is useful when it always succeeds:
+
+<!-- reference:same-type-callback.rs -->
+```rust
+use std::convert::Infallible;
+
+fn uppercase(value: String) -> Result<String, Infallible> {
+    Ok(value.to_ascii_uppercase())
+}
+```
+
+A V2 receipt with `"eur"` now loads as a current receipt with `"EUR"`.
+New values must already follow the application's currency rules; historical
+conversions do not validate current constructors. Fields without a change at V3
+carry their values forward.
 
 Every new version needs a field boundary. There is no separate version header
 for adding a version with no field changes.
@@ -747,6 +814,16 @@ for adding a version with no field changes.
 The compiler checks both the history attributes and the functions they name.
 For example, it rejects an addition without a value for older records or a
 conversion that accepts the wrong previous type.
+
+For example, this field says when `revision` appears but leaves its earlier value
+undefined:
+
+```text
+#[history(added_at = v2)]
+pub revision: u32,
+```
+
+The V2 example supplies `backfill_value = 7_u32` to complete the declaration.
 
 Each edit below applies to the complete V2 invoice source and fails a Cargo build:
 
@@ -762,24 +839,31 @@ Each edit below applies to the complete V2 invoice source and fails a Cargo buil
 | Set `updated_at = v0` | `history versions are positive` | Use the next permitted positive version |
 | Set `updated_at = v4294967295` above frozen V1 | `exceeds the one permitted successor V2` | Introduce V2 before a later version |
 
-For example, this field says when `revision` appears but leaves its earlier value
-undefined:
-
-```text
-#[history(added_at = v2)]
-pub revision: u32,
-```
-
-The V2 example supplies `backfill_value = 7_u32` to complete the declaration.
 Other rejected declarations include unsupported error types, async callbacks,
 capturing closures, duplicate attribute keys, and attributes in the wrong version order.
 The [evolution matrix](docs/evolution-matrix.md) records the supported and rejected combinations.
 
 ## Decode stored records and handle failures
 
-Use `receipt.into_versioned()` to prepare a current value for serialization.
-Use `Receipt::from_versioned(stored)` after deserializing a `Versioned<Receipt>`.
-The generated methods need no trait imports or manually assembled metadata.
+Wrap a current receipt before serializing it. After deserializing, convert the
+versioned value back to the current type:
+
+<!-- decoding:json.rs -->
+```rust
+let receipt = Receipt {
+    amount_cents: 3000,
+    currency: "EUR".to_owned(),
+};
+let bytes = serde_json::to_vec(&receipt.into_versioned())?;
+
+// After the application retrieves the bytes:
+let stored = serde_json::from_slice(&bytes)?;
+let restored = Receipt::from_versioned(stored)?;
+assert_eq!(restored.currency, "EUR");
+```
+
+This uses the V2 receipt from the walkthrough. The generated methods need no
+trait imports or manually assembled metadata.
 
 The application chooses where to save the serialized bytes and how to retrieve them.
 Typehistory does not call a database, filesystem, or transport.
@@ -794,6 +878,7 @@ JSON supports this representation. MessagePack supports it with
 [`to_vec_named`](https://docs.rs/rmp-serde/1.3.1/rmp_serde/encode/fn.to_vec_named.html),
 which serializes structs with their field names:
 
+<!-- decoding:messagepack.rs -->
 ```rust
 let bytes = rmp_serde::to_vec_named(&receipt.into_versioned())?;
 let receipt = Receipt::from_versioned(rmp_serde::from_slice(&bytes)?)?;
@@ -808,11 +893,37 @@ Each chosen format must also support the field types used by the history.
 
 Deserializing selects the historical type but does not run conversions.
 `from_versioned` applies the declared adjacent conversions and returns the current alias.
-An unconverted `Versioned` retains its original version when serialized again.
-To write the current version, convert it and call `into_versioned` again.
-Neither operation changes bytes already held in storage.
+You can inspect the source version before choosing to convert:
+
+<!-- decoding:source-version.rs -->
+```rust
+use typehistory::Versioned;
+
+let stored: Versioned<Receipt> = serde_json::from_slice(
+    br#"{"shop.receipt.created":{"1":{"amount_cents":1200}}}"#,
+)?;
+assert_eq!(stored.source_version().get(), 1);
+
+let receipt = Receipt::from_versioned(stored)?;
+let current = receipt.into_versioned();
+assert_eq!(current.source_version().get(), 2);
+```
+
+Serializing `stored` before conversion would preserve V1. Serializing `current`
+writes V2. Neither operation changes bytes already held in storage.
 
 ### Invalid records
+
+The historical payload must match its declared version. For example, V1 has no
+`currency` field, so this input is rejected:
+
+<!-- decoding:invalid.rs -->
+```rust
+use typehistory::Versioned;
+
+let invalid = br#"{"shop.receipt.created":{"1":{"amount_cents":1200,"currency":"USD"}}}"#;
+assert!(serde_json::from_slice::<Versioned<Receipt>>(invalid).is_err());
+```
 
 Deserializing a `Versioned` fails for:
 
@@ -830,14 +941,26 @@ The fields present in a payload never determine its version.
 `Receipt::from_versioned` returns a `DecodeError` if an ordinary history's conversion fails.
 This separate step preserves the callback's concrete error without reducing it to a Serde error message.
 
-When a conversion fails, its error includes:
+The invoice rejects a count of 13 during its V2-to-V3 conversion. Read such an
+invoice from V1 to inspect both the original version and the failed step:
 
-- **Source version:** The version originally read from storage.
-- **Failed step:** The previous and destination versions of that conversion.
-- **Cause:** The error returned by your conversion function, available through `Error::source()`.
+<!-- decoding:conversion-error.rs -->
+```rust
+use std::error::Error;
 
-For example, reading V1 can fail in the V2-to-V3 conversion. The error still
-reports V1 as the source version, as the invoice test demonstrates.
+let stored = serde_json::from_slice(
+    br#"{"billing.invoice.issued":{"1":{"legacy":"INV-13","count":13}}}"#,
+)?;
+let error = Invoice::from_versioned(stored).unwrap_err();
+
+assert_eq!(error.source_version().get(), 1);
+assert_eq!(error.adjacent_from().unwrap().get(), 2);
+assert_eq!(error.adjacent_to().unwrap().get(), 3);
+let cause = error.source().unwrap().downcast_ref::<ConvertError>().unwrap();
+assert_eq!(cause.0, 13);
+```
+
+`Error::source()` preserves the concrete error returned by the conversion.
 
 `DecodeError` implements `Debug`, `Display`, and `std::error::Error`.
 It does not implement `Serialize`, `Clone`, or equality traits.
@@ -846,17 +969,30 @@ Histories that opt into Redactable use [separate error types](docs/redactable.md
 ### Existing raw JSON payloads
 
 The low-level JSON APIs remain available for data whose metadata is already stored separately.
-Use `decode::<Invoice>(&identity, version, bytes)` with the original identity, source version, and raw JSON payload.
-Validate runtime metadata with `TypeIdentity::try_from(String)` and `PayloadVersion::try_from_raw(u32)`.
+Pass the original identity, source version, and raw payload together:
+
+<!-- decoding:raw-json.rs -->
+```rust
+use typehistory::{decode, PayloadVersion, TypeIdentity};
+
+let identity = TypeIdentity::try_from("shop.receipt.created".to_owned())?;
+let version = PayloadVersion::try_from_raw(1)?;
+let bytes = br#"{"amount_cents":1200}"#;
+let receipt = decode::<Receipt>(&identity, version, bytes)?;
+
+assert_eq!(receipt.currency, "USD");
+```
+
+The two constructors validate metadata supplied at runtime.
 
 This API checks identity and version before parsing the exact historical payload.
 It then applies adjacent conversions. `ReadError` distinguishes identity mismatch from `DecodeError`.
 The source chain preserves the original JSON or callback error when one exists.
 `Invoice::history().decode(...)` skips the identity check; `history()` requires the `HasHistory` trait in scope.
 
-The raw codecs and frozen payload schemas remain unchanged.
-Raw JSON has no record envelope, so deserializing it as `Versioned<Invoice>` fails.
-After loading it through the low-level API, `into_versioned` prepares the current value for the new representation.
+Raw JSON has no versioned wrapper, so deserializing it as `Versioned<Receipt>` fails.
+After loading it through `decode`, `into_versioned` prepares the current value for
+serialization with its identity and version.
 Any decision to replace stored data remains with the application.
 
 ## Frozen shapes and business meaning
@@ -881,9 +1017,18 @@ field update that converts it to the new type.
 
 ### What conversion tests must check
 
-The compiler can check that a backfill returns a `String`. It cannot determine
-whether `"USD"` is the correct currency for an old receipt. A conversion can also
-return the wrong value while preserving the expected type.
+Both of these values pass the same type check:
+
+<!-- reference:business-values.rs -->
+```rust
+let usd: String = "USD".to_owned();
+let eur: String = "EUR".to_owned();
+assert_ne!(usd, eur);
+```
+
+Only `"USD"` matches the shop's earlier receipts. The compiler checks types;
+the [receipt conversion test](#6-read-v1-and-write-v2) checks that business rule.
+A conversion can return the wrong value while preserving the expected type.
 
 Schemas describe serialized structure, so some source edits leave them unchanged:
 
@@ -920,9 +1065,6 @@ The remaining commands handle experimental resets or imported histories.
 | `cargo typehistory check --package invoice-history` | Check one configured library |
 | `cargo typehistory freeze --package invoice-history` | Freeze all ordinary drafts after validating the complete package |
 | `cargo typehistory freeze --package invoice-history --type billing.invoice.issued --version 3` | Freeze exactly one ordinary draft or reset reservation |
-| `cargo typehistory reset --package invoice-history --type billing.invoice.issued --version 3` | Reserve the highest frozen version for experimental replacement |
-| `cargo typehistory reset --undo --package invoice-history --type billing.invoice.issued --version 3` | Clear that reservation after source matches the saved frozen schema |
-| `cargo typehistory import --package invoice-history --from imported.json --floor billing.invoice.issued=4` | Validate and import a complete ledger with the stated retained floor |
 
 ### Iterate and discard an ordinary draft
 
@@ -953,6 +1095,11 @@ Reset lets you replace the highest frozen version during experiments. It is
 allowed only when there is no newer draft. The ledger keeps the original schema
 and marks that version as open for replacement, called a **reset reservation**.
 
+```sh
+cargo typehistory reset --package invoice-history \
+  --type billing.invoice.issued --version 3
+```
+
 While the reservation exists:
 
 - Development builds allow edits to that version. Builds requiring frozen
@@ -962,11 +1109,21 @@ While the reservation exists:
 
 Finish a reset in one of two ways:
 
-- **Accept the replacement:** Run `freeze` with the exact identity and version.
-  Freezing the whole package rejects pending reservations.
-- **Undo the reset:** Restore source that matches the saved schema, then run
-  `reset --undo` with the exact identity and version. Undo does not edit source;
-  a schema mismatch leaves the reservation open.
+**Accept the replacement:** Freeze the exact identity and version after editing
+and testing the declaration. Freezing the whole package rejects pending reservations.
+
+```sh
+cargo typehistory freeze --package invoice-history \
+  --type billing.invoice.issued --version 3
+```
+
+**Undo the reset:** Restore source that matches the saved schema, then clear the
+reservation. Undo does not edit source; a schema mismatch leaves the reservation open.
+
+```sh
+cargo typehistory reset --undo --package invoice-history \
+  --type billing.invoice.issued --version 3
+```
 
 ### Import a retained floor
 
@@ -996,6 +1153,13 @@ The source and imported ledger must agree:
 
 The annotation alone cannot supply missing historical schemas.
 
+With the declaration and `imported.json` prepared, import them together:
+
+```sh
+cargo typehistory import --package invoice-history \
+  --from imported.json --floor billing.invoice.issued=4
+```
+
 ### Failed commands and recovery
 
 Ledger writes are validated before the file is replaced. A package lock prevents
@@ -1014,8 +1178,11 @@ Each package is updated separately. These commands do not modify stored record b
 ## Build profiles and environment
 
 Development builds let you work on a draft. Release builds require every version
-to be frozen. You can also require frozen versions in a development build with
-`TYPEHISTORY_REQUIRE_FROZEN=1`.
+to be frozen. To apply the same requirement during development:
+
+```sh
+TYPEHISTORY_REQUIRE_FROZEN=1 cargo build --locked
+```
 
 | Consumer profile or setting | Ordinary draft or reset reservation |
 | --- | --- |
@@ -1064,11 +1231,28 @@ Put histories in ordinary Rust modules and import the macro explicitly.
 Types, conversion functions, and expressions resolve where the declaration
 appears, including supported `self`, `super`, and `crate` paths.
 
+For a renamed runtime dependency, Cargo's dependency key becomes the crate name:
+
+```toml
+[dependencies]
+history_api = { package = "typehistory", version = "0.1" }
+```
+
+Use that name in the module containing the history:
+
+<!-- reference:renamed-dependency.rs -->
+```rust
+use history_api::history;
+
+#[history(stable_id = "shop.delivery.requested")]
+pub struct Delivery {
+    pub postal_code: String,
+}
+```
+
+If you rename `typehistory-build`, use that name in `build.rs` too.
 The following rules also apply:
 
-- **Renamed dependencies:** Use `package = "typehistory"` and invoke the macro
-  through the dependency's chosen name, such as `#[history_api::history(...)]`.
-  If you rename `typehistory-build`, use that name in `build.rs` too.
 - **Dependency tables:** Runtime dependencies can be target-specific or inherited
   from the workspace. History declarations themselves must be unconditional.
 - **Generated names:** Avoid collisions with names such as `InvoiceV1` and
@@ -1169,17 +1353,40 @@ redacted output and errors for the histories you select. It is disabled by defau
 To use it:
 
 1. Enable the `redactable` feature on `typehistory`, `typehistory-build`, and the CLI.
-2. Select each history with `#[history(stable_id = "billing.receipt.recorded", redacted)]`.
-3. Declare its field policies and use `into_versioned` and `from_versioned` as shown in the
-   [integration guide](docs/redactable.md).
+2. Select each history with `redacted` and declare its field policies.
+
+For example, this separate receipt history hides the customer in redacted output:
+
+<!-- reference:redacted-history.rs -->
+```rust
+#[typehistory::history(stable_id = "billing.receipt.recorded", redacted)]
+pub struct Receipt {
+    #[sensitive]
+    pub customer: String,
+    #[not_sensitive]
+    pub amount: u32,
+}
+```
+
+Request a redacted projection when displaying the value:
+
+<!-- reference:redacted-output.rs -->
+```rust
+use typehistory::redactable::ToRedacted;
+
+let receipt = Receipt { customer: "Alice".to_owned(), amount: 42 };
+let safe = receipt.to_redacted();
+assert_eq!(safe.json()["customer"], "[REDACTED]");
+assert_eq!(safe.json()["amount"], 42);
+```
 
 Enabling the feature alone does not change ordinary histories, even when another
 dependency enables it. They keep the tutorial's traits and error types.
 Ordinary Serde serialization still writes the original field values, including
 for redacted histories. Persist those payloads; use redacted output for display.
 
-The guide covers field policies, nested records, callback errors, and renamed
-dependencies, with examples using Redactable 0.12.0.
+The [integration guide](docs/redactable.md) covers setup, field policies, nested
+records, callback errors, and renamed dependencies, using Redactable 0.12.0.
 
 ## Crates and further reading
 

@@ -1,5 +1,8 @@
 //! Compile the README's exact Rust blocks in ordinary external consumers.
 
+#[path = "tutorial/snippets.rs"]
+mod snippets;
+
 use super::support::{failure, success, Fixture, LEDGER};
 use toml::Value;
 
@@ -19,7 +22,11 @@ fn documented(marker: &str) -> &str {
 }
 
 fn fixture() -> Fixture {
-    let fixture = Fixture::empty();
+    configured_fixture(false)
+}
+
+fn configured_fixture(redacted: bool) -> Fixture {
+    let fixture = Fixture::configured(redacted);
     let mut manifest: Value = toml::from_str(&fixture.read("Cargo.toml")).unwrap();
     let dependencies = manifest["dependencies"].as_table_mut().unwrap();
     let runtime = dependencies.remove("history_api").unwrap();
@@ -32,15 +39,33 @@ fn fixture() -> Fixture {
 #[test]
 fn receipt_tutorial_reads_old_bytes_and_writes_current_payloads() {
     let fixture = fixture();
+    let mut manifest: Value = toml::from_str(&fixture.read("Cargo.toml")).unwrap();
+    manifest["dependencies"]
+        .as_table_mut()
+        .unwrap()
+        .insert("rmp-serde".into(), "1.3.1".into());
+    fixture.write("Cargo.toml", &toml::to_string(&manifest).unwrap());
+    success(&fixture.cargo(&["generate-lockfile", "--offline"]));
     fixture.write("src/lib.rs", documented("quick-example:v1.rs"));
     success(&fixture.cargo(&["build", "--locked", "--offline"]));
     success(&fixture.cli(&["freeze", "--package", PACKAGE]));
+    let frozen_v1 = fixture.read(LEDGER);
+    let v2 = documented("quick-example:v2.rs");
+    let currency_history = "#[history(added_at = v2, backfill_value = \"USD\".to_owned())]";
+    assert_eq!(v2.matches(currency_history).count(), 1);
+    fixture.write("src/lib.rs", &v2.replacen(currency_history, "", 1));
+    failure(
+        &fixture.cargo(&["build", "--locked", "--offline"]),
+        "field `currency` did not exist in frozen history",
+    );
+    assert_eq!(fixture.read(LEDGER), frozen_v1);
     fixture.write(
         "src/lib.rs",
         &format!(
-            "{}{}",
+            "{}{}{}",
             documented("quick-example:v2.rs"),
-            documented("quick-example:runtime-tests.rs")
+            documented("quick-example:runtime-tests.rs"),
+            snippets::receipt_tests()
         ),
     );
     success(&fixture.cargo(&["test", "--lib", "--locked", "--offline"]));
@@ -55,6 +80,8 @@ fn receipt_tutorial_reads_old_bytes_and_writes_current_payloads() {
     ]));
     success(&fixture.cargo(&["build", "--release", "--locked", "--offline"]));
     success(&fixture.cli(&["check", "--package", PACKAGE]));
+    fixture.write("src/lib.rs", &snippets::receipt_v3());
+    success(&fixture.cargo(&["test", "--lib", "--locked", "--offline"]));
 }
 
 #[test]
@@ -153,13 +180,18 @@ fn invoice_tutorial_checks_evolution_rejections_and_lifecycle() {
     ]));
     let frozen_v2 = fixture.read(LEDGER);
     let v3 = documented("example:versions/v3.rs");
+    snippets::check_invoice_fragments(v3);
     fixture.write("src/lib.rs", v3);
     success(&fixture.cargo(&["build", "--locked", "--offline"]));
     fixture.write("src/lib.rs", v2);
     success(&fixture.cargo(&["build", "--release", "--locked", "--offline"]));
     assert_eq!(fixture.read(LEDGER), frozen_v2);
 
-    let current = format!("{v3}{}", documented("example:runtime-tests.rs"));
+    let current = format!(
+        "{v3}{}{}",
+        documented("example:runtime-tests.rs"),
+        snippets::invoice_tests()
+    );
     fixture.write("src/lib.rs", &current);
     success(&fixture.cargo(&["test", "--lib", "--locked", "--offline"]));
     success(&fixture.cli(&[
@@ -223,4 +255,48 @@ fn invoice_tutorial_checks_evolution_rejections_and_lifecycle() {
         fixture.read("imported/typehistory/schemas.json"),
         fixture.read(LEDGER)
     );
+}
+
+#[test]
+fn renamed_dependency_tutorial_uses_the_documented_macro_import() {
+    let fixture = Fixture::empty();
+    success(&fixture.cli(&["init", "--package", PACKAGE]));
+    fixture.write(
+        "src/lib.rs",
+        &format!(
+            "{}{}",
+            documented("reference:renamed-dependency.rs"),
+            snippets::test_module(&[(
+                "renamed_dependency_roundtrip",
+                r#"
+let delivery = Delivery { postal_code: "00100".to_owned() };
+let bytes = serde_json::to_vec(&delivery.into_versioned())?;
+let restored = Delivery::from_versioned(serde_json::from_slice(&bytes)?)?;
+assert_eq!(restored.postal_code, "00100");
+"#
+                .to_owned(),
+            )])
+        ),
+    );
+    success(&fixture.cli(&["freeze", "--package", PACKAGE]));
+    success(&fixture.cargo(&["test", "--lib", "--locked", "--offline"]));
+}
+
+#[test]
+#[cfg(feature = "redactable")]
+fn redacted_tutorial_runs_the_documented_safe_output() {
+    let fixture = configured_fixture(true);
+    fixture.write(
+        "src/lib.rs",
+        &format!(
+            "{}{}",
+            documented("reference:redacted-history.rs"),
+            snippets::test_module(&[(
+                "redacted_output",
+                documented("reference:redacted-output.rs").to_owned(),
+            )])
+        ),
+    );
+    success(&fixture.cli(&["freeze", "--package", PACKAGE]));
+    success(&fixture.cargo(&["test", "--lib", "--locked", "--offline"]));
 }
