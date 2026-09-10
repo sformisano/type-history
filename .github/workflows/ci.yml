@@ -62,4 +62,4 @@ jobs:
       - name: Check reference schemas
         env:
           TMPDIR: ${{ runner.temp }}
-        run: cargo run -p cargo-typehistory ${{ matrix.features }} --locked -- check --package invoice-history
+        run: cargo run -p cargo-type-history ${{ matrix.features }} --locked -- check --package invoice-history

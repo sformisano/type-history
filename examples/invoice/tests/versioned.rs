@@ -2,7 +2,7 @@ use invoice_history::{ConvertError, Invoice};
 use rmp_serde::{from_slice as from_msgpack, to_vec_named};
 use serde_json::{from_slice, from_str, json, to_value, to_vec, Value};
 use std::error::Error;
-use typehistory::{DecodeFailureKind, Versioned};
+use type_history::{DecodeFailureKind, Versioned};
 
 const OLD: &[u8] = br#"{"billing.invoice.issued":{"1":{"legacy":"INV-42","count":42}}}"#;
 

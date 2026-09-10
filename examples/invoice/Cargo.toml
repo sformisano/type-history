@@ -8,11 +8,11 @@ publish = false
 description = "Reference application for reading and writing versioned invoices"
 
 [dependencies]
-typehistory = { path = "../../crates/typehistory" }
+type-history = { path = "../../crates/type-history" }
 serde_json.workspace = true
 
 [dev-dependencies]
 rmp-serde = "1.3.1"
 
 [build-dependencies]
-typehistory-build = { path = "../../crates/typehistory-build" }
+type-history-build = { path = "../../crates/type-history-build" }

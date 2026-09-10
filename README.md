@@ -1,13 +1,13 @@
-# Typehistory
+# Type History
 
-Typehistory is a Rust library that lets you evolve structs while preserving
+Type History is a Rust library that lets you evolve structs while preserving
 support for data written using earlier versions. It uses simple field attributes
 to describe changes and compile-time checks to catch missing or incorrect
 attributes before they cause runtime failures in production.
 
 ## Table of contents
 
-- [When to use Typehistory](#when-to-use-typehistory)
+- [When to use Type History](#when-to-use-type-history)
 - [How it works](#how-it-works)
 - [Start an empty package](#start-an-empty-package)
 - [Design principles](#design-principles)
@@ -24,12 +24,12 @@ attributes before they cause runtime failures in production.
 - [Optional Redactable integration](#optional-redactable-integration)
 - [Crates and further reading](#crates-and-further-reading)
 
-## When to use Typehistory
+## When to use Type History
 
 Persisted data often outlives the code that wrote it. A production application
 may need to read years of records after its Rust structs have changed.
 
-Typehistory helps when those records need to become the types your application
+Type History helps when those records need to become the types your application
 uses today. Common examples include:
 
 - **Stored events:** Read events written before a field was added or changed.
@@ -50,9 +50,9 @@ should use:
 
 <!-- quick-example:v2.rs -->
 ```rust
-use typehistory::typehistory;
+use type_history::versioned;
 
-#[typehistory(stable_id = "shop.receipt.created")]
+#[versioned(stable_id = "shop.receipt.created")]
 pub struct ReceiptCreated {
     pub amount_cents: u64,
 
@@ -65,12 +65,12 @@ pub struct ReceiptCreated {
 - `added_at = v2` introduces `currency` in V2.
 - `backfill_value` supplies `"USD"` when converting V1 events, because the shop accepted only US dollars then.
 
-`#[typehistory(...)]` applies to the struct. Its `#[history(...)]` field attributes
+`#[versioned(...)]` applies to the struct. Its `#[history(...)]` field attributes
 describe the individual changes.
 
 ### 2. Use the current type
 
-Typehistory generates the historical types and conversions. Application code
+Type History generates the historical types and conversions. Application code
 uses `ReceiptCreated`, which always names the latest version, to read earlier data:
 
 <!-- overview:read-old.rs -->
@@ -106,16 +106,17 @@ returns a compatible `Result`.
 Install the Cargo subcommand from crates.io:
 
 ```sh
-cargo install cargo-typehistory --version 0.1 --locked
+cargo install cargo-type-history --version 0.1 --locked
 ```
 
-Typehistory requires Rust 1.97 or later. Three packages have different jobs:
+Type History requires Rust 1.97 or later. The Cargo package is `type-history`;
+Rust imports use `type_history`. Three packages have different jobs:
 
 | Package | Why the example needs it |
 | --- | --- |
-| `typehistory` | Provides the history declaration, generated types, and versioned values |
-| `typehistory-build` | Makes Cargo check that previously frozen versions remain intact |
-| `cargo-typehistory` | Creates the schema file and freezes new versions |
+| `type-history` | Provides the history declaration, generated types, and versioned values |
+| `type-history-build` | Makes Cargo check that previously frozen versions remain intact |
+| `cargo-type-history` | Creates the schema file and freezes new versions |
 
 Create a library package:
 
@@ -133,12 +134,12 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-typehistory = "0.1"
+type-history = "0.1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 
 [build-dependencies]
-typehistory-build = "0.1"
+type-history-build = "0.1"
 ```
 
 The tests use `serde_json` to write receipts. The nested record example later in
@@ -147,17 +148,17 @@ this README also uses Serde derives.
 ### 2. Initialize the schema file
 
 A **schema** describes a record's serialized field names, field types, and nested
-structure. Typehistory saves frozen schemas in a file called the **ledger**.
+structure. Type History saves frozen schemas in a file called the **ledger**.
 Later builds compare your declaration with that file to check that older versions
 remain intact.
 
 The setup uses three files:
 
-- `typehistory.toml` enables Typehistory for the package.
+- `type-history.toml` enables Type History for the package.
 - `build.rs` runs the schema checks during Cargo builds.
-- `typehistory/schemas.json` stores the ledger. The `init` command creates it.
+- `type-history/schemas.json` stores the ledger. The `init` command creates it.
 
-Create `typehistory.toml`:
+Create `type-history.toml`:
 
 ```toml
 format = 1
@@ -166,7 +167,7 @@ format = 1
 Create `build.rs`:
 
 ```rust
-use typehistory_build::compile;
+use type_history_build::compile;
 
 fn main() {
     compile();
@@ -178,10 +179,10 @@ Empty `src/lib.rs` before initialization.
 ```sh
 cargo generate-lockfile
 cargo fetch --locked
-cargo typehistory init --package receipt-history
+cargo type-history init --package receipt-history
 ```
 
-`init` creates an empty ledger at `typehistory/schemas.json`. Run it before adding
+`init` creates an empty ledger at `type-history/schemas.json`. Run it before adding
 the first history declaration. It refuses to replace an existing ledger.
 Cargo builds require this file even when the package has no histories yet.
 
@@ -193,11 +194,11 @@ those commands again.
 Add this line to `.gitignore`:
 
 ```gitignore
-**/typehistory/.schemas.lock
+**/type-history/.schemas.lock
 ```
 
-Commit `Cargo.toml`, `Cargo.lock`, `typehistory.toml`, `build.rs`, your source, and
-`typehistory/schemas.json` with your project. The `.schemas.lock` file prevents
+Commit `Cargo.toml`, `Cargo.lock`, `type-history.toml`, `build.rs`, your source, and
+`type-history/schemas.json` with your project. The `.schemas.lock` file prevents
 concurrent commands from changing the ledger at the same time. It can be recreated.
 
 ### 3. Declare V1
@@ -206,22 +207,22 @@ Write this complete `src/lib.rs`:
 
 <!-- quick-example:v1.rs -->
 ```rust
-use typehistory::typehistory;
+use type_history::versioned;
 
-#[typehistory(stable_id = "shop.receipt.created")]
+#[versioned(stable_id = "shop.receipt.created")]
 pub struct ReceiptCreated {
     pub amount_cents: u64,
 }
 ```
 
-This declaration gives Typehistory two pieces of information:
+This declaration gives Type History two pieces of information:
 
 - **Stable identity:** `shop.receipt.created` identifies this history in stored records.
   Keep it unchanged when renaming the Rust type or moving its module.
 - **Initial fields:** `amount_cents` belongs to V1. Fields without history
   attributes exist from V1 by default.
 
-Typehistory generates `ReceiptCreatedV1` with an `amount_cents` field. It also makes
+Type History generates `ReceiptCreatedV1` with an `amount_cents` field. It also makes
 `ReceiptCreated` an alias of `ReceiptCreatedV1`, so application code can use the original name.
 
 ### 4. Freeze V1
@@ -234,7 +235,7 @@ Build the declaration, then freeze V1:
 
 ```sh
 cargo build --locked
-cargo typehistory freeze --package receipt-history
+cargo type-history freeze --package receipt-history
 ```
 
 Changing `amount_cents` from `u64` to `String` now fails compilation because it
@@ -269,7 +270,7 @@ The outer map identifies the history. The inner map identifies the payload versi
 Both maps contain exactly one entry. The payload keeps its original fields.
 
 Deserialize the bytes, then pass the result to `ReceiptCreated::from_versioned`.
-Typehistory checks the identity and selects V1 before reading the payload.
+Type History checks the identity and selects V1 before reading the payload.
 `from_versioned` converts it into the current `ReceiptCreated`, assigning `"USD"` to the new field.
 Application code supplies neither a numbered Rust type nor separate metadata.
 
@@ -341,7 +342,7 @@ require all histories to be frozen, so an unfinished draft cannot enter a releas
 Freeze V2, then check the release build:
 
 ```sh
-cargo typehistory freeze --package receipt-history \
+cargo type-history freeze --package receipt-history \
   --type shop.receipt.created --version 2
 cargo build --release --locked
 ```
@@ -360,7 +361,7 @@ The receipt example uses a few rules that also apply to longer histories:
 - **One conversion per step:** Reading V1 as V3 first converts V1 to V2, then V2
   to V3. Each new version builds on the existing conversions.
 - **Explicit values for old data:** You choose what an added field means for
-  older records. Typehistory cannot infer that choice from the field's type.
+  older records. Type History cannot infer that choice from the field's type.
 
 The ledger is needed when building the application. The running application uses
 generated types and conversion functions, so it needs neither the ledger nor Cargo.
@@ -428,7 +429,7 @@ cd invoice-history
 
 1. Copy the [setup manifest](#1-create-the-package).
 2. Set `name = "invoice-history"` in its `[package]` section.
-3. Create `typehistory.toml` and `build.rs` using the [initialization instructions](#2-initialize-the-schema-file).
+3. Create `type-history.toml` and `build.rs` using the [initialization instructions](#2-initialize-the-schema-file).
 4. Empty `src/lib.rs`.
 
 Initialize the package:
@@ -436,7 +437,7 @@ Initialize the package:
 ```sh
 cargo generate-lockfile
 cargo fetch --locked
-cargo typehistory init --package invoice-history
+cargo type-history init --package invoice-history
 ```
 
 Continue in `invoice-history` for the following steps.
@@ -449,9 +450,9 @@ Write this complete `src/lib.rs`:
 
 <!-- example:versions/v1.rs -->
 ```rust
-use typehistory::typehistory;
+use type_history::versioned;
 
-#[typehistory(stable_id = "billing.invoice.issued")]
+#[versioned(stable_id = "billing.invoice.issued")]
 pub struct Invoice {
     pub legacy: String,
     pub count: u32,
@@ -462,7 +463,7 @@ pub struct Invoice {
 
 ```sh
 cargo build --locked
-cargo typehistory freeze --package invoice-history
+cargo type-history freeze --package invoice-history
 ```
 
 ### V2: remove, convert, and add fields
@@ -470,7 +471,7 @@ cargo typehistory freeze --package invoice-history
 V2 makes three changes:
 
 - **Rename `legacy` to `label`:** Mark `legacy` as removed and add `label` in V2.
-  Keep the `legacy` declaration so Typehistory can generate `InvoiceV1`.
+  Keep the `legacy` declaration so Type History can generate `InvoiceV1`.
 - **Widen `count` to `u64`:** Record its previous type, `u32`, and provide a conversion.
 - **Add `revision`:** Assign 7 to earlier invoices. This value is a choice made
   for the example; your application needs a value that fits its own history.
@@ -483,9 +484,9 @@ use std::{
     error::Error,
     fmt::{Display, Formatter, Result as FmtResult},
 };
-use typehistory::typehistory;
+use type_history::versioned;
 
-#[typehistory(stable_id = "billing.invoice.issued")]
+#[versioned(stable_id = "billing.invoice.issued")]
 pub struct Invoice {
     #[history(removed_at = v2)]
     pub legacy: String,
@@ -525,7 +526,7 @@ The two conversion functions take different inputs:
   `&InvoiceV1`. It clones `legacy` to produce the new label.
 
 The rename needs access to the whole previous record because V1 has no field
-called `label`. Typehistory calls record conversions before moving any fields,
+called `label`. Type History calls record conversions before moving any fields,
 so `legacy` remains available until `label` has read it.
 
 Conversion functions, also called callbacks, return `Result`. These two always
@@ -535,7 +536,7 @@ Build and freeze V2:
 
 ```sh
 cargo build --locked
-cargo typehistory freeze --package invoice-history \
+cargo type-history freeze --package invoice-history \
   --type billing.invoice.issued --version 2
 ```
 
@@ -552,9 +553,9 @@ use std::{
     error::Error,
     fmt::{Display, Formatter, Result as FmtResult},
 };
-use typehistory::typehistory;
+use type_history::versioned;
 
-#[typehistory(stable_id = "billing.invoice.issued")]
+#[versioned(stable_id = "billing.invoice.issued")]
 pub struct Invoice {
     #[history(removed_at = v2)]
     pub legacy: String,
@@ -617,7 +618,7 @@ mod tests {
     use super::{ConvertError, Invoice};
     use serde_json::from_slice;
     use std::error::Error;
-    use typehistory::DecodeFailureKind;
+    use type_history::DecodeFailureKind;
 
     #[test]
     fn old_bytes_reach_the_current_type() {
@@ -659,7 +660,7 @@ Run the tests while V3 remains a draft. Then freeze V3 and check the release bui
 
 ```sh
 cargo test --lib --locked
-cargo typehistory freeze --package invoice-history \
+cargo type-history freeze --package invoice-history \
   --type billing.invoice.issued --version 3
 cargo build --release --locked
 ```
@@ -783,7 +784,7 @@ fn label(previous: &InvoiceV1) -> Result<String, ConvertError> {
 
 The current `Invoice` has `label` and no `legacy` field. Code accessing
 `invoice.legacy` therefore fails compilation. Keep `legacy` in the declaration
-so Typehistory can still read V1.
+so Type History can still read V1.
 
 The same mechanism supports:
 
@@ -886,7 +887,7 @@ This uses the V2 receipt from the walkthrough. The generated methods need no
 trait imports or manually assembled metadata.
 
 The application chooses where to save the serialized bytes and how to retrieve them.
-Typehistory does not call a database, filesystem, or transport.
+Type History does not call a database, filesystem, or transport.
 
 ### Choose a Serde format
 
@@ -920,7 +921,7 @@ You can inspect the source version before choosing to convert:
 <!-- decoding:source-version.rs -->
 ```rust
 use serde_json::from_slice;
-use typehistory::Versioned;
+use type_history::Versioned;
 
 let stored: Versioned<ReceiptCreated> = from_slice(
     br#"{"shop.receipt.created":{"1":{"amount_cents":1200}}}"#,
@@ -943,7 +944,7 @@ The historical payload must match its declared version. For example, V1 has no
 <!-- decoding:invalid.rs -->
 ```rust
 use serde_json::from_slice;
-use typehistory::Versioned;
+use type_history::Versioned;
 
 let invalid = br#"{"shop.receipt.created":{"1":{"amount_cents":1200,"currency":"USD"}}}"#;
 assert!(from_slice::<Versioned<ReceiptCreated>>(invalid).is_err());
@@ -998,7 +999,7 @@ Pass the original identity, source version, and raw payload together:
 
 <!-- decoding:raw-json.rs -->
 ```rust
-use typehistory::{decode, PayloadVersion, TypeIdentity};
+use type_history::{decode, PayloadVersion, TypeIdentity};
 
 let identity = TypeIdentity::try_from("shop.receipt.created".to_owned())?;
 let version = PayloadVersion::try_from_raw(1)?;
@@ -1085,11 +1086,11 @@ The remaining commands handle experimental resets or imported histories.
 
 | Command | Effect |
 | --- | --- |
-| `cargo typehistory init --package invoice-history` | Create the ledger before any history declaration exists |
-| `cargo typehistory check` | Check configured workspace libraries without writing package files |
-| `cargo typehistory check --package invoice-history` | Check one configured library |
-| `cargo typehistory freeze --package invoice-history` | Freeze all ordinary drafts after validating the complete package |
-| `cargo typehistory freeze --package invoice-history --type billing.invoice.issued --version 3` | Freeze exactly one ordinary draft or reset reservation |
+| `cargo type-history init --package invoice-history` | Create the ledger before any history declaration exists |
+| `cargo type-history check` | Check configured workspace libraries without writing package files |
+| `cargo type-history check --package invoice-history` | Check one configured library |
+| `cargo type-history freeze --package invoice-history` | Freeze all ordinary drafts after validating the complete package |
+| `cargo type-history freeze --package invoice-history --type billing.invoice.issued --version 3` | Freeze exactly one ordinary draft or reset reservation |
 
 ### Iterate and discard an ordinary draft
 
@@ -1121,7 +1122,7 @@ allowed only when there is no newer draft. The ledger keeps the original schema
 and marks that version as open for replacement, called a **reset reservation**.
 
 ```sh
-cargo typehistory reset --package invoice-history \
+cargo type-history reset --package invoice-history \
   --type billing.invoice.issued --version 3
 ```
 
@@ -1138,7 +1139,7 @@ Finish a reset in one of two ways:
 and testing the declaration. Freezing the whole package rejects pending reservations.
 
 ```sh
-cargo typehistory freeze --package invoice-history \
+cargo type-history freeze --package invoice-history \
   --type billing.invoice.issued --version 3
 ```
 
@@ -1146,7 +1147,7 @@ cargo typehistory freeze --package invoice-history \
 reservation. Undo does not edit source; a schema mismatch leaves the reservation open.
 
 ```sh
-cargo typehistory reset --undo --package invoice-history \
+cargo type-history reset --undo --package invoice-history \
   --type billing.invoice.issued --version 3
 ```
 
@@ -1163,13 +1164,13 @@ Each imported floor above V1 requires a matching `--floor EXACT_ID=N` argument.
 The declaration must state the same floor:
 
 ```text
-use typehistory::typehistory;
+use type_history::versioned;
 
-#[typehistory(stable_id = "billing.invoice.issued", retained_from = v4)]
+#[versioned(stable_id = "billing.invoice.issued", retained_from = v4)]
 ```
 
 This fragment belongs to a separate history starting at V4. Unannotated fields
-start at V4, and Typehistory generates no V1, V2, or V3 types for it.
+start at V4, and Type History generates no V1, V2, or V3 types for it.
 Do not apply it to the tutorial's existing V1-to-V3 history to discard old versions.
 
 The source and imported ledger must agree:
@@ -1183,7 +1184,7 @@ The annotation alone cannot supply missing historical schemas.
 With the declaration and `imported.json` prepared, import them together:
 
 ```sh
-cargo typehistory import --package invoice-history \
+cargo type-history import --package invoice-history \
   --from imported.json --floor billing.invoice.issued=4
 ```
 
@@ -1208,13 +1209,13 @@ Development builds let you work on a draft. Release builds require every version
 to be frozen. To apply the same requirement during development:
 
 ```sh
-TYPEHISTORY_REQUIRE_FROZEN=1 cargo build --locked
+TYPE_HISTORY_REQUIRE_FROZEN=1 cargo build --locked
 ```
 
 | Consumer profile or setting | Ordinary draft or reset reservation |
 | --- | --- |
 | Development | Allowed with warning |
-| `TYPEHISTORY_REQUIRE_FROZEN=1 cargo build` | Rejected |
+| `TYPE_HISTORY_REQUIRE_FROZEN=1 cargo build` | Rejected |
 | `AXIS_REQUIRE_FROZEN_EVENTS=1 cargo build` | Rejected |
 | Release family | Rejected |
 | Custom profile inheriting `dev` | Development rules |
@@ -1235,17 +1236,17 @@ output is cached. Builds do not freeze, repair, or rewrite the ledger.
 ### Package configuration
 
 - A consumer needs a library target, the `build.rs` hook, and `format = 1` in
-  `typehistory.toml`. Depending on the runtime alone does not enable ledger checks.
-- The ledger lives at `typehistory/schemas.json`; its location is fixed.
+  `type-history.toml`. Depending on the runtime alone does not enable ledger checks.
+- The ledger lives at `type-history/schemas.json`; its location is fixed.
 - No `links` value, manifest metadata, or second declaration file is needed.
 - A package cannot configure both standalone and Axis ledgers.
 
 ### Variables used by tooling
 
-The build hook sets `TYPEHISTORY_LEDGER_PATH`, `TYPEHISTORY_SCHEMA_ID_PREFIX`, and
-`TYPEHISTORY_AUTHORITY_KIND`. Do not set them yourself.
+The build hook sets `TYPE_HISTORY_LEDGER_PATH`, `TYPE_HISTORY_SCHEMA_ID_PREFIX`, and
+`TYPE_HISTORY_AUTHORITY_KIND`. Do not set them yourself.
 
-`TYPEHISTORY_SCHEMA_EXPORT` and `AXIS_SCHEMA_EXPORT` are used by export tooling.
+`TYPE_HISTORY_SCHEMA_EXPORT` and `AXIS_SCHEMA_EXPORT` are used by export tooling.
 They must be unset or `1` and cannot relax release or explicit strict checks.
 Lifecycle export uses a captured copy of development sources. Forced Cargo
 environment settings remain effective; conflicting forced settings fail.
@@ -1262,22 +1263,22 @@ For a renamed runtime dependency, Cargo's dependency key becomes the crate name:
 
 ```toml
 [dependencies]
-history_api = { package = "typehistory", version = "0.1" }
+history_api = { package = "type-history", version = "0.1" }
 ```
 
 Use that name in the module containing the history:
 
 <!-- reference:renamed-dependency.rs -->
 ```rust
-use history_api::typehistory;
+use history_api::versioned;
 
-#[typehistory(stable_id = "shop.delivery.requested")]
+#[versioned(stable_id = "shop.delivery.requested")]
 pub struct Delivery {
     pub postal_code: String,
 }
 ```
 
-If you rename `typehistory-build`, use that name in `build.rs` too.
+If you rename `type-history-build`, use that name in `build.rs` too.
 The following rules also apply:
 
 - **Dependency tables:** Runtime dependencies can be target-specific or inherited
@@ -1290,12 +1291,12 @@ The following rules also apply:
 
 ### Nested records
 
-A field can contain another named struct. Typehistory needs to know that struct's
+A field can contain another named struct. Type History needs to know that struct's
 schema so a later edit cannot silently change a frozen record's nested fields.
 
 For a supporting struct such as `Address`:
 
-1. Derive `typehistory::Schema` to describe its structure for the build checks.
+1. Derive `type_history::Schema` to describe its structure for the build checks.
 2. Derive Serde's `Serialize` and `Deserialize` for reading and writing its values.
 3. Add `#[serde(deny_unknown_fields)]` so decoding rejects unexpected fields.
 
@@ -1308,7 +1309,7 @@ Add this module to an initialized library:
 ```rust
 pub mod addresses {
     use serde::{Deserialize, Serialize};
-    use typehistory::{typehistory, Schema};
+    use type_history::{versioned, Schema};
 
     #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Schema)]
     #[serde(deny_unknown_fields)]
@@ -1316,7 +1317,7 @@ pub mod addresses {
         pub number: u32,
     }
 
-    #[typehistory(stable_id = "billing.address.record")]
+    #[versioned(stable_id = "billing.address.record")]
     pub struct AddressRecord {
         pub address: Address,
     }
@@ -1324,7 +1325,7 @@ pub mod addresses {
     #[test]
     fn nested_values_keep_their_closed_codec() {
         use serde_json::from_slice;
-        use typehistory::Versioned;
+        use type_history::Versioned;
 
         let stored = from_slice(
             br#"{"billing.address.record":{"1":{"address":{"number":7}}}}"#,
@@ -1383,16 +1384,16 @@ redacted output and errors for the histories you select. It is disabled by defau
 
 To use it:
 
-1. Enable the `redactable` feature on `typehistory`, `typehistory-build`, and the CLI.
+1. Enable the `redactable` feature on `type-history`, `type-history-build`, and the CLI.
 2. Select each history with `redacted` and declare its field policies.
 
 For example, this separate receipt history hides the customer in redacted output:
 
 <!-- reference:redacted-history.rs -->
 ```rust
-use typehistory::typehistory;
+use type_history::versioned;
 
-#[typehistory(stable_id = "billing.receipt.recorded", redacted)]
+#[versioned(stable_id = "billing.receipt.recorded", redacted)]
 pub struct ReceiptRecorded {
     #[sensitive]
     pub customer: String,
@@ -1405,7 +1406,7 @@ Request a redacted projection when displaying the value:
 
 <!-- reference:redacted-output.rs -->
 ```rust
-use typehistory::redactable::ToRedacted;
+use type_history::redactable::ToRedacted;
 
 let receipt = ReceiptRecorded { customer: "Alice".to_owned(), amount: 42 };
 let safe = receipt.to_redacted();
@@ -1423,23 +1424,23 @@ records, callback errors, and renamed dependencies, using Redactable 0.12.0.
 
 ## Crates and further reading
 
-Applications normally depend on `typehistory` and `typehistory-build`.
+Applications normally depend on `type-history` and `type-history-build`.
 The workspace separates runtime code, code generation, and development tooling:
 
 | Crate | Responsibility |
 | --- | --- |
-| `typehistory` | Public macros, history traits, and decoding API |
-| `typehistory-core` | Runtime decoding, identities, and structural schema contracts |
-| `typehistory-macros` | Procedural macro entry points |
-| `typehistory-codegen` | Parsing, schema checks, and Rust generation |
-| `typehistory-build` | Build integration and checked ledger operations |
-| `cargo-typehistory` | Cargo subcommand for lifecycle operations |
+| `type-history` | Public macros, history traits, and decoding API |
+| `type-history-core` | Runtime decoding, identities, and structural schema contracts |
+| `type-history-macros` | Procedural macro entry points |
+| `type-history-codegen` | Parsing, schema checks, and Rust generation |
+| `type-history-build` | Build integration and checked ledger operations |
+| `cargo-type-history` | Cargo subcommand for lifecycle operations |
 
 For more detail:
 
 - The [evolution matrix](docs/evolution-matrix.md) lists supported and rejected cases.
 - The [example guide](docs/guide.md) explains what the receipt and invoice tests check.
-- The [tutorial integration tests](crates/cargo-typehistory/tests/standalone/tutorial.rs) check intermediate edits and expected failures.
+- The [tutorial integration tests](crates/cargo-type-history/tests/standalone/tutorial.rs) check intermediate edits and expected failures.
 
 The [invoice reference application](examples/invoice/README.md) includes a complete
 history declaration, frozen ledger, and tests. See [Contributing](CONTRIBUTING.md)

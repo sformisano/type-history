@@ -1,7 +1,7 @@
 # Field-history evolution matrix
 
-This matrix summarizes the [Typehistory contract](../README.md).
-Typehistory originated in Axis's event field-history implementation.
+This matrix summarizes the [Type History contract](../README.md).
+Type History originated in Axis's event field-history implementation.
 The [Axis matrix at the extraction revision](https://github.com/sformisano/axis/blob/af7b96c3f0744cdfd170c50bb321d5dfd02be8ea/docs/design/event-evolution/evolution-matrix.md)
 documents that revision's aggregate-specific cases.
 S means supported, R means rejected, and U means outside the API.
@@ -74,7 +74,7 @@ Case IDs identify behavior families; this document is not a test-run report.
 | M53 | Conditional history/field declaration | R | Existing source inventory restrictions retained |
 | M54 | Supported feature-selected alias | S | Selected compiler-resolved shape checked against same authority |
 | M55 | self/super type, callback, expression, array length | S | Original invocation module and spans retained |
-| M56 | Author field names that resemble helpers (`previous`, `value`, `json`, `__typehistory_*`, or `__axis_*`) | S | Generated identifiers hygienic; field names cannot shadow transition input/local bindings |
+| M56 | Author field names that resemble helpers (`previous`, `value`, `json`, `__type_history_*`, or `__axis_*`) | S | Generated identifiers hygienic; field names cannot shadow transition input/local bindings |
 | M57 | Unsupported field attributes | R | Accept history, documentation, lints, and redaction policies on opted histories; reject other attributes |
 | M58 | Per-version derives or Serde customization | U/R | Generated versions use the history's selected trait contract and strict codecs; unsupported attributes fail |
 | M59 | Asynchronous or capturing-closure callback | R | Ordinary synchronous function path required |
@@ -119,7 +119,7 @@ Case IDs identify behavior families; this document is not a test-run report.
 | M108 | Edit formatting policy only | S | Revalidate policies without changing frozen wire schemas |
 | M109 | Redacted callback or low-level JSON failure | R | Preserve identity and version context; capture only safe causes and terminate raw source chains |
 | M110 | Redactable wrapper or nested history field | S | Core-owned transparent schema adapters and generated nested schema contracts |
-| M111 | Renamed Typehistory without direct Redactable | S | Generated records use runtime reexports |
+| M111 | Renamed Type History without direct Redactable | S | Generated records use runtime reexports |
 | M112 | Upstream Redactable derive on supporting record | S | Requires direct Redactable 0.12.0 dependency; renamed dependency supported |
 | M113 | Frontend-owned error projection | S | Generic GenerationPaths.error constructors receive concrete owned callback errors |
 
@@ -140,10 +140,10 @@ Case IDs identify behavior families; this document is not a test-run report.
 
 ## Verification and limits
 
-Parser tests live in [codegen](../crates/typehistory-codegen/src/history/tests.rs).
+Parser tests live in [codegen](../crates/type-history-codegen/src/history/tests.rs).
 Real standalone compiler and lifecycle cases live in
-[cargo-typehistory](../crates/cargo-typehistory/tests/standalone.rs). Its
-[tutorial tests](../crates/cargo-typehistory/tests/standalone/tutorial.rs) execute
+[cargo-type-history](../crates/cargo-type-history/tests/standalone.rs). Its
+[tutorial tests](../crates/cargo-type-history/tests/standalone/tutorial.rs) execute
 the README progression. The [invoice reference application](../examples/invoice/README.md)
 demonstrates a current consumer with its frozen ledger.
 

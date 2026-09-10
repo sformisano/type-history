@@ -1,0 +1,27 @@
+use history_api::versioned;
+use std::error::Error;
+use std::fmt::{Display, Formatter, Result as FmtResult};
+
+#[derive(Debug)]
+pub struct ConvertError;
+impl Display for ConvertError {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
+        formatter.write_str("conversion failed")
+    }
+}
+impl Error for ConvertError {}
+
+#[versioned(stable_id = "billing.invoice.issued")]
+pub struct Invoice {
+    #[history(removed_at = v2)]
+    pub legacy: String,
+    #[history(updated_at = v2, previous_type = u32, cast_from_previous_value = widen)]
+    pub count: u64,
+    #[history(added_at = v2, cast_from_previous_payload = label)]
+    pub label: String,
+    #[history(added_at = v2, backfill_value = 7_u32)]
+    pub revision: u32,
+}
+
+fn widen(value: u32) -> Result<u64, ConvertError> { Ok(u64::from(value)) }
+fn label(previous: &InvoiceV1) -> Result<String, ConvertError> { Ok(previous.legacy.clone()) }

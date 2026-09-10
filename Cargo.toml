@@ -1,11 +1,11 @@
 [workspace]
 members = [
-    "crates/typehistory-core",
-    "crates/typehistory-codegen",
-    "crates/typehistory-macros",
-    "crates/typehistory",
-    "crates/typehistory-build",
-    "crates/cargo-typehistory",
+    "crates/type-history-core",
+    "crates/type-history-codegen",
+    "crates/type-history-macros",
+    "crates/type-history",
+    "crates/type-history-build",
+    "crates/cargo-type-history",
     "examples/invoice",
 ]
 resolver = "2"
@@ -13,7 +13,7 @@ resolver = "2"
 [workspace.package]
 edition = "2021"
 rust-version = "1.97.0"
-repository = "https://github.com/sformisano/typehistory"
+repository = "https://github.com/sformisano/type-history"
 license = "MIT OR Apache-2.0"
 
 [workspace.dependencies]

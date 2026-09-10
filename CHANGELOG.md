@@ -2,9 +2,13 @@
 
 ## Unreleased
 
+- Rename the packages to `type-history` and `type-history-*`, with
+  `type_history` imports and the `cargo type-history` command.
+  Configuration now uses `type-history.toml`, `type-history/schemas.json`, and
+  `TYPE_HISTORY_*` build settings. Frozen schema identities stay unchanged.
 - Name receipt event examples `ReceiptCreated` and `ReceiptRecorded` to match
   their stable IDs.
-- Rename the struct macro to `typehistory`; field attributes remain `history`.
+- Rename the struct macro to `versioned`; field attributes remain `history`.
   Use explicit imports in the README, guides, and reference application.
 - Put a receipt example before setup and add tested field, decoding, and redaction
   snippets throughout the README.
@@ -23,7 +27,7 @@
 - Place each crate directly under `crates/`, using its package name. Move shared
   documentation and examples to root-level `docs/` and `examples/` directories.
 
-- Add a default-disabled `redactable` feature across all six Typehistory crates,
+- Add a default-disabled `redactable` feature across all six Type History crates,
   using Redactable 0.12.0. Each history selects its contract with `redacted`.
   Ordinary histories retain their existing traits and error sources when the
   feature is enabled elsewhere in the dependency graph.

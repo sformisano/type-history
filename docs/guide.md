@@ -1,32 +1,33 @@
 # Follow a record through its history
 
-Typehistory keeps earlier versions of a Rust record available as its fields change.
+Type History keeps earlier versions of a Rust record available as its fields change.
 The [README tutorial](../README.md#start-an-empty-package) shows the complete
 setup and declarations. This guide explains what its examples establish and how
 the executable checks exercise the same changes.
 
-## Start with the Receipt example
+## Start with the receipt event
 
-Receipt V1 contains an amount in cents. V2 adds currency, because the example shop
-starts accepting currencies besides US dollars. An earlier receipt has no currency
+`ReceiptCreated` V1 contains an amount in cents. V2 adds currency, because the
+example shop starts accepting currencies besides US dollars. An earlier event has no currency
 field, so its conversion needs an explicit value. The declaration supplies `"USD"`
 based on the shop's earlier use of dollars.
 
 The tutorial initializes an empty `receipt-history` package before declaring V1.
-Initialization creates `typehistory/schemas.json`, the ledger that records frozen
+Initialization creates `type-history/schemas.json`, the ledger that records frozen
 schemas. V1 initially builds as a draft. Freezing it establishes the schema that
 later builds must preserve.
 
-After V2 is added, one declaration generates `ReceiptV1` and `ReceiptV2`.
-`Receipt` becomes an alias of `ReceiptV2`. The conversion fills V2's new currency
-field while leaving V1's generated type unchanged.
+After V2 is added, one declaration generates `ReceiptCreatedV1` and `ReceiptCreatedV2`.
+`ReceiptCreated` becomes an alias of `ReceiptCreatedV2`. The conversion fills
+V2's new currency field while leaving V1's generated type unchanged.
 
-The [receipt tests](../README.md#6-read-v1-and-write-v2) deserialize a V1 `Versioned<Receipt>` and pass it to `Receipt::from_versioned`.
-They check the current amount and currency. They also construct a new `Receipt`
+The [receipt tests](../README.md#6-read-v1-and-write-v2) deserialize a V1
+`Versioned<ReceiptCreated>` and pass it to `ReceiptCreated::from_versioned`.
+They check the current amount and currency. They also construct a new `ReceiptCreated`
 with `"EUR"` and serialize `receipt.into_versioned()`.
 That second case shows that the backfill does not override a currency supplied by current application code.
 
-Application code uses `Receipt` throughout. `Versioned` carries the stable identity,
+Application code uses `ReceiptCreated` throughout. `Versioned` carries the stable identity,
 source version, and matching historical data without separate metadata arguments.
 The application chooses storage and a Serde format supporting maps and named payload fields.
 JSON and MessagePack's `to_vec_named` support that representation.
@@ -38,7 +39,7 @@ Renaming a Rust type or moving its module does not change that identity.
 
 The [invoice walkthrough](../README.md#evolve-an-invoice-through-v1-v2-and-v3)
 starts in a separate `invoice-history` package. Keeping it separate lets its V1
-begin with an empty ledger and preserves the Receipt tutorial's history.
+begin with an empty ledger and preserves the receipt tutorial's history.
 
 Invoice [V1](../README.md#v1-retain-the-original-fields) contains `legacy: String` and
 `count: u32`. After it is frozen, [V2](../README.md#v2-remove-convert-and-add-fields) replaces
@@ -46,12 +47,12 @@ Invoice [V1](../README.md#v1-retain-the-original-fields) contains `legacy: Strin
 
 The two conversion functions need different inputs. `widen` consumes the earlier
 count because that value alone determines the new count. `label` borrows the
-entire `InvoiceV1` because its input comes from another field. Typehistory calls
+entire `InvoiceV1` because its input comes from another field. Type History calls
 record-borrowing functions before moving any previous fields, so `legacy` remains
 available until `label` has read it.
 
 The revision backfill supplies 7 explicitly. This number belongs to the example;
-Typehistory cannot infer which revision an application should assign its earlier data.
+Type History cannot infer which revision an application should assign its earlier data.
 
 ## Keep every conversion step
 
@@ -66,7 +67,7 @@ error records source V1 and the failing V2-to-V3 step. They also recover the
 original `ConvertError` through `Error::source()` and inspect its count.
 
 That error follows ordinary Rust error handling. The callback's error type implements
-`std::error::Error + Send + Sync + 'static`, and Typehistory preserves it as the cause.
+`std::error::Error + Send + Sync + 'static`, and Type History preserves it as the cause.
 Version metadata tells the caller where conversion stopped; the cause explains
 why the callback rejected that value.
 
@@ -79,7 +80,7 @@ Reading a `Versioned` does not rewrite stored bytes or automatically run convers
 A frozen schema protects historical field names, serialized types, and supported
 nested structure. It also prevents deleting a retained version or history.
 It cannot prove that a callback returns the correct business value.
-The Receipt backfill would still produce a `String` if its currency were wrong.
+The currency backfill would still produce a `String` if its value were wrong.
 
 The Rust integration tests check both properties. Ordinary builds reject incompatible
 declarations, and runtime assertions check specific conversion results. The README's

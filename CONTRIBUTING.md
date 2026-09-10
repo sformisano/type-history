@@ -19,12 +19,12 @@ cargo doc --workspace --no-deps --all-features --locked
 cargo build --workspace --release --all-features --locked
 
 cargo run -p invoice-history --release --locked
-cargo run -p cargo-typehistory --locked -- check --package invoice-history
+cargo run -p cargo-type-history --locked -- check --package invoice-history
 ```
 
 Set `RUSTDOCFLAGS=-Dwarnings` when checking documentation, as CI does.
 GitHub Actions runs these checks in both feature modes. Workspace tests cover the
 [reference application](examples/invoice/README.md) and
-[tutorial examples](crates/cargo-typehistory/tests/standalone/tutorial.rs),
+[tutorial examples](crates/cargo-type-history/tests/standalone/tutorial.rs),
 including lifecycle commands and expected compiler failures.
 Normal builds use `target`; Clippy uses `target/clippy`.

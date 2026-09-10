@@ -30,14 +30,14 @@ dependencies = [
 ]
 
 [[package]]
-name = "cargo-typehistory"
+name = "cargo-type-history"
 version = "0.1.0"
 dependencies = [
  "serde_json",
  "tempfile",
  "thiserror",
  "toml",
- "typehistory-build",
+ "type-history-build",
 ]
 
 [[package]]
@@ -177,8 +177,8 @@ version = "0.0.0"
 dependencies = [
  "rmp-serde",
  "serde_json",
- "typehistory",
- "typehistory-build",
+ "type-history",
+ "type-history-build",
 ]
 
 [[package]]
@@ -598,15 +598,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ab16f14aed21ee8bfd8ec22513f7287cd4a91aa92e44edfe2c17ddd004e92607"
 
 [[package]]
-name = "typehistory"
+name = "type-history"
 version = "0.1.0"
 dependencies = [
- "typehistory-core",
- "typehistory-macros",
+ "type-history-core",
+ "type-history-macros",
 ]
 
 [[package]]
-name = "typehistory-build"
+name = "type-history-build"
 version = "0.1.0"
 dependencies = [
  "serde",
@@ -615,12 +615,12 @@ dependencies = [
  "syn 2.0.114",
  "tempfile",
  "toml",
- "typehistory-codegen",
- "typehistory-core",
+ "type-history-codegen",
+ "type-history-core",
 ]
 
 [[package]]
-name = "typehistory-codegen"
+name = "type-history-codegen"
 version = "0.1.0"
 dependencies = [
  "proc-macro2",
@@ -630,11 +630,11 @@ dependencies = [
  "syn 2.0.114",
  "tempfile",
  "thiserror",
- "typehistory-core",
+ "type-history-core",
 ]
 
 [[package]]
-name = "typehistory-core"
+name = "type-history-core"
 version = "0.1.0"
 dependencies = [
  "redactable",
@@ -645,15 +645,15 @@ dependencies = [
 ]
 
 [[package]]
-name = "typehistory-macros"
+name = "type-history-macros"
 version = "0.1.0"
 dependencies = [
  "proc-macro-crate 3.5.0",
  "proc-macro2",
  "quote",
  "syn 2.0.114",
- "typehistory-codegen",
- "typehistory-core",
+ "type-history-codegen",
+ "type-history-core",
 ]
 
 [[package]]

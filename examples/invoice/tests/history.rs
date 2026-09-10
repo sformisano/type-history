@@ -1,7 +1,7 @@
 use invoice_history::{ConvertError, Invoice};
 use serde_json::{from_slice, json, to_vec, Value};
 use std::error::Error;
-use typehistory::{decode, DecodeFailureKind, HasHistory, PayloadVersion, ReadError};
+use type_history::{decode, DecodeFailureKind, HasHistory, PayloadVersion, ReadError};
 
 #[test]
 fn old_bytes_reach_the_current_type() {

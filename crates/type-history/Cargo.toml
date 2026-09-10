@@ -1,0 +1,16 @@
+[package]
+name = "type-history"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[features]
+default = []
+redactable = ["type-history-core/redactable", "type-history-macros/redactable"]
+
+[dependencies]
+type-history-core = { path = "../type-history-core", version = "0.1.0" }
+type-history-macros = { path = "../type-history-macros", version = "0.1.0" }

@@ -10,20 +10,20 @@ Enable the feature on both dependencies in `Cargo.toml`:
 
 ```toml
 [dependencies]
-typehistory = { version = "0.1", features = ["redactable"] }
+type-history = { version = "0.1", features = ["redactable"] }
 
 [build-dependencies]
-typehistory-build = { version = "0.1", features = ["redactable"] }
+type-history-build = { version = "0.1", features = ["redactable"] }
 ```
 
-Keep the regular `build.rs`, `typehistory.toml`, and ledger setup from the main tutorial.
+Keep the regular `build.rs`, `type-history.toml`, and ledger setup from the main tutorial.
 Install the CLI with the same feature:
 
 ```sh
-cargo install cargo-typehistory --version 0.1 --locked --features redactable
+cargo install cargo-type-history --version 0.1 --locked --features redactable
 ```
 
-All six Typehistory crates expose the default-disabled feature.
+All six Type History crates expose the default-disabled feature.
 The runtime enables its core and procedural macro capabilities.
 The build hook and CLI propagate the capability through code generation.
 Without this feature, the resolved dependency graph contains no Redactable package.
@@ -41,10 +41,10 @@ This example belongs in an initialized consumer library:
 ```rust
 use serde_json::from_slice;
 use std::error::Error;
-use typehistory::redactable::ToRedacted;
-use typehistory::typehistory;
+use type_history::redactable::ToRedacted;
+use type_history::versioned;
 
-#[typehistory(stable_id = "billing.receipt.recorded", redacted)]
+#[versioned(stable_id = "billing.receipt.recorded", redacted)]
 pub struct ReceiptRecorded {
     #[sensitive]
     pub customer: String,
@@ -135,7 +135,7 @@ These adapters describe the inner wire type, matching the release's ordinary Ser
 `SensitiveValue<T, P>` derives equality with a `P: PartialEq` bound in this release.
 Built-in policies such as `Secret` lack that bound; use an equality-capable custom policy or annotate the raw field directly.
 Logging-only wrappers without Serde support are not persisted field types.
-The adapters live in `typehistory-core`, which owns the schema traits and can legally implement them for foreign wrappers.
+The adapters live in `type-history-core`, which owns the schema traits and can legally implement them for foreign wrappers.
 
 ## Callback errors and causes
 
@@ -167,14 +167,14 @@ The low-level `redaction::decode` API continues to discard raw JSON errors and r
 
 ## Renamed dependencies and derives
 
-Generated Typehistory paths follow the consumer's dependency name, including renamed dependencies.
-The integration addresses the pinned Redactable runtime through Typehistory's reexport.
+Generated Type History paths follow the consumer's dependency name, including renamed dependencies.
+The integration addresses the pinned Redactable runtime through Type History's reexport.
 Generated records do not invoke Redactable derives, so they require no direct Redactable dependency.
 Generated code contains no `cfg(feature = "redactable")` check against the consumer's own feature names.
 
 Authors who use upstream derives such as `Sensitive` on supporting types must add a direct Redactable dependency.
 Redactable 0.12.0 derives find that dependency with `proc_macro_crate`; it may be renamed.
-They fall back to `::redactable` when discovery fails and do not discover Typehistory's runtime reexport.
+They fall back to `::redactable` when discovery fails and do not discover Type History's runtime reexport.
 Upstream derives require an explicit policy. Import it with `use redactable::Secret;`
 and apply `#[sensitive(Secret)]`.
 Use the same pinned release to avoid distinct trait versions.
@@ -200,7 +200,7 @@ Public `DecodeContext` constructors support frontend-owned error storage without
 The standalone macro adds `Versioned` support through the separate `generate_versioned` entry point.
 Existing `generate_history` consumers keep their raw codecs and frontend-owned contracts.
 
-`redaction::record` in `typehistory-codegen` generates only redaction traits for a concrete named supporting record.
+`redaction::record` in `type-history-codegen` generates only redaction traits for a concrete named supporting record.
 The caller supplies `Clone`, `Serialize`, and its own codecs and schema implementations.
 
 The standalone consumer suite exercises these generation interfaces with a frontend-owned structured error.
