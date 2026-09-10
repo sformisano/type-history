@@ -17,7 +17,6 @@ jobs:
       CARGO_INCREMENTAL: "0"
       CARGO_PROFILE_DEV_DEBUG: line-tables-only
       CARGO_PROFILE_TEST_DEBUG: line-tables-only
-      TMPDIR: ${{ runner.temp }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -34,4 +33,6 @@ jobs:
         run: cargo fetch --locked
 
       - name: Verify
+        env:
+          TMPDIR: ${{ runner.temp }}
         run: bash scripts/verify.sh
