@@ -11,7 +11,7 @@ use type_history_codegen::ledger::{HistoryLedger, RecordMetadata, SchemaIdentity
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct ExportRecord {
-    identity: String,
+    stable_name: String,
     versions: Vec<ExportVersion>,
 }
 #[derive(Deserialize)]
@@ -37,9 +37,9 @@ pub fn decode(
         let declaration = inventory
             .declarations
             .iter()
-            .find(|item| item.identity == record.identity)
+            .find(|item| item.stable_name == record.stable_name)
             .ok_or("unexpected exported history")?;
-        if !seen.insert(record.identity.clone()) {
+        if !seen.insert(record.stable_name.clone()) {
             return Err("duplicate exported history".into());
         }
         let mut versions = BTreeMap::new();
@@ -47,13 +47,13 @@ pub fn decode(
             if !(declaration.retained_from..=declaration.version).contains(&version.version) {
                 return Err(format!(
                     "exported version differs from declared history: {} V{}",
-                    declaration.identity, version.version
+                    declaration.stable_name, version.version
                 )
                 .into());
             }
             let schema = JsonSchemaDocument::from_export(
                 version.wire,
-                &schema_identity.schema_id(&record.identity),
+                &schema_identity.schema_id(&record.stable_name),
             )?;
             if versions
                 .insert(
@@ -73,11 +73,11 @@ pub fn decode(
         if versions.len() as u64 != expected {
             return Err(format!(
                 "incomplete exported retained history for {}",
-                declaration.identity
+                declaration.stable_name
             )
             .into());
         }
-        observed.insert(record.identity, versions);
+        observed.insert(record.stable_name, versions);
     }
     if seen.len() != inventory.declarations.len() {
         return Err("incomplete history export; generated schema tests must run".into());

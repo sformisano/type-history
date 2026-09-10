@@ -1,4 +1,4 @@
-use super::support::{failure, success, Fixture, ID, LEDGER, V1, V2};
+use super::support::{failure, success, Fixture, LEDGER, STABLE_NAME, V1, V2};
 use serde_json::{json, Value};
 use std::fs::OpenOptions;
 
@@ -52,14 +52,14 @@ fn standalone_draft_reset_undo_exact_freeze_and_read_only_check() {
             "--package",
             "standalone-history-consumer",
             "--type",
-            ID,
+            STABLE_NAME,
         ],
         vec![
             "freeze",
             "--package",
             "standalone-history-consumer",
             "--type",
-            ID,
+            STABLE_NAME,
             "--version",
             "0",
         ],
@@ -72,16 +72,16 @@ fn standalone_draft_reset_undo_exact_freeze_and_read_only_check() {
         "--package",
         "standalone-history-consumer",
         "--type",
-        ID,
+        STABLE_NAME,
         "--version",
         "1",
     ];
     success(&fixture.cli(&reset));
     let reserved = fixture.read(LEDGER);
-    assert_eq!(fixture.ledger()[ID]["1"]["reset_draft"], true);
+    assert_eq!(fixture.ledger()[STABLE_NAME]["1"]["reset_draft"], true);
     assert_eq!(
-        fixture.ledger()[ID]["1"]["schema"],
-        serde_json::from_str::<Value>(&initial).unwrap()[ID]["1"]["schema"]
+        fixture.ledger()[STABLE_NAME]["1"]["schema"],
+        serde_json::from_str::<Value>(&initial).unwrap()[STABLE_NAME]["1"]["schema"]
     );
     failure(&fixture.cli(&reset), "already");
     fixture.write("src/lib.rs", &V1.replace("count: u32", "count: u64"));
@@ -101,7 +101,7 @@ fn standalone_draft_reset_undo_exact_freeze_and_read_only_check() {
             "--package",
             "standalone-history-consumer",
             "--type",
-            ID,
+            STABLE_NAME,
             "--version",
             "1",
         ]),
@@ -123,7 +123,7 @@ fn standalone_draft_reset_undo_exact_freeze_and_read_only_check() {
         "--package",
         "standalone-history-consumer",
         "--type",
-        ID,
+        STABLE_NAME,
         "--version",
         "1",
     ]));
@@ -136,11 +136,11 @@ fn standalone_draft_reset_undo_exact_freeze_and_read_only_check() {
         "--package",
         "standalone-history-consumer",
         "--type",
-        ID,
+        STABLE_NAME,
         "--version",
         "1",
     ]));
-    assert!(fixture.ledger()[ID]["1"]["reset_draft"].is_null());
+    assert!(fixture.ledger()[STABLE_NAME]["1"]["reset_draft"].is_null());
     success(&fixture.cargo(&["build", "--release", "--locked", "--offline"]));
     fixture.remove("type-history/.schemas.lock");
     let frozen = fixture.read(LEDGER);
@@ -152,19 +152,19 @@ fn standalone_draft_reset_undo_exact_freeze_and_read_only_check() {
 #[test]
 fn standalone_import_requires_explicit_floor_and_complete_candidate() {
     let fixture = Fixture::frozen();
-    let entry = fixture.ledger()[ID]["1"].clone();
+    let entry = fixture.ledger()[STABLE_NAME]["1"].clone();
     // Simulate a package whose real retained history starts at V4.
     fixture.remove(LEDGER);
     fixture.write(
         "src/lib.rs",
         &V1.replace(
-            "stable_id = \"billing.invoice.issued\"",
-            "stable_id = \"billing.invoice.issued\", retained_from = v4",
+            "stable_name = \"billing.invoice.issued\"",
+            "stable_name = \"billing.invoice.issued\", retained_from = v4",
         ),
     );
     fixture.write(
         "import.json",
-        &serde_json::to_string_pretty(&json!({ID:{"4":entry}})).unwrap(),
+        &serde_json::to_string_pretty(&json!({STABLE_NAME:{"4":entry}})).unwrap(),
     );
     failure(
         &fixture.cli(&[
@@ -199,7 +199,7 @@ fn standalone_import_requires_explicit_floor_and_complete_candidate() {
         "billing.invoice.issued=4",
     ]));
     assert_eq!(
-        fixture.ledger()[ID]
+        fixture.ledger()[STABLE_NAME]
             .as_object()
             .unwrap()
             .keys()
@@ -270,7 +270,7 @@ fn standalone_busy_lock_and_invalid_candidates_preserve_exact_authority() {
             "--package",
             "standalone-history-consumer",
             "--type",
-            ID,
+            STABLE_NAME,
             "--version",
             "1",
         ]),

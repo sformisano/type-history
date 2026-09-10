@@ -48,7 +48,7 @@ Case IDs identify behavior families; this document is not a test-run report.
 | M31 | Opaque value split by consuming ownership once, without cloning | U | No whole-payload ownership/caching DSL; generated fields already Clone, helpers may clone explicitly |
 | M32 | Cross-output computation requiring exactly-once shared side effect | U | Conversion code must be deterministic/pure; no framework shared cache or external transaction |
 
-## Grammar, chronology, and identity combinations
+## Grammar, chronology, and stable name combinations
 
 | ID | Case | Class | Rule / expected outcome |
 |---|---|---|---|
@@ -100,7 +100,7 @@ Case IDs identify behavior families; this document is not a test-run report.
 | M75 | Decode old record requiring backfill despite current serde permissiveness | S | Decode exact old type then explicit adjacent addition; never try current first |
 | M76 | Omitted Option key versus explicit null | S | Preserve existing exact-type serde behavior; omission may deserialize as None |
 | M77 | Missing required field/unknown JSON key/invalid newtype | R | Exact historical decoder fails; `Versioned` returns the format's error, while low-level ordinary JSON errors retain their source |
-| M78 | Duplicate JSON object key | R | Feed raw bytes to exact typed decoder, preserving existing duplicate-field rejection; do not preprocess into map/Value |
+| M78 | Duplicate JSON object key | R | Historical decoders reject duplicates; `Versioned` rejects duplicate payload fields while buffering |
 | M79 | Requested below-floor/future version | R | Unsupported version, no speculative current decode |
 | M83 | Failed adjacent conversion | R | Preserve stored version and failing step; ordinary errors retain the original source, redacted errors retain only the safe projection |
 
@@ -117,28 +117,28 @@ Case IDs identify behavior families; this document is not a test-run report.
 | M106 | Nested type with raw or panicking Debug | S | Generated redacted Debug never reads fields |
 | M107 | Add, convert, or remove a policy-bearing field | S | Policy follows its retained lifetime and is checked for every retained type |
 | M108 | Edit formatting policy only | S | Revalidate policies without changing frozen wire schemas |
-| M109 | Redacted callback or low-level JSON failure | R | Preserve identity and version context; capture only safe causes and terminate raw source chains |
+| M109 | Redacted callback or low-level JSON failure | R | Preserve stable name and version context; capture only safe causes and terminate raw source chains |
 | M110 | Redactable wrapper or nested history field | S | Core-owned transparent schema adapters and generated nested schema contracts |
 | M111 | Renamed Type History without direct Redactable | S | Generated records use runtime reexports |
 | M112 | Upstream Redactable derive on supporting record | S | Requires direct Redactable 0.12.0 dependency; renamed dependency supported |
 | M113 | Frontend-owned error projection | S | Generic GenerationPaths.error constructors receive concrete owned callback errors |
 
-## Versioned values and stable identity
+## Versioned values and stable names
 
 | ID | Case | Class | Rule / expected outcome |
 |---|---|---|---|
-| M120 | `stable_id` declaration | S | Exact identity stays unchanged after freezing, including across Rust renames and module moves |
+| M120 | `stable_name` declaration | S | All values and versions share the type's stable name; it stays unchanged after freezing, including across Rust renames and module moves |
 | M121 | Unknown struct argument | R | Only documented history argument keys are accepted |
-| M122 | Current value serialized as `Versioned<T>` | S | `into_versioned` stamps the current identity and version; callers cannot replace metadata independently |
+| M122 | Current value serialized as `Versioned<T>` | S | `into_versioned` supplies the stable name and current version; callers cannot replace metadata independently |
 | M123 | Historical `Versioned<T>` converted through current alias | S | Deserialization selects the exact retained payload; `from_versioned` applies adjacent conversions with source context |
 | M124 | Historical envelope serialized without conversion | S | Keep its historical version and matching data; wrap the converted current value to emit the latest version |
-| M125 | Empty envelope, extra map entries, wrong identity, or invalid version | R | Two single-entry maps are required; check identity and supported version before decoding payload fields |
-| M126 | JSON or MessagePack with named fields | S | Serde reads maps directly through the exact historical codecs; no generic value buffer |
+| M125 | Missing, duplicate, or unknown wrapper fields, wrong stable name, or invalid version | R | Require exactly `stable_name`, a positive numeric `u32` `version`, and `payload`; validate the complete wrapper and historical payload before conversion |
+| M126 | JSON or MessagePack with named fields | S | Accept wrapper fields in any order; buffer payload values without losing duplicate fields or integer precision, then use the exact historical decoder |
 | M127 | Format using payload struct arrays | U | The generated payload decoder requires maps; support depends on the format and field types |
 | M128 | Redacted `Versioned` parse failure | R | Discard raw errors inside `Deserialize`; serializer and external trailing-input errors remain outside that boundary |
 | M129 | Raw JSON supplied as a versioned envelope | R | Existing raw JSON needs the low-level decoder and separately stored metadata |
-| M130 | Simple or namespaced stable ID | S | `receipt_created`, `shop.receipt`, and existing longer dotted IDs are valid; each segment starts with a lowercase ASCII letter and uses only lowercase letters, digits, or underscores, within 255 bytes total |
-| M131 | Empty stable ID, empty segment, or invalid identity characters | R | Declaration and deserialization reject invalid identity syntax |
+| M130 | Simple or namespaced stable name | S | `receipt_created`, `shop.receipt`, and longer dotted names are valid; each segment starts with a lowercase ASCII letter and uses only lowercase letters, digits, or underscores, within 255 bytes total |
+| M131 | Empty stable name, empty segment, or invalid characters | R | Declaration and deserialization reject invalid stable name syntax |
 
 ## Verification and limits
 

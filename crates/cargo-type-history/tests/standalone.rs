@@ -10,8 +10,8 @@ mod hygiene;
 mod lifecycle;
 #[path = "standalone/source_discovery.rs"]
 mod source_discovery;
-#[path = "standalone/stable_identity.rs"]
-mod stable_identity;
+#[path = "standalone/stable_name.rs"]
+mod stable_name;
 #[path = "standalone/support.rs"]
 mod support;
 #[path = "standalone/tutorial.rs"]

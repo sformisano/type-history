@@ -92,7 +92,7 @@ pub(super) fn receipt_v3() -> String {
         "v2_gains_reference_and_normalizes_currency",
         r##"
 let stored = serde_json::from_slice(
-    br#"{"shop.receipt.created":{"2":{"amount_cents":1200,"currency":"eur"}}}"#,
+    br#"{"stable_name":"shop.receipt.created","version":2,"payload":{"amount_cents":1200,"currency":"eur"}}"#,
 )?;
 let receipt = ReceiptCreated::from_versioned(stored)?;
 assert_eq!(receipt.amount_cents, 1200);

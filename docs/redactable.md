@@ -44,7 +44,7 @@ use std::error::Error;
 use type_history::redactable::ToRedacted;
 use type_history::versioned;
 
-#[versioned(stable_id = "billing.receipt.recorded", redacted)]
+#[versioned(stable_name = "billing.receipt.recorded", redacted)]
 pub struct ReceiptRecorded {
     #[sensitive]
     pub customer: String,
@@ -65,12 +65,13 @@ The external consumer suite compiles this example from this document.
 Its input is a complete stored record:
 
 ```json
-{"billing.receipt.recorded":{"1":{"customer":"Alice","amount":42}}}
+{"stable_name":"billing.receipt.recorded","version":1,"payload":{"customer":"Alice","amount":42}}
 ```
 
 Write a current receipt with `serde_json::to_vec(&receipt.into_versioned())`.
 Both generated methods use the current alias and need no trait imports.
-`Versioned` keeps the stable identity, source version, and historical data together.
+`Versioned` keeps `stable_name`, the numeric `version`, and `payload` together.
+It accepts these fields in any order and validates the payload against its historical type.
 The application owns storage and chooses a format supporting maps and named payload fields.
 
 The ordinary `HasHistory`, `decode`, `DecodeError`, and `ReadError` remain unchanged.
@@ -118,7 +119,7 @@ The fixed generated `Debug` does not execute that code.
 Ordinary Serde serialization always writes the original field values.
 This also applies to `Versioned`, whose envelope preserves the historical payload's strict codecs.
 Never persist `to_redacted().json()` as a historical payload.
-Changing a frozen history's `stable_id` fails the build.
+Changing a frozen history's `stable_name` fails the build.
 
 A field policy applies across that field's complete retained lifetime.
 Added fields acquire the policy at their first version.
@@ -151,14 +152,14 @@ The safe wrapper never stores a raw error for later formatting.
 
 `ReceiptRecorded::from_versioned` returns `RedactedDecodeError` when a conversion fails.
 `Debug`, `Display`, Serde output, and `ToRedacted` expose only validated metadata and captured safe causes.
-Metadata includes identity, stored version, failure kind, and failing adjacent versions.
+Metadata includes the stable name, stored version, failure kind, and failing adjacent versions.
 `RedactedDecodeError::source()` returns `None`; `redacted_cause()` exposes the captured safe value.
 `RedactedReadError::source()` exposes only its `RedactedDecodeError`, whose source chain ends there.
-An identity mismatch has no source.
+A stable name mismatch has no source.
 
 For a redacted history, `Versioned::deserialize` discards parser errors without formatting them and returns a fixed safe message.
 The caller receives that message in the selected format's error type.
-This boundary covers identity, version, envelope, and historical payload decoding.
+This boundary covers the stable name, version, wrapper fields, and historical payload decoding.
 It does not cover errors raised outside the implementation, including a format's trailing-input checks.
 Serialization also writes real data, and serializer errors are not universally redacted.
 Do not treat every error from the example's `Box<dyn Error>` as safe to log.
@@ -187,9 +188,9 @@ Use the same pinned release to avoid distinct trait versions.
 The generator calls these associated constructors:
 
 ```text
-unsupported(identity: TypeIdentity, stored: PayloadVersion) -> Self
-decode(identity: TypeIdentity, stored: PayloadVersion, error: serde_json::Error) -> Self
-upcast<E>(identity: TypeIdentity, stored: PayloadVersion,
+unsupported(stable_name: StableName, stored: PayloadVersion) -> Self
+decode(stable_name: StableName, stored: PayloadVersion, error: serde_json::Error) -> Self
+upcast<E>(stable_name: StableName, stored: PayloadVersion,
           from: PayloadVersion, to: PayloadVersion, error: E) -> Self
 ```
 

@@ -22,14 +22,14 @@ use type_history_codegen::{
 /// `ReceiptCreated`. At V2, that alias becomes `pub type ReceiptCreated = ReceiptCreatedV2;`.
 /// Several field changes can share the same version number.
 ///
-/// Requires a `stable_id` and package authority from the
+/// Requires a `stable_name` and package authority from the
 /// Type History build hook. The optional `retained_from = vN` requires explicit
 /// import authority. Field `#[history(...)]` records describe additions, updates,
 /// and removals newest first. The macro supplies record traits; additional
 /// derives on its input are rejected.
 /// The alias provides `into_versioned` and `from_versioned` methods. They keep
-/// identity and version metadata with the data and load the current type without
-/// requiring application code to select numbered types. The `stable_id` value
+/// stable name and version metadata with the data and load the current type without
+/// requiring application code to select numbered types. The `stable_name` value
 /// is frozen with the schemas. Builds reject later changes to that value,
 /// even when the Rust type or its module is renamed.
 ///
@@ -45,7 +45,7 @@ use type_history_codegen::{
 /// ```rust,ignore
 /// use type_history::versioned;
 ///
-/// #[versioned(stable_id = "shop.receipt.created")]
+/// #[versioned(stable_name = "shop.receipt.created")]
 /// pub struct ReceiptCreated {
 ///     pub amount_cents: u64,
 /// }
@@ -76,7 +76,7 @@ pub fn schema(item: TokenStream) -> TokenStream {
 }
 
 fn expand(arguments: Arguments, item: ItemStruct) -> Result<Tokens> {
-    let (input, identity) = input::parse(arguments, item)?;
+    let (input, stable_name) = input::parse(arguments, item)?;
     let plan = HistoryPlan::infer(&input.name, input.retained_floor, &input.fields)?;
     required_environment("TYPE_HISTORY_AUTHORITY_KIND", "standalone", &input.name)?;
     required_environment(
@@ -106,7 +106,7 @@ fn expand(arguments: Arguments, item: ItemStruct) -> Result<Tokens> {
     let history = plan.expand_authorized(
         &input.name,
         &input.fields,
-        &identity,
+        &stable_name,
         &ledger,
         &RecordMetadata {},
     )?;
@@ -125,8 +125,8 @@ fn expand(arguments: Arguments, item: ItemStruct) -> Result<Tokens> {
         error: syn::parse2(error.clone())?,
         helper_prefix: helper_prefix(&input.name),
     };
-    let generated = generate_history(&input, &identity, &history, &paths)?;
-    let stored_record = generate_versioned(&input, &identity, &history, &paths)?;
+    let generated = generate_history(&input, &stable_name, &history, &paths)?;
+    let stored_record = generate_versioned(&input, &stable_name, &history, &paths)?;
     let items = generated.items;
     let current = generated.latest;
     let decoder = generated.decoder;
@@ -150,7 +150,7 @@ fn expand(arguments: Arguments, item: ItemStruct) -> Result<Tokens> {
         #items
         #stored_record
         impl #history_trait for #current {
-            const TYPE: #facade::TypeIdentity = #facade::TypeIdentity::new(#identity);
+            const STABLE_NAME: #facade::StableName = #facade::StableName::new(#stable_name);
             const VERSION: #facade::PayloadVersion = match #facade::PayloadVersion::try_from_raw(#head) {
                 ::core::result::Result::Ok(version) => version,
                 ::core::result::Result::Err(_) => panic!("non-positive history version"),
@@ -167,7 +167,7 @@ fn expand(arguments: Arguments, item: ItemStruct) -> Result<Tokens> {
         #[cfg(all(test, type_history_schema_export))]
         #[test]
         fn #export() {
-            let schema = #facade::__private::serde_json::json!({"identity": #identity, "versions": [#(#schemas),*]});
+            let schema = #facade::__private::serde_json::json!({"stable_name": #stable_name, "versions": [#(#schemas),*]});
             ::std::println!("TYPE_HISTORY_SCHEMA_EXPORT_V1\t{}", schema);
         }
     })

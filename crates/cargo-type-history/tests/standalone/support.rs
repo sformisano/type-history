@@ -9,7 +9,7 @@ use toml::{Table, Value as TomlValue};
 
 // These external consumers reuse the assigned worktree's normal Cargo target.
 static SERIAL: Mutex<()> = Mutex::new(());
-pub const ID: &str = "billing.invoice.issued";
+pub const STABLE_NAME: &str = "billing.invoice.issued";
 pub const LEDGER: &str = "type-history/schemas.json";
 pub const V1: &str = include_str!("fixtures/v1.rs");
 pub const V2: &str = include_str!("fixtures/v2.rs");

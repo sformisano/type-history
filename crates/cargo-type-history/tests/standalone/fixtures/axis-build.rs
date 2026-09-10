@@ -5,8 +5,8 @@ use type_history_codegen::ledger::{HistoryLedger, RecordMetadata, SchemaIdentity
 use syn::parse_quote;
 
 fn main() {
-    let (input, identity) = input::parse(
-        parse_quote!(stable_id = "fixture.axis.record", redacted),
+    let (input, stable_name) = input::parse(
+        parse_quote!(stable_name = "fixture.axis.record", redacted),
         parse_quote! {
             pub struct AxisRecord {
                 #[sensitive]
@@ -28,8 +28,8 @@ fn main() {
       } } }
     }"#, SchemaIdentity::new("urn:typehistory:schema:")).unwrap();
     let plan = HistoryPlan::infer(&input.name, input.retained_floor, &input.fields).unwrap();
-    let history = plan.expand_authorized(&input.name, &input.fields, &identity, &ledger, &RecordMetadata {}).unwrap();
-    let generated = generate_history(&input, &identity, &history, &GenerationPaths {
+    let history = plan.expand_authorized(&input.name, &input.fields, &stable_name, &ledger, &RecordMetadata {}).unwrap();
+    let generated = generate_history(&input, &stable_name, &history, &GenerationPaths {
         support: parse_quote!(history_api::__private),
         error: parse_quote!(FrontendError),
         helper_prefix: "frontend".to_owned(),

@@ -1,19 +1,28 @@
 use super::support::{failure, success, Fixture, V1, V2, V3};
+use toml::Value;
 
 const PACKAGE: &str = "standalone-history-consumer";
 const TESTS: &str = include_str!("fixtures/versioned-tests.rs");
+const VALUES: &str = include_str!("fixtures/versioned-values.rs");
 #[cfg(feature = "redactable")]
 const REDACTED_TESTS: &str = include_str!("fixtures/versioned-redacted-tests.rs");
 
 #[test]
 fn versioned_values_delay_conversion_and_support_ordinary_consumers() {
     let fixture = Fixture::empty();
+    let mut manifest: Value = toml::from_str(&fixture.read("Cargo.toml")).unwrap();
+    manifest["dependencies"]
+        .as_table_mut()
+        .unwrap()
+        .insert("rmp-serde".into(), "1.3.1".into());
+    fixture.write("Cargo.toml", &toml::to_string(&manifest).unwrap());
+    success(&fixture.cargo(&["generate-lockfile", "--offline"]));
     success(&fixture.cli(&["init", "--package", PACKAGE]));
     for source in [V1, V2] {
         fixture.write("src/lib.rs", source);
         success(&fixture.cli(&["freeze", "--package", PACKAGE]));
     }
-    fixture.write("src/lib.rs", &format!("{V3}\n{TESTS}"));
+    fixture.write("src/lib.rs", &format!("{V3}\n{TESTS}\n{VALUES}"));
     success(&fixture.cli(&["freeze", "--package", PACKAGE]));
     success(&fixture.cargo(&["test", "--lib", "--locked", "--offline"]));
     // An application imports only the current alias and the public container.
@@ -24,7 +33,7 @@ use history_api::Versioned;
 use standalone_history_consumer::Invoice;
 fn main() {
     let stored: Versioned<Invoice> = serde_json::from_str(
-        r##"{"billing.invoice.issued":{"1":{"legacy":"app","count":42}}}"##,
+        r##"{"stable_name":"billing.invoice.issued","version":1,"payload":{"legacy":"app","count":42}}"##,
     ).unwrap();
     let current = Invoice::from_versioned(stored).unwrap();
     assert_eq!(current.count, "42");
@@ -83,7 +92,7 @@ fn versioned_redacted_values_keep_safe_observations_and_raw_serialization() {
     fixture.write(
         "src/lib.rs",
         r#"
-#[history_api::versioned(stable_id = "example.stored.secret", redacted)]
+#[history_api::versioned(stable_name = "example.stored.secret", redacted)]
 pub struct Secure { #[sensitive] pub value: String }
 "#,
     );

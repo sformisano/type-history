@@ -1,4 +1,4 @@
-#[history_api::versioned(stable_id = "example.wide.record")]
+#[history_api::versioned(stable_name = "example.wide.record")]
 pub struct Wide {
     pub unsigned: u128,
     pub signed: i128,
@@ -10,7 +10,7 @@ mod stored_tests {
     use history_api::{DecodeFailureKind, Versioned};
     use std::error::Error;
 
-    const V1_RECORD: &str = r#"{"billing.invoice.issued":{"1":{"legacy":"INV-42","count":42}}}"#;
+    const V1_RECORD: &str = r#"{"stable_name":"billing.invoice.issued","version":1,"payload":{"legacy":"INV-42","count":42}}"#;
 
     fn trace() -> Vec<&'static str> {
         TRACE.with(|trace| trace.borrow().clone())
@@ -20,7 +20,7 @@ mod stored_tests {
     fn historical_roundtrip_does_not_run_callbacks_until_consumed() {
         TRACE.with(|trace| trace.borrow_mut().clear());
         let stored: Versioned<Invoice> = serde_json::from_str(V1_RECORD).unwrap();
-        assert_eq!(stored.stable_id().as_str(), "billing.invoice.issued");
+        assert_eq!(stored.stable_name().as_str(), "billing.invoice.issued");
         assert_eq!(stored.source_version().get(), 1);
         assert_eq!(serde_json::to_string(&stored).unwrap(), V1_RECORD);
         assert!(!format!("{stored:?}").contains("INV-42"));
@@ -42,13 +42,15 @@ mod stored_tests {
     fn invalid_envelopes_never_start_conversions_even_after_valid_payloads() {
         TRACE.with(|trace| trace.borrow_mut().clear());
         for wire in [
-            r#"{"billing.invoice.issued":{"1":{"legacy":"x","count":42},"2":{}}}"#,
-            r#"{"billing.invoice.issued":{"1":{"legacy":"x","count":42}},"other":{}}"#,
-            r#"{"billing.invoice.issued":{"1":{"legacy":"x","count":42},"1":{"legacy":"x","count":42}}}"#,
-            r#"{"billing.invoice.issued":{"1":{"legacy":"x","count":42}},"billing.invoice.issued":{"1":{"legacy":"x","count":42}}}"#,
-            r#"{"billing.invoice.issued":{"1":{"legacy":"x","count":42,"extra":true}}}"#,
-            r#"{"billing.invoice.issued":{"1":{"legacy":"x","count":42}}"#,
-            r#"{"billing.invoice.issued":{"1":{"legacy":"x","count":42}}} trailing"#,
+            r#"{"stable_name":"billing.invoice.issued","version":1,"payload":{"legacy":"x","count":42},"version":2,"payload":{}}"#,
+            r#"{"stable_name":"billing.invoice.issued","version":1,"payload":{"legacy":"x","count":42},"stable_name":"other"}"#,
+            r#"{"stable_name":"billing.invoice.issued","version":1,"payload":{"legacy":"x","count":42},"version":1,"payload":{"legacy":"x","count":42}}"#,
+            r#"{"stable_name":"billing.invoice.issued","version":1,"payload":{"legacy":"x","count":42},"stable_name":"billing.invoice.issued","version":1,"payload":{"legacy":"x","count":42}}"#,
+            r#"{"stable_name":"billing.invoice.issued","version":1,"payload":{"legacy":"x","count":42,"extra":true}}"#,
+            r#"{"stable_name":"billing.invoice.issued","version":1,"payload":{"legacy":"x","count":42}"#,
+            r#"{"payload":{"legacy":"x","count":42,"count":43},"version":1,"stable_name":"billing.invoice.issued"}"#,
+            r#"{"payload":{"legacy":"x","count":42},"version":1,"stable_name":"billing.invoice.issued","extra":true}"#,
+            r#"{"stable_name":"billing.invoice.issued","version":1,"payload":{"legacy":"x","count":42}} trailing"#,
         ] {
             assert!(
                 serde_json::from_str::<Versioned<Invoice>>(wire).is_err(),
@@ -82,9 +84,9 @@ mod stored_tests {
     }
 
     #[test]
-    fn single_version_full_width_integers_decode_directly_into_typed_fields() {
+    fn single_version_full_width_integers_keep_their_exact_values() {
         let wire = format!(
-            r#"{{"example.wide.record":{{"1":{{"unsigned":{},"signed":{}}}}}}}"#,
+            r#"{{"stable_name":"example.wide.record","version":1,"payload":{{"unsigned":{},"signed":{}}}}}"#,
             u128::MAX,
             i128::MIN
         );

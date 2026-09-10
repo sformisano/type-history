@@ -1,4 +1,4 @@
-//! Stream metadata before decoding a typed payload; never buffer generic values.
+//! Validate the named envelope before decoding its historical payload.
 
 use std::{
     fmt::{Formatter, Result as FmtResult},
@@ -6,31 +6,22 @@ use std::{
 };
 
 use serde::{
-    de::{DeserializeSeed, Error, IgnoredAny, MapAccess, Visitor},
+    de::{Error, MapAccess, Visitor},
     ser::SerializeMap,
     Deserialize, Deserializer, Serialize, Serializer,
 };
 
-use super::{Versioned, VersionedHistory};
+use super::{buffer::BufferedValue, Versioned, VersionedHistory};
 use crate::PayloadVersion;
+
+const FIELDS: &[&str] = &["stable_name", "version", "payload"];
 
 impl<T: VersionedHistory> Serialize for Versioned<T> {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let mut map = serializer.serialize_map(Some(1))?;
-        map.serialize_entry(T::STABLE_ID.as_str(), &PayloadWithVersion(self))?;
-        map.end()
-    }
-}
-
-struct PayloadWithVersion<'a, T: VersionedHistory>(&'a Versioned<T>);
-
-impl<T: VersionedHistory> Serialize for PayloadWithVersion<'_, T> {
-    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let mut map = serializer.serialize_map(Some(1))?;
-        map.serialize_entry(
-            &self.0.source_version().get().to_string(),
-            &self.0.historical,
-        )?;
+        let mut map = serializer.serialize_map(Some(3))?;
+        map.serialize_entry("stable_name", T::STABLE_NAME.as_str())?;
+        map.serialize_entry("version", &self.source_version().get())?;
+        map.serialize_entry("payload", &self.historical)?;
         map.end()
     }
 }
@@ -56,81 +47,55 @@ impl<'de, T: VersionedHistory> Visitor<'de> for RecordVisitor<T> {
     type Value = Versioned<T>;
 
     fn expecting(&self, formatter: &mut Formatter<'_>) -> FmtResult {
-        formatter.write_str("a map containing one stable identity and its versioned payload")
+        formatter.write_str("a map with stable_name, version, and payload fields")
     }
 
     fn visit_map<M: MapAccess<'de>>(self, mut map: M) -> Result<Self::Value, M::Error> {
-        let identity = map
-            .next_key::<String>()?
-            .ok_or_else(|| M::Error::custom("missing stable identity"))?;
-        if identity != T::STABLE_ID.as_str() {
+        let mut stable_name = None;
+        let mut version = None;
+        let mut payload = None;
+
+        while let Some(field) = map.next_key::<String>()? {
+            match field.as_str() {
+                "stable_name" => {
+                    if stable_name.is_some() {
+                        return Err(M::Error::duplicate_field("stable_name"));
+                    }
+                    stable_name = Some(map.next_value::<String>()?);
+                }
+                "version" => {
+                    if version.is_some() {
+                        return Err(M::Error::duplicate_field("version"));
+                    }
+                    let number = map.next_value::<u32>()?;
+                    version = Some(PayloadVersion::try_from(number).map_err(M::Error::custom)?);
+                }
+                "payload" => {
+                    if payload.is_some() {
+                        return Err(M::Error::duplicate_field("payload"));
+                    }
+                    payload = Some(map.next_value::<BufferedValue>()?);
+                }
+                _ => return Err(M::Error::unknown_field(&field, FIELDS)),
+            }
+        }
+
+        let stable_name = stable_name.ok_or_else(|| M::Error::missing_field("stable_name"))?;
+        let version = version.ok_or_else(|| M::Error::missing_field("version"))?;
+        let payload = payload.ok_or_else(|| M::Error::missing_field("payload"))?;
+        if stable_name != T::STABLE_NAME.as_str() {
             return Err(M::Error::custom(
-                "versioned value stable identity does not match the requested type",
+                "versioned value stable name does not match the requested type",
             ));
         }
-        let historical = map.next_value_seed(VersionSeed::<T>(PhantomData))?;
-        require_end(&mut map)?;
+
+        let historical = T::deserialize_historical(version, payload).map_err(|error| {
+            if T::REDACTED {
+                M::Error::custom("invalid redacted versioned value")
+            } else {
+                M::Error::custom(error)
+            }
+        })?;
         Ok(Versioned { historical })
     }
-}
-
-struct VersionSeed<T>(PhantomData<T>);
-
-impl<'de, T: VersionedHistory> DeserializeSeed<'de> for VersionSeed<T> {
-    type Value = T::Historical;
-
-    fn deserialize<D: Deserializer<'de>>(self, deserializer: D) -> Result<Self::Value, D::Error> {
-        deserializer.deserialize_map(self)
-    }
-}
-
-impl<'de, T: VersionedHistory> Visitor<'de> for VersionSeed<T> {
-    type Value = T::Historical;
-
-    fn expecting(&self, formatter: &mut Formatter<'_>) -> FmtResult {
-        formatter.write_str("a map containing one version and its payload")
-    }
-
-    fn visit_map<M: MapAccess<'de>>(self, mut map: M) -> Result<Self::Value, M::Error> {
-        let raw = map
-            .next_key::<String>()?
-            .ok_or_else(|| M::Error::custom("missing payload version"))?;
-        let number = raw
-            .parse::<u32>()
-            .map_err(|_| M::Error::custom("invalid payload version"))?;
-        if number.to_string() != raw {
-            return Err(M::Error::custom(
-                "payload version must be a canonical decimal string",
-            ));
-        }
-        let version = PayloadVersion::try_from(number).map_err(M::Error::custom)?;
-        let historical = map.next_value_seed(PayloadSeed::<T> {
-            version,
-            marker: PhantomData,
-        })?;
-        require_end(&mut map)?;
-        Ok(historical)
-    }
-}
-
-struct PayloadSeed<T> {
-    version: PayloadVersion,
-    marker: PhantomData<T>,
-}
-
-impl<'de, T: VersionedHistory> DeserializeSeed<'de> for PayloadSeed<T> {
-    type Value = T::Historical;
-
-    fn deserialize<D: Deserializer<'de>>(self, deserializer: D) -> Result<Self::Value, D::Error> {
-        T::deserialize_historical(self.version, deserializer)
-    }
-}
-
-fn require_end<'de, M: MapAccess<'de>>(map: &mut M) -> Result<(), M::Error> {
-    if map.next_key::<IgnoredAny>()?.is_some() {
-        return Err(M::Error::custom(
-            "versioned value maps must contain exactly one entry",
-        ));
-    }
-    Ok(())
 }

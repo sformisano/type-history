@@ -11,7 +11,7 @@ fn generated_traits_preserve_authored_field_types_and_values() {
 
 type M = String;
 
-#[history_api::versioned(stable_id = "example.field.alias")]
+#[history_api::versioned(stable_name = "example.field.alias")]
 pub struct Record {
     pub value: M,
     pub count: u32,
@@ -24,7 +24,7 @@ fn generated_records_use_ordinary_traits_and_preserve_decoder_errors() {
     use std::error::Error;
 
     let source = decode::<Record>(
-        &Record::TYPE,
+        &Record::STABLE_NAME,
         PayloadVersion::INITIAL,
         br#"{"value":"INV-7","count":7}"#,
     ).unwrap();
@@ -37,7 +37,7 @@ fn generated_records_use_ordinary_traits_and_preserve_decoder_errors() {
     assert!(text.contains("count: 7"));
 
     let ReadError::Decode(error) = decode::<Record>(
-        &Record::TYPE,
+        &Record::STABLE_NAME,
         PayloadVersion::INITIAL,
         br#"{"value":"INV-7","count":"wrong"}"#,
     ).unwrap_err() else { panic!("expected a decoder error") };
@@ -168,7 +168,7 @@ use std::fmt::{Display, Formatter, Result as FmtResult};
 #[deprecated]
 type Old = String;
 
-#[history_api::versioned(stable_id = "example.deprecated.field")]
+#[history_api::versioned(stable_name = "example.deprecated.field")]
 pub struct Record {
     #[allow(deprecated)]
     pub value: Old,
@@ -212,7 +212,7 @@ fn aliases_keep_public_types_and_frozen_shapes() {
     use history_api::{decode, HasHistory, PayloadVersion, ResolvedSchema};
 
     let value = decode::<Record>(
-        &Record::TYPE,
+        &Record::STABLE_NAME,
         PayloadVersion::INITIAL,
         br#"{"value":"first","second":"second"}"#,
     ).unwrap();
@@ -235,14 +235,14 @@ const LINT_SOURCE: &str = r##"
 #[deprecated]
 pub const INITIAL_REVISION: u32 = 1;
 
-#[history_api::versioned(stable_id = "example.container.lints")]
+#[history_api::versioned(stable_name = "example.container.lints")]
 #[allow(non_snake_case)]
 #[allow(deprecated)]
 pub struct ContainerAllowance {
     pub camelCase: u32,
 }
 
-#[history_api::versioned(stable_id = "example.field.lints")]
+#[history_api::versioned(stable_name = "example.field.lints")]
 #[allow(non_snake_case)]
 pub struct FieldAllowance {
     #[allow(non_snake_case)]
@@ -267,12 +267,12 @@ fn allowed_fields_keep_their_wire_names() {
     use history_api::{decode, HasHistory, PayloadVersion, ResolvedSchema};
 
     let first = decode::<ContainerAllowance>(
-        &ContainerAllowance::TYPE,
+        &ContainerAllowance::STABLE_NAME,
         PayloadVersion::INITIAL,
         br#"{"camelCase":7}"#,
     ).unwrap();
     let second = decode::<FieldAllowance>(
-        &FieldAllowance::TYPE,
+        &FieldAllowance::STABLE_NAME,
         PayloadVersion::INITIAL,
         br#"{"camelCase":8}"#,
     ).unwrap();

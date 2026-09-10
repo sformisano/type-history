@@ -1,6 +1,6 @@
 //! Owned safe projections; raw errors are discarded at construction.
 
-use crate::{DecodeContext, DecodeFailureKind, PayloadVersion, TypeIdentity};
+use crate::{DecodeContext, DecodeFailureKind, PayloadVersion, StableName};
 use redactable::{BypassJsonRedaction, BypassTextRedaction, RedactedValue, ToRedacted};
 use serde::{ser::SerializeStruct, Serialize, Serializer};
 use serde_json::Error as JsonError;
@@ -22,17 +22,17 @@ pub struct RedactedDecodeError {
 
 impl RedactedDecodeError {
     /// Reject an unsupported stored version before reading payload bytes.
-    pub fn unsupported(identity: TypeIdentity, version: PayloadVersion) -> Self {
+    pub fn unsupported(stable_name: StableName, version: PayloadVersion) -> Self {
         Self {
-            context: DecodeContext::unsupported(identity, version),
+            context: DecodeContext::unsupported(stable_name, version),
             cause: None,
         }
     }
 
     /// Discard the decoder error without formatting or storing it.
-    pub fn decode(identity: TypeIdentity, version: PayloadVersion, _: JsonError) -> Self {
+    pub fn decode(stable_name: StableName, version: PayloadVersion, _: JsonError) -> Self {
         Self {
-            context: DecodeContext::decode(identity, version),
+            context: DecodeContext::decode(stable_name, version),
             cause: Some(
                 BypassTextRedaction("history wire decoding failed".to_owned()).to_redacted(),
             ),
@@ -45,14 +45,14 @@ impl RedactedDecodeError {
     /// and any custom policy are the author's responsibility. Raw formatting,
     /// `Error`, `Clone`, `Send`, `Sync`, and `'static` bounds are unnecessary.
     pub fn upcast<E: ToRedacted>(
-        identity: TypeIdentity,
+        stable_name: StableName,
         version: PayloadVersion,
         from: PayloadVersion,
         to: PayloadVersion,
         error: E,
     ) -> Self {
         Self {
-            context: DecodeContext::upcast(identity, version, from, to),
+            context: DecodeContext::upcast(stable_name, version, from, to),
             cause: Some(error.to_redacted()),
         }
     }
@@ -61,9 +61,9 @@ impl RedactedDecodeError {
     pub const fn context(&self) -> &DecodeContext {
         &self.context
     }
-    /// Logical record identity.
-    pub fn identity(&self) -> &TypeIdentity {
-        self.context.identity()
+    /// Stable name shared by every version of this type.
+    pub fn stable_name(&self) -> &StableName {
+        self.context.stable_name()
     }
     /// Original stored payload version.
     pub const fn source_version(&self) -> PayloadVersion {
@@ -90,7 +90,7 @@ impl RedactedDecodeError {
 impl Serialize for RedactedDecodeError {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let mut record = serializer.serialize_struct("RedactedDecodeError", 6)?;
-        record.serialize_field("identity", self.identity())?;
+        record.serialize_field("stable_name", self.stable_name())?;
         record.serialize_field("source_version", &self.source_version())?;
         record.serialize_field("adjacent_from", &self.adjacent_from())?;
         record.serialize_field("adjacent_to", &self.adjacent_to())?;
@@ -121,15 +121,15 @@ impl Display for RedactedDecodeError {
 }
 impl Error for RedactedDecodeError {}
 
-/// Identity mismatch or safe historical failure.
+/// Stable name mismatch or safe historical failure.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub enum RedactedReadError {
     /// The stored record belongs to another logical type.
     TypeMismatch {
-        /// Requested type identity.
-        expected: TypeIdentity,
-        /// Stored type identity.
-        found: TypeIdentity,
+        /// Requested stable name.
+        expected: StableName,
+        /// Stored stable name.
+        found: StableName,
     },
     /// Safe exact-version decoding or conversion failure.
     Decode(RedactedDecodeError),

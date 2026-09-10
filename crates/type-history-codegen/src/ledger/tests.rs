@@ -46,17 +46,17 @@ fn nested_duplicate_schema_properties_are_rejected() {
 }
 
 #[test]
-fn ledger_identity_and_source_role_remain_authoritative() {
-    let identity = "a.events.registered";
-    let invalid = ledger(identity, &[1]).replace(
+fn ledger_stable_name_and_source_role_remain_authoritative() {
+    let stable_name = "a.events.registered";
+    let invalid = ledger(stable_name, &[1]).replace(
         "urn:typehistory:schema:a.events.registered",
         "urn:typehistory:schema:a.events.different",
     );
     assert!(parse(invalid.as_bytes()).unwrap_err().contains("$id"));
-    let baseline = parse(ledger(identity, &[1]).as_bytes()).unwrap();
+    let baseline = parse(ledger(stable_name, &[1]).as_bytes()).unwrap();
     assert!(baseline
         .authorize_history(
-            identity,
+            stable_name,
             &Metadata { role: Role::Update },
             HistoryPlan { floor: 1, head: 1 }
         )
@@ -66,11 +66,11 @@ fn ledger_identity_and_source_role_remain_authoritative() {
 
 #[test]
 fn resets_keep_the_latest_reservation_and_block_successors() {
-    let identity = "a.events.registered";
-    let baseline = parse(ledger(identity, &[1, 2]).as_bytes()).unwrap();
+    let stable_name = "a.events.registered";
+    let baseline = parse(ledger(stable_name, &[1, 2]).as_bytes()).unwrap();
     let mut entries = baseline.entries().clone();
     entries
-        .get_mut(identity)
+        .get_mut(stable_name)
         .unwrap()
         .get_mut(&1)
         .unwrap()
@@ -78,7 +78,7 @@ fn resets_keep_the_latest_reservation_and_block_successors() {
     assert!(from_entries(entries).unwrap_err().contains("latest"));
     let mut entries = baseline.entries().clone();
     entries
-        .get_mut(identity)
+        .get_mut(stable_name)
         .unwrap()
         .get_mut(&2)
         .unwrap()
@@ -87,7 +87,7 @@ fn resets_keep_the_latest_reservation_and_block_successors() {
     assert_eq!(
         reset
             .authorize_history(
-                identity,
+                stable_name,
                 &Metadata {
                     role: Role::Creation
                 },
@@ -98,7 +98,7 @@ fn resets_keep_the_latest_reservation_and_block_successors() {
     );
     assert!(reset
         .authorize_history(
-            identity,
+            stable_name,
             &Metadata {
                 role: Role::Creation
             },
@@ -107,42 +107,42 @@ fn resets_keep_the_latest_reservation_and_block_successors() {
         .unwrap_err()
         .contains("cannot have a successor"));
     assert_eq!(
-        reset.snapshot(identity, 2).unwrap().schema,
-        baseline.snapshot(identity, 2).unwrap().schema
+        reset.snapshot(stable_name, 2).unwrap().schema,
+        baseline.snapshot(stable_name, 2).unwrap().schema
     );
 }
 
-fn document(identity: &str, property: &str) -> String {
+fn document(stable_name: &str, property: &str) -> String {
     format!(
-        r#"{{"$schema":"https://json-schema.org/draft/2020-12/schema","$id":"urn:typehistory:schema:{identity}","type":"object","additionalProperties":false,"required":["{property}"],"properties":{{"{property}":{{"type":"string"}}}}}}"#
+        r#"{{"$schema":"https://json-schema.org/draft/2020-12/schema","$id":"urn:typehistory:schema:{stable_name}","type":"object","additionalProperties":false,"required":["{property}"],"properties":{{"{property}":{{"type":"string"}}}}}}"#
     )
 }
 
-fn ledger(identity: &str, versions: &[u32]) -> String {
+fn ledger(stable_name: &str, versions: &[u32]) -> String {
     let entries = versions
         .iter()
         .map(|version| {
             format!(
                 r#""{version}":{{"metadata":{{"role":"creation"}},"schema":{}}}"#,
-                document(identity, "owner_name")
+                document(stable_name, "owner_name")
             )
         })
         .collect::<Vec<_>>()
         .join(",");
-    format!(r#"{{"{identity}":{{{entries}}}}}"#)
+    format!(r#"{{"{stable_name}":{{{entries}}}}}"#)
 }
 
 #[test]
-fn an_absent_identity_has_no_committed_history() {
+fn an_absent_stable_name_has_no_committed_history() {
     let baseline = parse(ledger("a.events.registered", &[1]).as_bytes()).expect("valid authority");
     assert_eq!(
         baseline.authority("a.events.other"),
-        LedgerAuthority::NewIdentity
+        LedgerAuthority::NewHistory
     );
 }
 
 #[test]
-fn a_committed_identity_reports_its_exact_range() {
+fn a_committed_stable_name_reports_its_exact_range() {
     let baseline =
         parse(ledger("a.events.registered", &[3, 4]).as_bytes()).expect("valid authority");
     assert_eq!(
@@ -160,32 +160,33 @@ fn a_gap_in_the_retained_range_is_rejected() {
 
 #[test]
 fn a_duplicate_version_key_is_rejected() {
-    let identity = "a.events.registered";
-    let schema = document(identity, "owner_name");
+    let stable_name = "a.events.registered";
+    let schema = document(stable_name, "owner_name");
     let bytes = format!(
-        r#"{{"{identity}":{{"1":{{"metadata":{{"role":"creation"}},"schema":{schema}}},"1":{{"metadata":{{"role":"creation"}},"schema":{schema}}}}}}}"#
+        r#"{{"{stable_name}":{{"1":{{"metadata":{{"role":"creation"}},"schema":{schema}}},"1":{{"metadata":{{"role":"creation"}},"schema":{schema}}}}}}}"#
     );
     let error = parse(bytes.as_bytes()).expect_err("a duplicate key is invalid");
     assert!(error.contains("duplicate JSON key"), "{error}");
 }
 
 #[test]
-fn a_duplicate_identity_key_is_rejected() {
-    let identity = "a.events.registered";
-    let schema = document(identity, "owner_name");
-    let entry =
-        format!(r#""{identity}":{{"1":{{"metadata":{{"role":"creation"}},"schema":{schema}}}}}"#);
+fn a_duplicate_stable_name_key_is_rejected() {
+    let stable_name = "a.events.registered";
+    let schema = document(stable_name, "owner_name");
+    let entry = format!(
+        r#""{stable_name}":{{"1":{{"metadata":{{"role":"creation"}},"schema":{schema}}}}}"#
+    );
     let bytes = format!("{{{entry},{entry}}}");
     let error = parse(bytes.as_bytes()).expect_err("a duplicate key is invalid");
     assert!(error.contains("duplicate JSON key"), "{error}");
 }
 
 #[test]
-fn role_disagreement_within_one_identity_is_rejected() {
-    let identity = "a.events.registered";
-    let schema = document(identity, "owner_name");
+fn role_disagreement_within_one_stable_name_is_rejected() {
+    let stable_name = "a.events.registered";
+    let schema = document(stable_name, "owner_name");
     let bytes = format!(
-        r#"{{"{identity}":{{"1":{{"metadata":{{"role":"creation"}},"schema":{schema}}},"2":{{"metadata":{{"role":"update"}},"schema":{schema}}}}}}}"#
+        r#"{{"{stable_name}":{{"1":{{"metadata":{{"role":"creation"}},"schema":{schema}}},"2":{{"metadata":{{"role":"update"}},"schema":{schema}}}}}}}"#
     );
     let error = parse(bytes.as_bytes()).expect_err("role drift is invalid");
     assert!(error.contains("disagrees about its metadata"), "{error}");
@@ -209,17 +210,17 @@ fn a_present_but_corrupt_file_is_never_read_as_empty_history() {
 }
 
 #[test]
-fn a_new_identity_permits_only_version_one() {
-    assert!(LedgerAuthority::NewIdentity.permits(1, 1).is_ok());
-    let error = LedgerAuthority::NewIdentity
+fn a_new_history_permits_only_version_one() {
+    assert!(LedgerAuthority::NewHistory.permits(1, 1).is_ok());
+    let error = LedgerAuthority::NewHistory
         .permits(1, 2)
-        .expect_err("a new identity cannot begin above V1");
+        .expect_err("a new stable_name cannot begin above V1");
     assert!(error.contains("begins with only V1"), "{error}");
 }
 
 #[test]
-fn a_new_identity_rejects_an_unauthorized_floor() {
-    let error = LedgerAuthority::NewIdentity
+fn a_new_history_rejects_an_unauthorized_floor() {
+    let error = LedgerAuthority::NewHistory
         .permits(3, 3)
         .expect_err("an unauthorized floor is invalid");
     assert!(error.contains("no committed history exists"), "{error}");

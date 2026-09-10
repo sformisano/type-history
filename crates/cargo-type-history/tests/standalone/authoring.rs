@@ -1,4 +1,4 @@
-use super::support::{failure, success, Fixture, ID, LEDGER, V1, V2, V3};
+use super::support::{failure, success, Fixture, LEDGER, STABLE_NAME, V1, V2, V3};
 use std::time::{Duration, Instant};
 use toml::{Table, Value};
 
@@ -6,7 +6,7 @@ use toml::{Table, Value};
 fn redaction_requires_the_disabled_by_default_capability() {
     let fixture = Fixture::empty();
     success(&fixture.cli(&["init", "--package", "standalone-history-consumer"]));
-    fixture.write("src/lib.rs", "#[history_api::versioned(stable_id = \"test.redacted.record\", redacted)] pub struct Record { #[sensitive] pub value: String }");
+    fixture.write("src/lib.rs", "#[history_api::versioned(stable_name = \"test.redacted.record\", redacted)] pub struct Record { #[sensitive] pub value: String }");
     failure(
         &fixture.cargo(&["build", "--locked", "--offline"]),
         "redacted histories require the `redactable` feature",
@@ -84,7 +84,7 @@ fn standalone_adjacent_history_runtime_and_error_sources() {
         "--package",
         "standalone-history-consumer",
         "--type",
-        ID,
+        STABLE_NAME,
         "--version",
         "2",
     ]));
@@ -92,7 +92,7 @@ fn standalone_adjacent_history_runtime_and_error_sources() {
     success(&fixture.cargo(&["test", "--lib", "--locked", "--offline"]));
     success(&fixture.cli(&["freeze", "--package", "standalone-history-consumer"]));
     success(&fixture.cargo(&["build", "--release", "--locked", "--offline"]));
-    assert_eq!(fixture.ledger()[ID].as_object().unwrap().len(), 3);
+    assert_eq!(fixture.ledger()[STABLE_NAME].as_object().unwrap().len(), 3);
 
     // Body semantics are outside wire authority; the authored conversion still runs.
     fixture.write(
@@ -171,12 +171,12 @@ fn standalone_compiler_checks_history_contracts_and_macro_hygiene() {
         ),
         (
             V1.replace("billing.invoice.issued", "ReceiptCreated"),
-            "type identity segment 1 must start with a lowercase ASCII letter",
+            "stable name segment 1 must start with a lowercase ASCII letter",
         ),
         (
             V1.replace(
-                "#[versioned(stable_id",
-                "#[derive(Clone)]\n#[versioned(stable_id",
+                "#[versioned(stable_name",
+                "#[derive(Clone)]\n#[versioned(stable_name",
             ),
             "derive",
         ),
@@ -198,13 +198,13 @@ fn standalone_compiler_checks_history_contracts_and_macro_hygiene() {
         (format!("{V1}\nstruct InvoiceV1;"), "InvoiceV1"),
         (
             format!(
-                "{V1}\n#[cfg_attr(any(), history_api::versioned(stable_id = \"example.optional.record\"))] struct Conditional {{}}"
+                "{V1}\n#[cfg_attr(any(), history_api::versioned(stable_name = \"example.optional.record\"))] struct Conditional {{}}"
             ),
             "conditional",
         ),
         (
             format!(
-                "{V1}\n#[cfg(any())] mod conditional {{ use history_api::versioned; #[versioned(stable_id = \"example.optional.record\")] struct Conditional {{}} }}"
+                "{V1}\n#[cfg(any())] mod conditional {{ use history_api::versioned; #[versioned(stable_name = \"example.optional.record\")] struct Conditional {{}} }}"
             ),
             "conditional",
         ),
@@ -234,14 +234,14 @@ fn standalone_compiler_checks_history_contracts_and_macro_hygiene() {
         "src/lib.rs",
         &format!(
             r#"{V1}
-#[history_api::versioned(stable_id = "example.upper.record")]
+#[history_api::versioned(stable_name = "example.upper.record")]
 pub struct AB {{}}
-#[history_api::versioned(stable_id = "example.mixed.record")]
+#[history_api::versioned(stable_name = "example.mixed.record")]
 pub struct Ab {{}}
 use history_api::versioned as evolve;
 mod nested {{
     use super::evolve;
-    #[evolve(stable_id = "example.raw.record")]
+    #[evolve(stable_name = "example.raw.record")]
     pub struct Raw {{ pub r#type: u32 }}
 }}
 #[test]
@@ -249,8 +249,8 @@ fn public_aliases_and_raw_names_are_usable() {{
     let _: AB = ABV1 {{}};
     let _: Ab = AbV1 {{}};
     use history_api::{{decode, HasHistory, PayloadVersion}};
-    let _: AB = decode::<AB>(&AB::TYPE, PayloadVersion::INITIAL, b"{{}}").unwrap();
-    let _: Ab = decode::<Ab>(&Ab::TYPE, PayloadVersion::INITIAL, b"{{}}").unwrap();
+    let _: AB = decode::<AB>(&AB::STABLE_NAME, PayloadVersion::INITIAL, b"{{}}").unwrap();
+    let _: Ab = decode::<Ab>(&Ab::STABLE_NAME, PayloadVersion::INITIAL, b"{{}}").unwrap();
     let value = nested::Raw {{ r#type: 7 }};
     assert_eq!(value.r#type, 7);
 }}
@@ -298,7 +298,7 @@ fn standalone_removed_field_visibility_and_module_relative_callbacks() {
         &format!(
             r#"{V1}
 mod private {{
-    #[history_api::versioned(stable_id = "example.private.record")]
+    #[history_api::versioned(stable_name = "example.private.record")]
     pub struct Hidden {{ value: String }}
 }}
 fn forbidden(value: private::Hidden) {{ let _ = value.value; }}

@@ -12,7 +12,7 @@ pub(super) fn generate(context: &Context<'_>) -> TokenStream {
     let historical = format_ident!("__TypeHistory{}VersionedPayload", context.input.name);
     let latest = context.payload(context.history.head());
     let final_variant = format_ident!("V{}", context.history.head());
-    let identity = context.identity();
+    let stable_name = context.stable_name();
     let current_version = context.version(context.history.head());
     let redacted = context.input.redacted;
     let value = format_ident!("__type_history_value", span = Span::mixed_site());
@@ -84,7 +84,7 @@ pub(super) fn generate(context: &Context<'_>) -> TokenStream {
         impl #support::VersionedHistory for #latest {
             type Historical = #historical;
             type Error = #error_type;
-            const STABLE_ID: #support::TypeIdentity = #identity;
+            const STABLE_NAME: #support::StableName = #stable_name;
             const CURRENT_VERSION: #support::PayloadVersion = #current_version;
             const REDACTED: bool = #redacted;
 
@@ -104,7 +104,7 @@ pub(super) fn generate(context: &Context<'_>) -> TokenStream {
                     #(#decoding,)*
                     _ => ::core::result::Result::Err(
                         <__TypeHistoryDeserializer::Error as #support::serde::de::Error>::custom(
-                            #error_type::unsupported(#identity, #source_version),
+                            #error_type::unsupported(#stable_name, #source_version),
                         ),
                     ),
                 }
@@ -116,7 +116,7 @@ pub(super) fn generate(context: &Context<'_>) -> TokenStream {
         }
 
         impl #latest {
-            /// Wrap this current value with its stable identity and payload version.
+            /// Wrap this current value with its stable name and payload version.
             pub fn into_versioned(self) -> #support::Versioned<Self> {
                 #support::Versioned::new(self)
             }

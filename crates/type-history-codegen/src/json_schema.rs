@@ -2,7 +2,7 @@
 //!
 //! `schemars` generates a raw document from the current Rust types. Type History
 //! normalizes that document and validates its closed structural [`SchemaShape`].
-//! Development tooling compares these documents under each type identity and
+//! Development tooling compares these documents under each stable name and
 //! version. Type History never validates business values against a schema document.
 
 use std::{

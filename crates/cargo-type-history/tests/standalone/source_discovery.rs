@@ -42,7 +42,7 @@ mod records {
     #[allow(unused_imports)]
     use std::io::{self, Write as _};
 
-    #[api::versioned(stable_id = "billing.invoice.issued")]
+    #[api::versioned(stable_name = "billing.invoice.issued")]
     pub struct Invoice {
         pub value: String,
     }
@@ -89,10 +89,10 @@ use serde::{Deserialize, Serialize};
 #[serde(deny_unknown_fields)]
 pub struct Details { pub amount: u32 }
 
-#[__FACADE__(stable_id = "billing.invoice.issued")]
+#[__FACADE__(stable_name = "billing.invoice.issued")]
 pub struct Invoice { pub details: Details }
 
-#[__FACADE__::versioned(stable_id = "billing.invoice.copied")]
+#[__FACADE__::versioned(stable_name = "billing.invoice.copied")]
 pub struct InvoiceCopy { pub amount: u32 }
 
 #[test]
@@ -199,7 +199,7 @@ fn feature_selected_path_dependencies_are_captured_and_checked() {
     fixture.write("Cargo.toml", &toml::to_string(&manifest).unwrap());
     success(&fixture.cargo(&["generate-lockfile", "--offline"]));
     let source = r#"
-#[history_api::versioned(stable_id = "billing.invoice.issued")]
+#[history_api::versioned(stable_name = "billing.invoice.issued")]
 pub struct Invoice {
     pub value: optional_support::Value,
 }

@@ -45,7 +45,7 @@ pub fn read(root: &Path, admission: Admission) -> Result<PackageInventory<Record
         let plan = HistoryPlan::infer(&input.name, input.retained_floor, &input.fields)?;
         declarations.push(Declaration::resolve(
             input.name.to_string(),
-            declaration.identity,
+            declaration.stable_name,
             RecordMetadata {},
             plan,
             &input.name,
@@ -53,7 +53,7 @@ pub fn read(root: &Path, admission: Admission) -> Result<PackageInventory<Record
             ledger.as_ref(),
         )?);
     }
-    declarations.sort_by(|a, b| a.identity.cmp(&b.identity));
+    declarations.sort_by(|a, b| a.stable_name.cmp(&b.stable_name));
     let mut tracked_paths = package.tracked_paths;
     tracked_paths.extend(source.tracked_paths);
     tracked_paths.extend([config_path, ledger_path, package.root.join("axis.toml")]);

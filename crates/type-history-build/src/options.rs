@@ -26,7 +26,7 @@ pub struct LifecycleOptions {
     pub action: Action,
     /// One exact workspace package, required for mutations.
     pub package: Option<String>,
-    /// One exact logical identity and positive version.
+    /// One exact stable name and positive version.
     pub selected: Option<(String, u32)>,
     /// Whether to close a reset by restoring its frozen shape.
     pub undo: bool,
@@ -43,7 +43,7 @@ pub struct LifecycleOptions {
 /// Describe the frontend's fixed command and selector spelling.
 pub fn usage(contract: &ToolContract) -> String {
     format!(
-        "cargo {} <init|freeze|check|reset|import> --package NAME\nfreeze/reset: --{} EXACT_ID --version N; reset: --undo\nimport: --from FILE [--floor EXACT_ID=N ...]\ncheck without --package checks configured workspace libraries read-only",
+        "cargo {} <init|freeze|check|reset|import> --package NAME\nfreeze/reset: --{} EXACT_NAME --version N; reset: --undo\nimport: --from FILE [--floor EXACT_NAME=N ...]\ncheck without --package checks configured workspace libraries read-only",
         contract.command, contract.selector
     )
 }
@@ -90,7 +90,7 @@ pub fn parse(
         features: None,
         target: None,
     };
-    let (mut event, mut version) = (None, None);
+    let (mut stable_name, mut version) = (None, None);
     let mut args = args.into_iter().skip(1);
     while let Some(flag) = args.next() {
         if flag == "--undo" {
@@ -106,8 +106,8 @@ pub fn parse(
         match flag.as_str() {
             "--package" | "-p" => set(&mut options.package, value, "package")?,
             flag if flag == selector => {
-                exact_identity(&value)?;
-                set(&mut event, value, contract.selector)?;
+                exact_stable_name(&value)?;
+                set(&mut stable_name, value, contract.selector)?;
             }
             "--version" => set(&mut version, positive(&value)?, "version")?,
             "--from" => set(&mut options.from, PathBuf::from(value), "from")?,
@@ -117,22 +117,23 @@ pub fn parse(
                 set(&mut options.target, value, "target")?;
             }
             "--floor" => {
-                let (identity, floor) =
-                    value.split_once('=').ok_or("--floor requires EXACT_ID=N")?;
-                exact_identity(identity)?;
+                let (stable_name, floor) = value
+                    .split_once('=')
+                    .ok_or("--floor requires EXACT_NAME=N")?;
+                exact_stable_name(stable_name)?;
                 if options
                     .floors
-                    .insert(identity.to_owned(), positive(floor)?)
+                    .insert(stable_name.to_owned(), positive(floor)?)
                     .is_some()
                 {
-                    return Err("duplicate --floor identity".into());
+                    return Err("duplicate --floor stable name".into());
                 }
             }
             _ => return Err(format!("unknown option {flag}; {usage}").into()),
         }
     }
-    options.selected = match (event, version) {
-        (Some(id), Some(version)) => Some((id, version)),
+    options.selected = match (stable_name, version) {
+        (Some(stable_name), Some(version)) => Some((stable_name, version)),
         (None, None) => None,
         _ => return Err(format!("{selector} and --version must be supplied together").into()),
     };
@@ -176,9 +177,9 @@ fn positive(value: &str) -> Result<u32> {
     }
     Ok(result)
 }
-fn exact_identity(value: &str) -> Result<()> {
+fn exact_stable_name(value: &str) -> Result<()> {
     if value.is_empty() || value.contains(['*', '?', '[', ']']) {
-        return Err("history identity must be exact; wildcards are not accepted".into());
+        return Err("history stable name must be exact; wildcards are not accepted".into());
     }
     Ok(())
 }

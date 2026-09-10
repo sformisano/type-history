@@ -6,11 +6,11 @@ pub struct Nested {
     #[sensitive(redaction_api::Secret)]
     pub secret: String,
 }
-#[history_api::versioned(stable_id = "example.nested.child", redacted)]
+#[history_api::versioned(stable_name = "example.nested.child", redacted)]
 pub struct Child { pub nested: Nested }
-#[history_api::versioned(stable_id = "example.nested.parent", redacted)]
+#[history_api::versioned(stable_name = "example.nested.parent", redacted)]
 pub struct Parent { pub child: Option<Child> }
-#[history_api::versioned(stable_id = "example.wrapper.record", redacted)]
+#[history_api::versioned(stable_name = "example.wrapper.record", redacted)]
 pub struct Wrappers {
     pub declared: BypassRedaction<String>,
     #[not_sensitive]

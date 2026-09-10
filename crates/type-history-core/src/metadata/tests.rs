@@ -1,6 +1,6 @@
 use std::{borrow::Cow, panic::catch_unwind};
 
-use super::{InvalidTypeIdentity, PayloadVersion, TypeIdentity};
+use super::{InvalidStableName, PayloadVersion, StableName};
 
 #[test]
 fn payload_versions_reject_zero_during_parsing_and_deserialization() {
@@ -15,24 +15,24 @@ fn payload_versions_reject_zero_during_parsing_and_deserialization() {
 }
 
 #[test]
-fn identities_preserve_static_and_owned_canonical_values() {
-    const STATIC_TYPE: TypeIdentity = TypeIdentity::new("billing.invoice.paid");
-    let owned = TypeIdentity::try_from("billing.invoice.paid".to_owned()).unwrap();
-    assert_eq!(STATIC_TYPE, owned);
-    assert!(matches!(STATIC_TYPE.0, Cow::Borrowed(_)));
+fn stable_names_preserve_static_and_owned_canonical_values() {
+    const STATIC_NAME: StableName = StableName::new("billing.invoice.paid");
+    let owned = StableName::try_from("billing.invoice.paid".to_owned()).unwrap();
+    assert_eq!(STATIC_NAME, owned);
+    assert!(matches!(STATIC_NAME.0, Cow::Borrowed(_)));
     assert!(matches!(owned.0, Cow::Owned(_)));
     assert_eq!(
         serde_json::to_string(&owned).unwrap(),
         "\"billing.invoice.paid\""
     );
     assert_eq!(
-        serde_json::from_str::<TypeIdentity>("\"billing.invoice.paid\"").unwrap(),
-        STATIC_TYPE
+        serde_json::from_str::<StableName>("\"billing.invoice.paid\"").unwrap(),
+        STATIC_NAME
     );
 }
 
 #[test]
-fn identities_accept_simple_and_namespaced_values() {
+fn stable_names_accept_simple_and_namespaced_values() {
     for value in [
         "a",
         "receipt",
@@ -42,18 +42,18 @@ fn identities_accept_simple_and_namespaced_values() {
         "shop.receipt.created",
         "shop_2.receipt_created",
     ] {
-        let owned = TypeIdentity::try_from(value.to_owned()).expect(value);
-        let declared = TypeIdentity::new(value);
+        let owned = StableName::try_from(value.to_owned()).expect(value);
+        let declared = StableName::new(value);
         assert_eq!(owned, declared);
         assert_eq!(owned.as_str(), value);
         let json = serde_json::to_string(value).unwrap();
         assert_eq!(serde_json::to_string(&owned).unwrap(), json);
-        assert_eq!(serde_json::from_str::<TypeIdentity>(&json).unwrap(), owned);
+        assert_eq!(serde_json::from_str::<StableName>(&json).unwrap(), owned);
     }
 }
 
 #[test]
-fn identities_reject_empty_segments_and_invalid_characters() {
+fn stable_names_reject_empty_segments_and_invalid_characters() {
     for (value, segment_number) in [
         ("", 1),
         (".receipt", 1),
@@ -70,29 +70,29 @@ fn identities_reject_empty_segments_and_invalid_characters() {
         ("1receipt", 1),
     ] {
         assert_eq!(
-            TypeIdentity::try_from(value.to_owned()),
-            Err(InvalidTypeIdentity::InvalidSegment { segment_number }),
+            StableName::try_from(value.to_owned()),
+            Err(InvalidStableName::InvalidSegment { segment_number }),
             "{value:?}"
         );
         let json = serde_json::to_string(value).unwrap();
-        assert!(serde_json::from_str::<TypeIdentity>(&json).is_err());
-        assert!(catch_unwind(|| TypeIdentity::new(value)).is_err());
+        assert!(serde_json::from_str::<StableName>(&json).is_err());
+        assert!(catch_unwind(|| StableName::new(value)).is_err());
     }
 }
 
 #[test]
-fn identities_enforce_the_length_limit_with_or_without_dots() {
-    for value in ["a".repeat(TypeIdentity::MAX_LEN), "a.".repeat(127) + "a"] {
-        assert_eq!(value.len(), TypeIdentity::MAX_LEN);
-        assert!(TypeIdentity::try_from(value.clone()).is_ok());
+fn stable_names_enforce_the_length_limit_with_or_without_dots() {
+    for value in ["a".repeat(StableName::MAX_LEN), "a.".repeat(127) + "a"] {
+        assert_eq!(value.len(), StableName::MAX_LEN);
+        assert!(StableName::try_from(value.clone()).is_ok());
         let json = serde_json::to_string(&value).unwrap();
-        assert!(serde_json::from_str::<TypeIdentity>(&json).is_ok());
+        assert!(serde_json::from_str::<StableName>(&json).is_ok());
         let too_long = value + "a";
         assert_eq!(
-            TypeIdentity::try_from(too_long.clone()),
-            Err(InvalidTypeIdentity::TooLong)
+            StableName::try_from(too_long.clone()),
+            Err(InvalidStableName::TooLong)
         );
         let json = serde_json::to_string(&too_long).unwrap();
-        assert!(serde_json::from_str::<TypeIdentity>(&json).is_err());
+        assert!(serde_json::from_str::<StableName>(&json).is_err());
     }
 }

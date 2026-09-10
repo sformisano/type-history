@@ -22,8 +22,8 @@ pub struct GenerationPaths {
     pub support: Path,
     /// Frontend-owned error type. Generated calls pass owned concrete errors.
     ///
-    /// Requires `unsupported(identity, stored)`, `decode(identity, stored, json_error)`,
-    /// and generic `upcast(identity, stored, from, to, callback_error)` constructors.
+    /// Requires `unsupported(stable_name, stored)`, `decode(stable_name, stored, json_error)`,
+    /// and generic `upcast(stable_name, stored, from, to, callback_error)` constructors.
     /// The frontend chooses callback bounds and projects before erasing the type.
     /// Axis can select its `ToRedactedError` contract here without requiring
     /// Redactable's distinct `ToRedacted` contract on those errors.
@@ -57,7 +57,7 @@ pub struct GeneratedHistory {
 /// Generate an already-authorized history without interpreting aggregate roles.
 pub fn generate_history(
     input: &RecordInput,
-    identity: &str,
+    stable_name: &str,
     history: &AuthorizedHistory,
     paths: &GenerationPaths,
 ) -> Result<GeneratedHistory> {
@@ -82,7 +82,7 @@ pub fn generate_history(
         input,
         history,
         paths,
-        identity,
+        stable_name,
     };
     let (payloads, versions) = types::generate(&context)?;
     let conversions = transitions::generate(&context);
@@ -105,7 +105,7 @@ pub fn generate_history(
 /// provide `VersionedHistory` and `Versioned`; other frontends remain unchanged.
 pub fn generate_versioned(
     input: &RecordInput,
-    identity: &str,
+    stable_name: &str,
     history: &AuthorizedHistory,
     paths: &GenerationPaths,
 ) -> Result<TokenStream> {
@@ -113,7 +113,7 @@ pub fn generate_versioned(
         input,
         history,
         paths,
-        identity,
+        stable_name,
     };
     with_lints(&input.attributes, versioned::generate(&context))
 }
@@ -122,7 +122,7 @@ struct Context<'a> {
     input: &'a RecordInput,
     history: &'a AuthorizedHistory,
     paths: &'a GenerationPaths,
-    identity: &'a str,
+    stable_name: &'a str,
 }
 
 impl Context<'_> {
@@ -174,9 +174,9 @@ impl Context<'_> {
         }
     }
 
-    fn identity(&self) -> TokenStream {
+    fn stable_name(&self) -> TokenStream {
         let support = &self.paths.support;
-        let identity = self.identity;
-        quote!(#support::TypeIdentity::new(#identity))
+        let stable_name = self.stable_name;
+        quote!(#support::StableName::new(#stable_name))
     }
 }

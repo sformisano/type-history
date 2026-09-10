@@ -28,14 +28,16 @@ They check the current amount and currency. They also construct a new `ReceiptCr
 with `"EUR"` and serialize `receipt.into_versioned()`.
 That second case shows that the backfill does not override a currency supplied by current application code.
 
-Application code uses `ReceiptCreated` throughout. `Versioned` carries the stable identity,
-source version, and matching historical data without separate metadata arguments.
+Application code uses `ReceiptCreated` throughout. `Versioned` carries three named fields:
+`stable_name`, the numeric `version`, and `payload` with the matching historical data.
+The wrapper accepts those fields in any order.
 The application chooses storage and a Serde format supporting maps and named payload fields.
 JSON and MessagePack's `to_vec_named` support that representation.
 
-The first freeze records `stable_id` in the ledger. Builds and lifecycle commands
+The first freeze records `stable_name` in the ledger. Builds and lifecycle commands
 reject later changes to that value.
-Renaming a Rust type or moving its module does not change that identity.
+All values and versions of a type share its stable name.
+Renaming the Rust type or moving its module does not change that name.
 
 ## Add conversions that use earlier fields
 

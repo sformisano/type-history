@@ -2,7 +2,7 @@
 
 use serde::Serialize;
 
-use crate::{DecodeError, PayloadVersion, TypeIdentity};
+use crate::{DecodeError, PayloadVersion, StableName};
 
 /// Exact-version decoder followed by adjacent typed conversions.
 pub struct History<T, E = DecodeError> {
@@ -60,7 +60,7 @@ pub enum DecodeFailureKind {
 /// Immutable original and adjacent version context for a decoding failure.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct DecodeContext {
-    identity: TypeIdentity,
+    stable_name: StableName,
     source_version: PayloadVersion,
     adjacent_from: Option<PayloadVersion>,
     adjacent_to: Option<PayloadVersion>,
@@ -69,9 +69,9 @@ pub struct DecodeContext {
 
 impl DecodeContext {
     /// Construct context for an unsupported stored version.
-    pub fn unsupported(identity: TypeIdentity, source_version: PayloadVersion) -> Self {
+    pub fn unsupported(stable_name: StableName, source_version: PayloadVersion) -> Self {
         Self {
-            identity,
+            stable_name,
             source_version,
             adjacent_from: None,
             adjacent_to: None,
@@ -80,9 +80,9 @@ impl DecodeContext {
     }
 
     /// Construct context for failed historical JSON decoding.
-    pub fn decode(identity: TypeIdentity, source_version: PayloadVersion) -> Self {
+    pub fn decode(stable_name: StableName, source_version: PayloadVersion) -> Self {
         Self {
-            identity,
+            stable_name,
             source_version,
             adjacent_from: None,
             adjacent_to: None,
@@ -92,13 +92,13 @@ impl DecodeContext {
 
     /// Construct context for one failing adjacent conversion.
     pub fn upcast(
-        identity: TypeIdentity,
+        stable_name: StableName,
         source_version: PayloadVersion,
         adjacent_from: PayloadVersion,
         adjacent_to: PayloadVersion,
     ) -> Self {
         Self {
-            identity,
+            stable_name,
             source_version,
             adjacent_from: Some(adjacent_from),
             adjacent_to: Some(adjacent_to),
@@ -106,9 +106,9 @@ impl DecodeContext {
         }
     }
 
-    /// Stable logical record identity.
-    pub fn identity(&self) -> &TypeIdentity {
-        &self.identity
+    /// Stable name shared by every version of this type.
+    pub fn stable_name(&self) -> &StableName {
+        &self.stable_name
     }
 
     /// Original stored version, preserved throughout the conversion chain.

@@ -4,7 +4,7 @@ use serde_json::{from_slice, from_str, json, to_value, to_vec, Value};
 use std::error::Error;
 use type_history::{DecodeFailureKind, Versioned};
 
-const OLD: &[u8] = br#"{"billing.invoice.issued":{"1":{"legacy":"INV-42","count":42}}}"#;
+const OLD: &[u8] = br#"{"stable_name":"billing.invoice.issued","version":1,"payload":{"legacy":"INV-42","count":42}}"#;
 
 #[test]
 fn application_uses_only_the_current_alias_for_reading_and_writing() {
@@ -18,16 +18,14 @@ fn application_uses_only_the_current_alias_for_reading_and_writing() {
     assert_eq!(restored, invoice);
     assert_eq!(
         from_slice::<Value>(&bytes).unwrap(),
-        json!({
-            "billing.invoice.issued": {"3": {"count": "42", "label": "INV-42", "revision": 7}}
-        })
+        json!({"stable_name":"billing.invoice.issued","version":3,"payload":{"count":"42","label":"INV-42","revision":7}})
     );
 }
 
 #[test]
 fn untouched_record_retains_its_original_version_and_data() {
     let stored: Versioned<Invoice> = from_slice(OLD).unwrap();
-    assert_eq!(stored.stable_id().as_str(), "billing.invoice.issued");
+    assert_eq!(stored.stable_name().as_str(), "billing.invoice.issued");
     assert_eq!(stored.source_version().get(), 1);
     assert_eq!(
         to_value(stored.clone()).unwrap(),
@@ -51,7 +49,7 @@ fn binary_format_reads_old_records_and_round_trips_current_values() {
 
 #[test]
 fn conversion_failure_keeps_the_concrete_source_and_original_version() {
-    let bytes = br#"{"billing.invoice.issued":{"1":{"legacy":"INV-13","count":13}}}"#;
+    let bytes = br#"{"stable_name":"billing.invoice.issued","version":1,"payload":{"legacy":"INV-13","count":13}}"#;
     let stored = from_slice(bytes).unwrap();
     let error = Invoice::from_versioned(stored).unwrap_err();
     assert_eq!(error.kind(), DecodeFailureKind::Upcast);
@@ -73,20 +71,28 @@ fn conversion_failure_keeps_the_concrete_source_and_original_version() {
 fn malformed_envelopes_and_payloads_are_rejected() {
     for bytes in [
         "{}",
-        r#"{"billing.invoice.issued":{}}"#,
-        r#"{"another.invoice.issued":{"1":{"legacy":"INV-42","count":42}}}"#,
-        r#"{"billing.invoice.issued":{"0":{}}}"#,
-        r#"{"billing.invoice.issued":{"01":{}}}"#,
-        r#"{"billing.invoice.issued":{"+1":{}}}"#,
-        r#"{"billing.invoice.issued":{"4":{}}}"#,
-        r#"{"billing.invoice.issued":{"4294967296":{}}}"#,
-        r#"{"billing.invoice.issued":{"1":{"legacy":"INV-42","count":42},"1":{}}}"#,
-        r#"{"billing.invoice.issued":{"1":{"legacy":"INV-42","count":42}},"billing.invoice.issued":{}}"#,
-        r#"{"billing.invoice.issued":{"1":{"legacy":"INV-42","count":42,"count":43}}}"#,
-        r#"{"billing.invoice.issued":{"1":{"legacy":"INV-42","count":42,"extra":0}}}"#,
-        r#"{"billing.invoice.issued":{"1":{"legacy":"INV-42"}}}"#,
-        r#"{"billing.invoice.issued":{"1":["INV-42",42]}}"#,
-        r#"{"billing.invoice.issued":{"1":{"legacy":"INV-42","count":42}}} trailing"#,
+        r#"{"stable_name":"billing.invoice.issued"}"#,
+        r#"{"stable_name":"another.invoice.issued","version":1,"payload":{"legacy":"INV-42","count":42}}"#,
+        r#"{"stable_name":"billing.invoice.issued","version":0,"payload":{}}"#,
+        r#"{"stable_name":"billing.invoice.issued","version":"1","payload":{}}"#,
+        r#"{"stable_name":"billing.invoice.issued","version":-1,"payload":{}}"#,
+        r#"{"stable_name":"billing.invoice.issued","version":1.5,"payload":{}}"#,
+        r#"{"stable_name":"billing.invoice.issued","version":null,"payload":{}}"#,
+        r#"{"stable_name":"billing.invoice.issued","version":true,"payload":{}}"#,
+        r#"{"version":1,"payload":{"legacy":"INV-42","count":42}}"#,
+        r#"{"stable_name":"billing.invoice.issued","payload":{"legacy":"INV-42","count":42}}"#,
+        r#"{"stable_name":"billing.invoice.issued","version":1}"#,
+        r#"{"stable_name":"billing.invoice.issued","version":4,"payload":{}}"#,
+        r#"{"stable_name":"billing.invoice.issued","version":4294967296,"payload":{}}"#,
+        r#"{"stable_name":"billing.invoice.issued","version":1,"payload":{"legacy":"INV-42","count":42},"version":1,"payload":{}}"#,
+        r#"{"stable_name":"billing.invoice.issued","version":1,"payload":{"legacy":"INV-42","count":42},"stable_name":"billing.invoice.issued"}"#,
+        r#"{"stable_name":"billing.invoice.issued","version":1,"payload":{"legacy":"INV-42","count":42},"payload":{}}"#,
+        r#"{"stable_name":"billing.invoice.issued","version":1,"payload":{"legacy":"INV-42","count":42},"extra":true}"#,
+        r#"{"stable_name":"billing.invoice.issued","version":1,"payload":{"legacy":"INV-42","count":42,"count":43}}"#,
+        r#"{"stable_name":"billing.invoice.issued","version":1,"payload":{"legacy":"INV-42","count":42,"extra":0}}"#,
+        r#"{"stable_name":"billing.invoice.issued","version":1,"payload":{"legacy":"INV-42"}}"#,
+        r#"{"stable_name":"billing.invoice.issued","version":1,"payload":["INV-42",42]}"#,
+        r#"{"stable_name":"billing.invoice.issued","version":1,"payload":{"legacy":"INV-42","count":42}} trailing"#,
     ] {
         assert!(
             from_str::<Versioned<Invoice>>(bytes).is_err(),
@@ -96,11 +102,39 @@ fn malformed_envelopes_and_payloads_are_rejected() {
 }
 
 #[test]
-fn identity_or_version_mismatch_precedes_payload_parsing() {
-    let error =
-        from_str::<Versioned<Invoice>>(r#"{"another.invoice.issued": INVALID"#).unwrap_err();
-    assert!(error.to_string().contains("stable identity"));
-    let error =
-        from_str::<Versioned<Invoice>>(r#"{"billing.invoice.issued":{"9": INVALID"#).unwrap_err();
+fn stable_name_or_version_mismatch_rejects_the_value() {
+    let error = from_str::<Versioned<Invoice>>(
+        r#"{"payload":{},"version":1,"stable_name":"another.invoice.issued"}"#,
+    )
+    .unwrap_err();
+    assert!(error.to_string().contains("stable name"));
+    let error = from_str::<Versioned<Invoice>>(
+        r#"{"payload":{},"version":9,"stable_name":"billing.invoice.issued"}"#,
+    )
+    .unwrap_err();
     assert!(error.to_string().contains("unsupported"));
+}
+
+#[test]
+fn wrapper_fields_can_appear_in_any_order() {
+    let fields = [
+        r#""stable_name":"billing.invoice.issued""#,
+        r#""version":1"#,
+        r#""payload":{"legacy":"INV-42","count":42}"#,
+    ];
+    for order in [
+        [0, 1, 2],
+        [0, 2, 1],
+        [1, 0, 2],
+        [1, 2, 0],
+        [2, 0, 1],
+        [2, 1, 0],
+    ] {
+        let wire = format!("{{{}}}", order.map(|index| fields[index]).join(","));
+        let stored: Versioned<Invoice> = from_str(&wire).unwrap();
+        assert_eq!(stored.source_version().get(), 1);
+        let invoice = Invoice::from_versioned(stored).unwrap();
+        assert_eq!(invoice.label, "INV-42");
+        assert_eq!(invoice.count, "42");
+    }
 }

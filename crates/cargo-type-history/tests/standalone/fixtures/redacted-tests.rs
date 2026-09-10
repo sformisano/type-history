@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use super::{Secure, SecureV1, SecureV2, SecureV3};
-    use history_api::{DecodeFailureKind, PayloadVersion, TypeIdentity};
+    use history_api::{DecodeFailureKind, PayloadVersion, StableName};
     use history_api::redaction::{self, HasRedactedHistory};
     use history_api::redactable::{Redactable, ToRedacted};
     use serde_json::json;
@@ -18,7 +18,7 @@ mod tests {
         assert_eq!(safe["public"], "visible");
         assert_eq!(safe["count"], 0);
         assert_eq!(safe["legacy"], "[REDACTED]");
-        let current = redaction::decode::<Secure>(&Secure::TYPE, PayloadVersion::INITIAL, BYTES).unwrap();
+        let current = redaction::decode::<Secure>(&Secure::STABLE_NAME, PayloadVersion::INITIAL, BYTES).unwrap();
         assert_eq!(current.label, "LEGACY_SECRET_726");
         assert_eq!(current.count, "41");
         let second: SecureV2 = serde_json::from_value(json!({"count":41,"label":"LEGACY_SECRET_726","nested":{"secret":"NESTED_SECRET_726"},"wrapped":"WRAPPED_SECRET_726","public":"visible"})).unwrap();
@@ -47,12 +47,12 @@ mod tests {
     #[test]
     fn errors_keep_context_and_only_safe_causes() {
         let failed = String::from_utf8(BYTES.to_vec()).unwrap().replace("41", "999");
-        let error = redaction::decode::<Secure>(&Secure::TYPE, PayloadVersion::INITIAL, failed.as_bytes()).unwrap_err();
+        let error = redaction::decode::<Secure>(&Secure::STABLE_NAME, PayloadVersion::INITIAL, failed.as_bytes()).unwrap_err();
         let cause = error.source().unwrap();
         assert!(cause.source().is_none());
         let context = error.to_redacted().json();
         let context = &context["Decode"];
-        assert_eq!(context["identity"], "example.secure.record");
+        assert_eq!(context["stable_name"], "example.secure.record");
         assert_eq!(context["source_version"], 1);
         assert_eq!(context["adjacent_from"], 2);
         assert_eq!(context["adjacent_to"], 3);
@@ -61,7 +61,7 @@ mod tests {
         let unsupported = Secure::history().decode(PayloadVersion::try_from(4).unwrap(), b"JSON_SECRET_726").unwrap_err();
         assert_eq!(unsupported.kind(), DecodeFailureKind::UnsupportedVersion);
         assert!(unsupported.redacted_cause().is_none());
-        let mismatch = redaction::decode::<Secure>(&TypeIdentity::new("other.record.type"), PayloadVersion::INITIAL, BYTES).unwrap_err();
+        let mismatch = redaction::decode::<Secure>(&StableName::new("other.record.type"), PayloadVersion::INITIAL, BYTES).unwrap_err();
         assert!(mismatch.source().is_none());
     }
 }

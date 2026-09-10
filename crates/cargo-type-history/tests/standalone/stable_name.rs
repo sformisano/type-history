@@ -1,11 +1,11 @@
-use super::support::{failure, success, Fixture, ID, LEDGER, V1};
+use super::support::{failure, success, Fixture, LEDGER, STABLE_NAME, V1};
 use serde_json::Value;
 
-const CHANGED_ID: &str = "billing.invoice.reissued";
+const CHANGED_NAME: &str = "billing.invoice.reissued";
 
 #[test]
-fn simple_and_two_segment_ids_freeze_evolve_and_keep_their_identity() {
-    const SOURCE: &str = include_str!("fixtures/short-ids.rs");
+fn simple_and_two_segment_names_freeze_evolve_and_keep_their_name() {
+    const SOURCE: &str = include_str!("fixtures/short-names.rs");
     const ADDED_FIELD: &str =
         "    #[history(added_in = v2, backfill_value = 7_u32)]\n    pub revision: u32,\n";
     const PACKAGE: &str = "standalone-history-consumer";
@@ -50,22 +50,11 @@ fn simple_and_two_segment_ids_freeze_evolve_and_keep_their_identity() {
 }
 
 #[test]
-fn old_key_and_frozen_stable_id_edits_are_rejected_by_every_lifecycle_path() {
+fn frozen_stable_name_edits_are_rejected_by_every_lifecycle_path() {
     let fixture = Fixture::frozen();
     let frozen = fixture.read(LEDGER);
 
-    fixture.write("src/lib.rs", &V1.replace("stable_id =", "id ="));
-    failure(
-        &fixture.cargo(&["build", "--locked", "--offline"]),
-        "history argument `id` was renamed to `stable_id`",
-    );
-    failure(
-        &fixture.cli(&["check", "--package", "standalone-history-consumer"]),
-        "history argument `id` was renamed to `stable_id`",
-    );
-    assert_eq!(fixture.read(LEDGER), frozen);
-
-    let changed_source = V1.replace(ID, CHANGED_ID);
+    let changed_source = V1.replace(STABLE_NAME, CHANGED_NAME);
     fixture.write("src/lib.rs", &changed_source);
     failure(
         &fixture.cargo(&["build", "--locked", "--offline"]),
@@ -85,7 +74,7 @@ fn old_key_and_frozen_stable_id_edits_are_rejected_by_every_lifecycle_path() {
             "--package",
             "standalone-history-consumer",
             "--type",
-            ID,
+            STABLE_NAME,
             "--version",
             "1",
         ]),
@@ -93,15 +82,19 @@ fn old_key_and_frozen_stable_id_edits_are_rejected_by_every_lifecycle_path() {
     );
 
     let mut renamed_import = fixture.ledger();
-    let versions = renamed_import.as_object_mut().unwrap().remove(ID).unwrap();
+    let versions = renamed_import
+        .as_object_mut()
+        .unwrap()
+        .remove(STABLE_NAME)
+        .unwrap();
     let mut versions = versions.as_object().unwrap().clone();
     for snapshot in versions.values_mut() {
-        snapshot["schema"]["$id"] = format!("urn:typehistory:schema:{CHANGED_ID}").into();
+        snapshot["schema"]["$id"] = format!("urn:typehistory:schema:{CHANGED_NAME}").into();
     }
     renamed_import
         .as_object_mut()
         .unwrap()
-        .insert(CHANGED_ID.to_owned(), Value::Object(versions));
+        .insert(CHANGED_NAME.to_owned(), Value::Object(versions));
     fixture.write(
         "renamed-import.json",
         &serde_json::to_string_pretty(&renamed_import).unwrap(),
@@ -124,7 +117,7 @@ fn old_key_and_frozen_stable_id_edits_are_rejected_by_every_lifecycle_path() {
         "--package",
         "standalone-history-consumer",
         "--type",
-        ID,
+        STABLE_NAME,
         "--version",
         "1",
     ]));
@@ -140,7 +133,7 @@ fn old_key_and_frozen_stable_id_edits_are_rejected_by_every_lifecycle_path() {
             "--package",
             "standalone-history-consumer",
             "--type",
-            ID,
+            STABLE_NAME,
             "--version",
             "1",
         ]),
@@ -153,7 +146,7 @@ fn old_key_and_frozen_stable_id_edits_are_rejected_by_every_lifecycle_path() {
             "--package",
             "standalone-history-consumer",
             "--type",
-            ID,
+            STABLE_NAME,
             "--version",
             "1",
         ]),
@@ -163,7 +156,7 @@ fn old_key_and_frozen_stable_id_edits_are_rejected_by_every_lifecycle_path() {
 }
 
 #[test]
-fn rust_record_rename_keeps_the_stable_id_and_exact_ledger() {
+fn rust_record_rename_keeps_the_stable_name_and_exact_ledger() {
     let fixture = Fixture::frozen();
     let frozen = fixture.read(LEDGER);
     let renamed = V1.replace("pub struct Invoice", "pub struct Receipt");
@@ -177,8 +170,8 @@ mod renamed_record_tests {{
     use history_api::HasHistory;
 
     #[test]
-    fn stable_identity_is_independent_of_the_rust_name() {{
-        assert_eq!(Receipt::TYPE.as_str(), "{ID}");
+    fn stable_name_is_independent_of_the_rust_name() {{
+        assert_eq!(Receipt::STABLE_NAME.as_str(), "{STABLE_NAME}");
         let value: Receipt = ReceiptV1 {{ legacy: "legacy".to_owned(), count: 7 }};
         assert_eq!(value.count, 7);
     }}

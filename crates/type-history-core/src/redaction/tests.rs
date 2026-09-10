@@ -1,6 +1,7 @@
 use super::{RedactedDecodeError, RedactedReadError};
-use crate::{DecodeFailureKind, PayloadVersion, TypeIdentity};
+use crate::{DecodeFailureKind, PayloadVersion, StableName};
 use redactable::{BypassTextRedaction, RedactedValue, ToRedacted};
+use serde_json::to_value;
 use std::{
     cell::Cell,
     error::Error,
@@ -44,7 +45,7 @@ fn callback_is_projected_once_and_dropped_before_safe_observation() {
     let projections = Rc::new(Cell::new(0));
     let drops = Rc::new(Cell::new(0));
     let error = RedactedDecodeError::upcast(
-        TypeIdentity::new("test.secret.record"),
+        StableName::new("test.secret.record"),
         PayloadVersion::INITIAL,
         PayloadVersion::try_from(2).unwrap(),
         PayloadVersion::try_from(3).unwrap(),
@@ -56,6 +57,11 @@ fn callback_is_projected_once_and_dropped_before_safe_observation() {
     assert_eq!(projections.get(), 1);
     assert_eq!(drops.get(), 1);
     assert_eq!(error.kind(), DecodeFailureKind::Upcast);
+    assert_eq!(error.stable_name().as_str(), "test.secret.record");
+    assert_eq!(
+        to_value(&error).unwrap()["stable_name"],
+        "test.secret.record"
+    );
     assert_eq!(error.redacted_cause().unwrap().text(), "safe cause");
     assert!(error.source().is_none());
     let read = RedactedReadError::Decode(error.clone());
@@ -90,7 +96,7 @@ fn borrowed_callback_errors_need_no_static_or_error_contract() {
     }
     let secret = "BORROWED_SECRET_726".to_owned();
     let error = RedactedDecodeError::upcast(
-        TypeIdentity::new("test.secret.record"),
+        StableName::new("test.secret.record"),
         PayloadVersion::INITIAL,
         PayloadVersion::INITIAL,
         PayloadVersion::try_from(2).unwrap(),

@@ -15,8 +15,8 @@ use crate::{
 
 /// One supported standalone history declaration before authority checks.
 pub struct RecordDeclaration {
-    /// Explicit stable logical identity.
-    pub identity: String,
+    /// Explicit stable name shared by every version of this type.
+    pub stable_name: String,
     /// Complete authored inventory shared with the attribute macro.
     pub input: RecordInput,
     /// Canonical containing module path.
@@ -41,7 +41,7 @@ pub fn discover(
 ) -> Result<RecordSource, SourceDiagnostic> {
     let graph = SourceGraph::read(root, library, facade_names)?;
     let mut declarations = Vec::new();
-    let mut identities = BTreeSet::new();
+    let mut stable_names = BTreeSet::new();
     for unit in &graph.units {
         for item in &unit.items {
             let attributes = attributes(item);
@@ -89,17 +89,17 @@ pub fn discover(
                 .map_err(|source| declaration_error(&graph, unit, source))?;
             let mut record = record.clone();
             record.attrs.remove(position);
-            let (input, identity) = input::parse(arguments, record)
+            let (input, stable_name) = input::parse(arguments, record)
                 .map_err(|source| declaration_error(&graph, unit, source))?;
-            if !identities.insert(identity.clone()) {
+            if !stable_names.insert(stable_name.clone()) {
                 return Err(declaration_error(
                     &graph,
                     unit,
-                    Error::new_spanned(&input.name, "duplicate history identity"),
+                    Error::new_spanned(&input.name, "duplicate history stable name"),
                 ));
             }
             declarations.push(RecordDeclaration {
-                identity,
+                stable_name,
                 input,
                 module_path: unit.module_path.clone(),
                 source_path: relative(&graph.package_root, &unit.source_path),
@@ -201,12 +201,12 @@ mod tests {
         let root = tempfile::tempdir().expect("package");
         let library = root.path().join("lib.rs");
         for source in [
-            "#[cfg_attr(feature=\"optional\", history_api::versioned(stable_id=\"billing.invoice.issued\"))] struct Invoice {}",
-            "use history_api::versioned as evolve; #[cfg_attr(feature=\"optional\", evolve(stable_id=\"billing.invoice.issued\"))] struct Invoice {}",
-            "#[cfg_attr(feature=\"optional\", cfg_attr(unix, history_api::versioned(stable_id=\"billing.invoice.issued\")))] struct Invoice {}",
-            "#[cfg(feature=\"optional\")] mod records { use history_api::versioned; #[versioned(stable_id=\"billing.invoice.issued\")] struct Invoice {} }",
-            "#[cfg(feature=\"optional\")] mod records { use history_api as api; #[api::versioned(stable_id=\"billing.invoice.issued\")] struct Invoice {} }",
-            "#![cfg(feature=\"optional\")] use history_api::versioned as evolve; #[evolve(stable_id=\"billing.invoice.issued\")] struct Invoice {}",
+            "#[cfg_attr(feature=\"optional\", history_api::versioned(stable_name=\"billing.invoice.issued\"))] struct Invoice {}",
+            "use history_api::versioned as evolve; #[cfg_attr(feature=\"optional\", evolve(stable_name=\"billing.invoice.issued\"))] struct Invoice {}",
+            "#[cfg_attr(feature=\"optional\", cfg_attr(unix, history_api::versioned(stable_name=\"billing.invoice.issued\")))] struct Invoice {}",
+            "#[cfg(feature=\"optional\")] mod records { use history_api::versioned; #[versioned(stable_name=\"billing.invoice.issued\")] struct Invoice {} }",
+            "#[cfg(feature=\"optional\")] mod records { use history_api as api; #[api::versioned(stable_name=\"billing.invoice.issued\")] struct Invoice {} }",
+            "#![cfg(feature=\"optional\")] use history_api::versioned as evolve; #[evolve(stable_name=\"billing.invoice.issued\")] struct Invoice {}",
         ] {
             fs::write(&library, source).unwrap();
             assert!(
@@ -218,7 +218,7 @@ mod tests {
             );
         }
         fs::write(&library, "#[cfg(feature=\"optional\")] mod records;").unwrap();
-        fs::write(root.path().join("records.rs"), "use history_api::versioned as evolve; #[evolve(stable_id=\"billing.invoice.issued\")] struct Invoice {}").unwrap();
+        fs::write(root.path().join("records.rs"), "use history_api::versioned as evolve; #[evolve(stable_name=\"billing.invoice.issued\")] struct Invoice {}").unwrap();
         assert!(matches!(
             discover(root.path(), &library, &["history_api".to_owned()]),
             Err(SourceDiagnostic::ConditionalSchema { .. })
@@ -234,7 +234,7 @@ mod tests {
             r#"
             #[cfg(test)] mod tests {
                 use history_api::versioned;
-                #[versioned(stable_id="billing.invoice.issued")] struct Invoice {}
+                #[versioned(stable_name="billing.invoice.issued")] struct Invoice {}
             }
             #[cfg(feature="optional")] mod unrelated {
                 use another_api::decorate;
@@ -260,10 +260,10 @@ mod tests {
             "use history_api::versioned as evolve; #[path=\"invoice.rs\"] mod invoice;",
         )
         .unwrap();
-        fs::write(root.path().join("src/invoice.rs"), "use crate::evolve; #[evolve(stable_id=\"billing.invoice.issued\")] pub struct Invoice { number: String }").unwrap();
+        fs::write(root.path().join("src/invoice.rs"), "use crate::evolve; #[evolve(stable_name=\"billing.invoice.issued\")] pub struct Invoice { number: String }").unwrap();
         let source = discover(root.path(), &library, &["history_api".to_owned()]).unwrap();
         assert_eq!(source.declarations.len(), 1);
-        assert_eq!(source.declarations[0].identity, "billing.invoice.issued");
+        assert_eq!(source.declarations[0].stable_name, "billing.invoice.issued");
         assert_eq!(source.declarations[0].module_path, ["invoice"]);
         assert!(source
             .tracked_paths
@@ -275,11 +275,11 @@ mod tests {
         let root = tempfile::tempdir().expect("package");
         let library = root.path().join("lib.rs");
         for source in [
-            "pub use history_api as api; mod records { use crate::api; #[api::versioned(stable_id=\"billing.invoice.issued\")] struct Invoice {} }",
-            "mod records { use crate::second as api; #[api::versioned(stable_id=\"billing.invoice.issued\")] struct Invoice {} } pub use crate::first as second; pub use history_api as first;",
-            "pub use history_api as api; #[crate::api::versioned(stable_id=\"billing.invoice.issued\")] struct Invoice {}",
-            "mod facade { pub use history_api::versioned; } use crate::facade::{self as api}; #[api::versioned(stable_id=\"billing.invoice.issued\")] struct Invoice {}",
-            "use std::fmt::{self, Write as _}; use std::io::{self, Write as _}; use history_api::{self as api}; #[api::versioned(stable_id=\"billing.invoice.issued\")] struct Invoice {}",
+            "pub use history_api as api; mod records { use crate::api; #[api::versioned(stable_name=\"billing.invoice.issued\")] struct Invoice {} }",
+            "mod records { use crate::second as api; #[api::versioned(stable_name=\"billing.invoice.issued\")] struct Invoice {} } pub use crate::first as second; pub use history_api as first;",
+            "pub use history_api as api; #[crate::api::versioned(stable_name=\"billing.invoice.issued\")] struct Invoice {}",
+            "mod facade { pub use history_api::versioned; } use crate::facade::{self as api}; #[api::versioned(stable_name=\"billing.invoice.issued\")] struct Invoice {}",
+            "use std::fmt::{self, Write as _}; use std::io::{self, Write as _}; use history_api::{self as api}; #[api::versioned(stable_name=\"billing.invoice.issued\")] struct Invoice {}",
         ] {
             fs::write(&library, source).unwrap();
             let found = discover(root.path(), &library, &["history_api".to_owned()]).unwrap();
@@ -299,7 +299,7 @@ mod tests {
             "use crate::exports::history_api; mod exports { pub use history_api::versioned as history_api; }",
             "use crate::exports::history_api; use history_api::Schema; mod exports { pub use history_api::versioned as history_api; }",
         ] {
-            fs::write(&library, format!("{imports} #[history_api(stable_id=\"billing.invoice.issued\")] struct Invoice {{}}")).unwrap();
+            fs::write(&library, format!("{imports} #[history_api(stable_name=\"billing.invoice.issued\")] struct Invoice {{}}")).unwrap();
             let found = discover(root.path(), &library, &["history_api".to_owned()]).unwrap();
             assert_eq!(found.declarations.len(), 1, "{imports}");
         }
@@ -316,7 +316,7 @@ mod tests {
             "use crate::exports::{versioned, Schema}; mod exports { pub use ::versioned::{self, versioned, Schema}; }",
             "use crate::exports::{versioned, Schema}; mod exports { pub use ::versioned::{versioned, self, Schema}; }",
         ] {
-            fs::write(&library, format!("{imports} #[versioned(stable_id=\"billing.invoice.issued\")] struct Invoice {{}}")).unwrap();
+            fs::write(&library, format!("{imports} #[versioned(stable_name=\"billing.invoice.issued\")] struct Invoice {{}}")).unwrap();
             let facades = ["versioned".to_owned()];
             let found = discover(root.path(), &library, &facades).unwrap();
             assert_eq!(found.declarations.len(), 1, "{imports}");
@@ -367,7 +367,7 @@ mod tests {
             "use crate::exports::versioned; use versioned::Schema; mod exports { pub use versioned::versioned; }",
         ] {
             let source = format!(
-                "{imports} #[versioned(stable_id=\"billing.invoice.issued\")] struct Invoice {{}}"
+                "{imports} #[versioned(stable_name=\"billing.invoice.issued\")] struct Invoice {{}}"
             );
             fs::write(&library, &source).unwrap();
             let facades = ["versioned".to_owned()];
@@ -389,12 +389,12 @@ mod tests {
         let root = tempfile::tempdir().expect("package");
         let library = root.path().join("lib.rs");
         for source in [
-            "use versioned::versioned; #[versioned::versioned(stable_id=\"billing.invoice.issued\")] struct Invoice {}",
-            "use versioned::versioned; #[::versioned::versioned(stable_id=\"billing.invoice.issued\")] struct Invoice {}",
-            "use versioned::versioned as evolve; #[evolve(stable_id=\"billing.invoice.issued\")] struct Invoice {}",
-            "use versioned::versioned; use versioned as api; #[api::versioned(stable_id=\"billing.invoice.issued\")] struct Invoice {}",
-            "mod records { use versioned::{versioned, Schema}; #[versioned(stable_id=\"billing.invoice.issued\")] struct Invoice {} }",
-            "pub use versioned::versioned; mod records { use crate::versioned; #[versioned(stable_id=\"billing.invoice.issued\")] struct Invoice {} }",
+            "use versioned::versioned; #[versioned::versioned(stable_name=\"billing.invoice.issued\")] struct Invoice {}",
+            "use versioned::versioned; #[::versioned::versioned(stable_name=\"billing.invoice.issued\")] struct Invoice {}",
+            "use versioned::versioned as evolve; #[evolve(stable_name=\"billing.invoice.issued\")] struct Invoice {}",
+            "use versioned::versioned; use versioned as api; #[api::versioned(stable_name=\"billing.invoice.issued\")] struct Invoice {}",
+            "mod records { use versioned::{versioned, Schema}; #[versioned(stable_name=\"billing.invoice.issued\")] struct Invoice {} }",
+            "pub use versioned::versioned; mod records { use crate::versioned; #[versioned(stable_name=\"billing.invoice.issued\")] struct Invoice {} }",
         ] {
             fs::write(&library, source).unwrap();
             let found = discover(root.path(), &library, &["versioned".to_owned()]).unwrap();
@@ -402,7 +402,7 @@ mod tests {
         }
         fs::write(
             &library,
-            "use history_api::{versioned, Schema}; #[versioned(stable_id=\"billing.invoice.issued\")] struct Invoice {}",
+            "use history_api::{versioned, Schema}; #[versioned(stable_name=\"billing.invoice.issued\")] struct Invoice {}",
         )
         .unwrap();
         assert_eq!(
@@ -419,15 +419,15 @@ mod tests {
         let root = tempfile::tempdir().expect("package");
         let library = root.path().join("lib.rs");
         for source in [
-            "#[versioned(stable_id=\"billing.invoice.issued\")] struct Invoice {}",
-            "use versioned::history; #[history(stable_id=\"billing.invoice.issued\")] struct Invoice {}",
-            "#[versioned::history(stable_id=\"billing.invoice.issued\")] struct Invoice {}",
-            "use versioned::typehistory; #[typehistory(stable_id=\"billing.invoice.issued\")] struct Invoice {}",
-            "#[versioned::typehistory(stable_id=\"billing.invoice.issued\")] struct Invoice {}",
-            "#[versioned::nested::versioned(stable_id=\"billing.invoice.issued\")] struct Invoice {}",
-            "use versioned::versioned as evolve; #[evolve::versioned(stable_id=\"billing.invoice.issued\")] struct Invoice {}",
-            "mod versioned {} #[versioned::versioned(stable_id=\"billing.invoice.issued\")] struct Invoice {}",
-            "use versioned::History as versioned; #[versioned::versioned(stable_id=\"billing.invoice.issued\")] struct Invoice {}",
+            "#[versioned(stable_name=\"billing.invoice.issued\")] struct Invoice {}",
+            "use versioned::history; #[history(stable_name=\"billing.invoice.issued\")] struct Invoice {}",
+            "#[versioned::history(stable_name=\"billing.invoice.issued\")] struct Invoice {}",
+            "use versioned::typehistory; #[typehistory(stable_name=\"billing.invoice.issued\")] struct Invoice {}",
+            "#[versioned::typehistory(stable_name=\"billing.invoice.issued\")] struct Invoice {}",
+            "#[versioned::nested::versioned(stable_name=\"billing.invoice.issued\")] struct Invoice {}",
+            "use versioned::versioned as evolve; #[evolve::versioned(stable_name=\"billing.invoice.issued\")] struct Invoice {}",
+            "mod versioned {} #[versioned::versioned(stable_name=\"billing.invoice.issued\")] struct Invoice {}",
+            "use versioned::History as versioned; #[versioned::versioned(stable_name=\"billing.invoice.issued\")] struct Invoice {}",
         ] {
             fs::write(&library, source).unwrap();
             assert!(
@@ -445,9 +445,9 @@ mod tests {
         let root = tempfile::tempdir().expect("package");
         let library = root.path().join("lib.rs");
         for source in [
-            "#[cfg(feature=\"optional\")] mod records { use versioned::versioned; #[versioned(stable_id=\"billing.invoice.issued\")] struct Invoice {} }",
-            "#[cfg(feature=\"optional\")] mod records { use versioned::{versioned, Schema}; #[versioned(stable_id=\"billing.invoice.issued\")] struct Invoice {} }",
-            "#[cfg(feature=\"optional\")] use versioned::versioned; #[versioned(stable_id=\"billing.invoice.issued\")] struct Invoice {}",
+            "#[cfg(feature=\"optional\")] mod records { use versioned::versioned; #[versioned(stable_name=\"billing.invoice.issued\")] struct Invoice {} }",
+            "#[cfg(feature=\"optional\")] mod records { use versioned::{versioned, Schema}; #[versioned(stable_name=\"billing.invoice.issued\")] struct Invoice {} }",
+            "#[cfg(feature=\"optional\")] use versioned::versioned; #[versioned(stable_name=\"billing.invoice.issued\")] struct Invoice {}",
         ] {
             fs::write(&library, source).unwrap();
             assert!(
@@ -465,10 +465,10 @@ mod tests {
         let root = tempfile::tempdir().expect("package");
         let library = root.path().join("lib.rs");
         for source in [
-            "use crate::b as a; use crate::a as b; #[a::versioned(stable_id=\"billing.invoice.issued\")] struct Invoice {}",
-            "use crate::a::nested as a; #[a::versioned(stable_id=\"billing.invoice.issued\")] struct Invoice {}",
-            "#[cfg(feature=\"optional\")] pub use history_api as api; #[crate::api::versioned(stable_id=\"billing.invoice.issued\")] struct Invoice {}",
-            "#[cfg(feature=\"optional\")] mod api { pub use history_api::versioned; } #[crate::api::versioned(stable_id=\"billing.invoice.issued\")] struct Invoice {}",
+            "use crate::b as a; use crate::a as b; #[a::versioned(stable_name=\"billing.invoice.issued\")] struct Invoice {}",
+            "use crate::a::nested as a; #[a::versioned(stable_name=\"billing.invoice.issued\")] struct Invoice {}",
+            "#[cfg(feature=\"optional\")] pub use history_api as api; #[crate::api::versioned(stable_name=\"billing.invoice.issued\")] struct Invoice {}",
+            "#[cfg(feature=\"optional\")] mod api { pub use history_api::versioned; } #[crate::api::versioned(stable_name=\"billing.invoice.issued\")] struct Invoice {}",
         ] {
             fs::write(&library, source).unwrap();
             assert!(
@@ -483,10 +483,10 @@ mod tests {
         let root = tempfile::tempdir().expect("package");
         let library = root.path().join("lib.rs");
         for source in [
-            "#[cfg(any())] #[history_api::versioned(stable_id=\"billing.invoice.issued\")] struct Invoice {}",
-            "use history_api::*; #[versioned(stable_id=\"billing.invoice.issued\")] struct Invoice {}",
-            "#[history_api::versioned(stable_id=\"billing.invoice.issued\")] enum Invoice {}",
-            "#[history_api::versioned(stable_id=\"billing.invoice.issued\")] struct Invoice {} #[history_api::versioned(stable_id=\"billing.invoice.issued\")] struct Other {}",
+            "#[cfg(any())] #[history_api::versioned(stable_name=\"billing.invoice.issued\")] struct Invoice {}",
+            "use history_api::*; #[versioned(stable_name=\"billing.invoice.issued\")] struct Invoice {}",
+            "#[history_api::versioned(stable_name=\"billing.invoice.issued\")] enum Invoice {}",
+            "#[history_api::versioned(stable_name=\"billing.invoice.issued\")] struct Invoice {} #[history_api::versioned(stable_name=\"billing.invoice.issued\")] struct Other {}",
         ] {
             fs::write(&library, source).unwrap();
             assert!(
@@ -494,7 +494,7 @@ mod tests {
                 "{source}"
             );
         }
-        fs::write(&library, "mod history_api {} #[history_api::versioned(stable_id=\"billing.invoice.issued\")] struct Invoice {}").unwrap();
+        fs::write(&library, "mod history_api {} #[history_api::versioned(stable_name=\"billing.invoice.issued\")] struct Invoice {}").unwrap();
         assert!(discover(root.path(), &library, &["history_api".to_owned()])
             .unwrap()
             .declarations

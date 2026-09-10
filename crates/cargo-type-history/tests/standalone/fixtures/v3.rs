@@ -16,7 +16,7 @@ impl Display for ConvertError {
 
 impl Error for ConvertError {}
 
-#[versioned(stable_id = "billing.invoice.issued")]
+#[versioned(stable_name = "billing.invoice.issued")]
 pub struct Invoice {
     #[history(removed_at = v2)]
     pub legacy: String,
@@ -45,14 +45,14 @@ fn stringify(value: u64) -> Result<String, ConvertError> {
 #[cfg(test)]
 mod tests {
     use super::{ConvertError, Invoice, InvoiceV3, TRACE};
-    use history_api::{decode, DecodeError, DecodeFailureKind, HasHistory, PayloadVersion, ReadError, TypeIdentity};
+    use history_api::{decode, DecodeError, DecodeFailureKind, HasHistory, PayloadVersion, ReadError, StableName};
     use serde_json::Error as JsonError;
     use std::error::Error;
 
     #[test]
     fn exact_decoding_runs_adjacent_steps_and_borrows_before_moves() {
         TRACE.with(|trace| trace.borrow_mut().clear());
-        let value = decode::<Invoice>(&Invoice::TYPE, PayloadVersion::INITIAL, br#"{"legacy":"INV-42","count":42}"#).unwrap();
+        let value = decode::<Invoice>(&Invoice::STABLE_NAME, PayloadVersion::INITIAL, br#"{"legacy":"INV-42","count":42}"#).unwrap();
         assert_eq!((&*value.count, &*value.label, value.revision), ("42", "INV-42", 7));
         TRACE.with(|trace| assert_eq!(&*trace.borrow(), &["label", "widen", "stringify"]));
         let _: Invoice = InvoiceV3 { count: "4".into(), label: "current".into(), revision: 7 };
@@ -62,7 +62,7 @@ mod tests {
 
     #[test]
     fn failure_preserves_original_and_adjacent_versions_and_typed_cause() {
-        let failure = decode::<Invoice>(&Invoice::TYPE, PayloadVersion::INITIAL, br#"{"legacy":"INV-13","count":13}"#).unwrap_err();
+        let failure = decode::<Invoice>(&Invoice::STABLE_NAME, PayloadVersion::INITIAL, br#"{"legacy":"INV-13","count":13}"#).unwrap_err();
         let ReadError::Decode(error) = &failure else { panic!("expected adjacent failure") };
         assert_eq!(error.source_version().get(), 1);
         assert_eq!(error.adjacent_from().unwrap().get(), 2);
@@ -76,7 +76,7 @@ mod tests {
     }
 
     #[test]
-    fn strict_json_exact_version_and_identity_precede_conversion() {
+    fn strict_json_exact_version_and_stable_name_precede_conversion() {
         TRACE.with(|trace| trace.borrow_mut().clear());
         for bytes in [b"not JSON".as_slice(), br#"{"count":"42","label":"ok","revision":7}"#] {
             let failure = Invoice::history().decode(PayloadVersion::try_from_raw(99).unwrap(), bytes).unwrap_err();
@@ -88,7 +88,7 @@ mod tests {
             assert_eq!(failure.kind(), DecodeFailureKind::Decode);
             assert!(failure.source().unwrap().is::<JsonError>());
         }
-        let wrong = TypeIdentity::new("billing.other.record");
+        let wrong = StableName::new("billing.other.record");
         assert!(matches!(decode::<Invoice>(&wrong, PayloadVersion::INITIAL, b"invalid"), Err(ReadError::TypeMismatch { .. })));
         TRACE.with(|trace| assert!(trace.borrow().is_empty()));
     }

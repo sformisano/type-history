@@ -14,7 +14,7 @@ use syn::{Attribute, Error, Ident, Result, Type};
 
 use crate::model::NamedField;
 
-/// Default retained floor for a new history identity.
+/// Default retained floor for a new history stable name.
 pub const DEFAULT_RETAINED_FLOOR: u32 = 1;
 
 mod attributes;
@@ -240,7 +240,7 @@ impl HistoryPlan {
         &self,
         event_marker: &Ident,
         fields: &[NamedField],
-        identity: &str,
+        stable_name: &str,
         baseline: &HistoryLedger<M>,
         metadata: &M,
     ) -> Result<AuthorizedHistory> {
@@ -252,11 +252,11 @@ impl HistoryPlan {
             ));
         }
         baseline
-            .authorize_history(identity, metadata, *self)
+            .authorize_history(stable_name, metadata, *self)
             .map_err(|reason| Error::new_spanned(event_marker, reason))?;
         let history = self.expand_unchecked(event_marker, fields)?;
         for version in &history.versions {
-            let Some(snapshot) = baseline.snapshot(identity, version.version) else {
+            let Some(snapshot) = baseline.snapshot(stable_name, version.version) else {
                 continue;
             };
             if snapshot.reset_draft {
@@ -266,7 +266,7 @@ impl HistoryPlan {
                 return Err(Error::new_spanned(
                     event_marker,
                     format!(
-                        "{identity} V{}: record authority must describe a record",
+                        "{stable_name} V{}: record authority must describe a record",
                         version.version
                     ),
                 ));
@@ -284,18 +284,18 @@ impl HistoryPlan {
                 let name = field.name.to_string();
                 let name = name.strip_prefix("r#").unwrap_or(&name);
                 if !expected.contains(name) {
-                    return Err(Error::new_spanned(&field.name, format!("{identity} V{} field `{name}` did not exist in frozen history; use added_in at its actual successor boundary instead of inventing an earlier field", version.version)));
+                    return Err(Error::new_spanned(&field.name, format!("{stable_name} V{} field `{name}` did not exist in frozen history; use added_in at its actual successor boundary instead of inventing an earlier field", version.version)));
                 }
             }
             if let Some(name) = expected.iter().find(|name| !actual.contains(**name)) {
-                return Err(Error::new_spanned(event_marker, format!("{identity} V{} field `{name}` disappeared from frozen history; restore its lifetime and use removed_at at a successor boundary", version.version)));
+                return Err(Error::new_spanned(event_marker, format!("{stable_name} V{} field `{name}` disappeared from frozen history; restore its lifetime and use removed_at at a successor boundary", version.version)));
             }
         }
         let frozen_shapes = history
             .versions
             .iter()
             .filter_map(|version| {
-                let snapshot = baseline.snapshot(identity, version.version)?;
+                let snapshot = baseline.snapshot(stable_name, version.version)?;
                 (!snapshot.reset_draft).then(|| (version.version, snapshot.schema.shape()))
             })
             .collect();
@@ -308,7 +308,7 @@ impl HistoryPlan {
     /// Expand the dense retained range.
     ///
     /// Private because the authority check belongs to the caller that knows
-    /// the history identity; see this module's documentation.
+    /// the history stable name; see this module's documentation.
     fn expand_unchecked(
         &self,
         event_marker: &Ident,

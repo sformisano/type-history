@@ -1,4 +1,4 @@
-use history_api::{DecodeContext, DecodeFailureKind, PayloadVersion, TypeIdentity};
+use history_api::{DecodeContext, DecodeFailureKind, PayloadVersion, StableName};
 use serde::Serialize;
 use serde_json::Error as JsonError;
 
@@ -13,14 +13,14 @@ impl ToRedactedError for CallbackError {
 #[derive(Debug, Serialize)]
 pub struct FrontendError { context: DecodeContext, cause: Option<ErrorTree> }
 impl FrontendError {
-    pub fn unsupported(identity: TypeIdentity, version: PayloadVersion) -> Self {
-        Self { context: DecodeContext::unsupported(identity, version), cause: None }
+    pub fn unsupported(stable_name: StableName, version: PayloadVersion) -> Self {
+        Self { context: DecodeContext::unsupported(stable_name, version), cause: None }
     }
-    pub fn decode(identity: TypeIdentity, version: PayloadVersion, _: JsonError) -> Self {
-        Self { context: DecodeContext::decode(identity, version), cause: Some(ErrorTree { variant: "Wire", safe_code: 0 }) }
+    pub fn decode(stable_name: StableName, version: PayloadVersion, _: JsonError) -> Self {
+        Self { context: DecodeContext::decode(stable_name, version), cause: Some(ErrorTree { variant: "Wire", safe_code: 0 }) }
     }
-    pub fn upcast<E: ToRedactedError>(identity: TypeIdentity, version: PayloadVersion, from: PayloadVersion, to: PayloadVersion, error: E) -> Self {
-        Self { context: DecodeContext::upcast(identity, version, from, to), cause: Some(error.to_redacted_error()) }
+    pub fn upcast<E: ToRedactedError>(stable_name: StableName, version: PayloadVersion, from: PayloadVersion, to: PayloadVersion, error: E) -> Self {
+        Self { context: DecodeContext::upcast(stable_name, version, from, to), cause: Some(error.to_redacted_error()) }
     }
 }
 include!(concat!(env!("OUT_DIR"), "/history.rs"));

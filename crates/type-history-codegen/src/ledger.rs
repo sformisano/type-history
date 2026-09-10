@@ -7,7 +7,7 @@ use std::{
     fs,
     path::{Path, PathBuf},
 };
-use type_history_core::TypeIdentity;
+use type_history_core::StableName;
 
 mod unique_json;
 
@@ -28,8 +28,8 @@ impl SchemaIdentity {
         &self.prefix
     }
     /// Complete expected schema ID for the logical type.
-    pub fn schema_id(&self, identity: &str) -> String {
-        format!("{}{identity}", self.prefix)
+    pub fn schema_id(&self, stable_name: &str) -> String {
+        format!("{}{stable_name}", self.prefix)
     }
 }
 
@@ -119,11 +119,11 @@ impl<M: Clone + Eq + Serialize + DeserializeOwned> HistoryLedger<M> {
         let raw: BTreeMap<String, BTreeMap<String, Snapshot<M>>> =
             serde_json::from_slice(bytes).map_err(|error| error.to_string())?;
         let mut entries = BTreeMap::new();
-        for (identity, raw_versions) in raw {
-            TypeIdentity::try_from(identity.clone())
-                .map_err(|error| format!("invalid type identity `{identity}`: {error}"))?;
+        for (stable_name, raw_versions) in raw {
+            StableName::try_from(stable_name.clone())
+                .map_err(|error| format!("invalid stable name `{stable_name}`: {error}"))?;
             if raw_versions.is_empty() {
-                return Err(format!("{identity} records no versions"));
+                return Err(format!("{stable_name} records no versions"));
             }
             let mut versions = BTreeMap::new();
             for (key, snapshot) in raw_versions {
@@ -133,9 +133,9 @@ impl<M: Clone + Eq + Serialize + DeserializeOwned> HistoryLedger<M> {
                         "version key `{key}` must be a canonical positive integer"
                     ));
                 }
-                if snapshot.schema.identity() != schema_identity.schema_id(&identity) {
+                if snapshot.schema.identity() != schema_identity.schema_id(&stable_name) {
                     return Err(format!(
-                        "{identity} V{version}: schema $id disagrees with its type identity"
+                        "{stable_name} V{version}: schema $id disagrees with its stable name"
                     ));
                 }
                 versions.insert(version, snapshot);
@@ -151,32 +151,32 @@ impl<M: Clone + Eq + Serialize + DeserializeOwned> HistoryLedger<M> {
             for (offset, (version, snapshot)) in versions.iter().enumerate() {
                 if &snapshot.metadata != metadata {
                     return Err(format!(
-                        "{identity} disagrees about its metadata across retained versions"
+                        "{stable_name} disagrees about its metadata across retained versions"
                     ));
                 }
                 if snapshot.reset_draft && version != head {
-                    return Err(format!("{identity} V{version}: reset_draft is permitted only on the latest retained version V{head}"));
+                    return Err(format!("{stable_name} V{version}: reset_draft is permitted only on the latest retained version V{head}"));
                 }
                 let expected = floor
                     .checked_add(u32::try_from(offset).map_err(|_| {
-                        format!("{identity} records more versions than the supported range")
+                        format!("{stable_name} records more versions than the supported range")
                     })?)
                     .ok_or_else(|| {
-                        format!("{identity} records a version above the supported range")
+                        format!("{stable_name} records a version above the supported range")
                     })?;
                 if *version != expected {
-                    return Err(format!("{identity} retains a non-contiguous range; expected V{expected}, found V{version}"));
+                    return Err(format!("{stable_name} retains a non-contiguous range; expected V{expected}, found V{version}"));
                 }
             }
-            entries.insert(identity, versions);
+            entries.insert(stable_name, versions);
         }
         Ok(Self {
             entries,
             schema_identity,
         })
     }
-    /// Every retained logical identity in deterministic order.
-    pub fn identities(&self) -> impl Iterator<Item = &str> {
+    /// Every retained stable name in deterministic order.
+    pub fn stable_names(&self) -> impl Iterator<Item = &str> {
         self.entries.keys().map(String::as_str)
     }
     /// Immutable complete authority inventory.
@@ -198,35 +198,35 @@ impl<M: Clone + Eq + Serialize + DeserializeOwned> HistoryLedger<M> {
         )
     }
     /// One frozen shape or latest reset reservation.
-    pub fn snapshot(&self, identity: &str, version: u32) -> Option<&Snapshot<M>> {
-        self.entries.get(identity)?.get(&version)
+    pub fn snapshot(&self, stable_name: &str, version: u32) -> Option<&Snapshot<M>> {
+        self.entries.get(stable_name)?.get(&version)
     }
     /// Authorize the source range and metadata before dense reconstruction.
     pub fn authorize_history(
         &self,
-        identity: &str,
+        stable_name: &str,
         metadata: &M,
         plan: HistoryPlan,
     ) -> Result<HistoryReadiness, String> {
-        TypeIdentity::try_from(identity.to_owned()).map_err(|error| error.to_string())?;
-        self.authority(identity)
+        StableName::try_from(stable_name.to_owned()).map_err(|error| error.to_string())?;
+        self.authority(stable_name)
             .permits(plan.floor, plan.head)
-            .map_err(|reason| format!("{identity}: {reason}"))?;
-        let Some(versions) = self.entries.get(identity) else {
+            .map_err(|reason| format!("{stable_name}: {reason}"))?;
+        let Some(versions) = self.entries.get(stable_name) else {
             return Ok(HistoryReadiness::Draft);
         };
         if versions
             .values()
             .any(|snapshot| &snapshot.metadata != metadata)
         {
-            return Err(format!("{identity}: source metadata differs from frozen history; restore its original metadata"));
+            return Err(format!("{stable_name}: source metadata differs from frozen history; restore its original metadata"));
         }
         let (head, latest) = versions
             .last_key_value()
             .expect("validated non-empty inventory");
         if latest.reset_draft {
             if plan.head != *head {
-                return Err(format!("{identity} V{head}: a reset draft cannot have a successor; freeze or undo this exact reset first"));
+                return Err(format!("{stable_name} V{head}: a reset draft cannot have a successor; freeze or undo this exact reset first"));
             }
             Ok(HistoryReadiness::ResetDraft)
         } else if plan.head == *head {
@@ -235,10 +235,10 @@ impl<M: Clone + Eq + Serialize + DeserializeOwned> HistoryLedger<M> {
             Ok(HistoryReadiness::Draft)
         }
     }
-    /// Committed range authority for one logical identity.
-    pub fn authority(&self, identity: &str) -> LedgerAuthority {
-        match self.entries.get(identity) {
-            None => LedgerAuthority::NewIdentity,
+    /// Committed range authority for one stable name.
+    pub fn authority(&self, stable_name: &str) -> LedgerAuthority {
+        match self.entries.get(stable_name) {
+            None => LedgerAuthority::NewHistory,
             Some(versions) => {
                 let mut keys = versions.keys().copied();
                 let floor = keys.next().expect("validated non-empty version map");
@@ -249,11 +249,11 @@ impl<M: Clone + Eq + Serialize + DeserializeOwned> HistoryLedger<M> {
     }
 }
 
-/// What committed authority permits for one event identity.
+/// What committed authority permits for one history.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LedgerAuthority {
-    /// Nothing is committed for this identity. Only a V1 draft is valid.
-    NewIdentity,
+    /// Nothing is committed for this stable name. Only a V1 draft is valid.
+    NewHistory,
     /// A contiguous committed range. Only that head, or the one permitted
     /// successor draft, is valid.
     Frozen {
@@ -278,16 +278,16 @@ impl LedgerAuthority {
             ));
         }
         match *self {
-            Self::NewIdentity => {
+            Self::NewHistory => {
                 if floor != crate::history::DEFAULT_RETAINED_FLOOR {
                     return Err(format!(
-                        "retained floor V{floor} is not authorized; no committed history exists for this type, so a new identity starts at V{}. Import a real baseline with the explicit import command before declaring a higher floor",
+                        "retained floor V{floor} is not authorized; no committed history exists for this type, so a new stable name starts at V{}. Import a real baseline with the explicit import command before declaring a higher floor",
                         crate::history::DEFAULT_RETAINED_FLOOR
                     ));
                 }
                 if head != crate::history::DEFAULT_RETAINED_FLOOR {
                     return Err(format!(
-                        "inferred current version V{head} is not authorized; a new type identity begins with only V{}. Freeze V{} before declaring the next version",
+                        "inferred current version V{head} is not authorized; a new stable name begins with only V{}. Freeze V{} before declaring the next version",
                         crate::history::DEFAULT_RETAINED_FLOOR,
                         crate::history::DEFAULT_RETAINED_FLOOR
                     ));
@@ -333,7 +333,7 @@ impl LedgerAuthority {
 impl Display for LedgerAuthority {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
         match self {
-            Self::NewIdentity => formatter.write_str("no committed history"),
+            Self::NewHistory => formatter.write_str("no committed history"),
             Self::Frozen { floor, head } => write!(formatter, "committed V{floor}..=V{head}"),
         }
     }

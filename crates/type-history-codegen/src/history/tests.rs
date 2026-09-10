@@ -20,9 +20,9 @@ fn opened() -> Ident {
 #[test]
 fn frozen_inventory_rejects_an_update_that_invents_a_predecessor_field() {
     use crate::ledger::{HistoryLedger, RecordMetadata, SchemaIdentity};
-    let identity = "fixture.aggregates.account.events.opened";
+    let stable_name = "fixture.aggregates.account.events.opened";
     let baseline = HistoryLedger::<RecordMetadata>::parse(format!(
-        r#"{{"{identity}":{{"1":{{"metadata":{{}},"schema":{{"$schema":"https://json-schema.org/draft/2020-12/schema","$id":"urn:typehistory:schema:{identity}","type":"object","additionalProperties":false,"properties":{{}},"required":[]}}}}}}}}"#
+        r#"{{"{stable_name}":{{"1":{{"metadata":{{}},"schema":{{"$schema":"https://json-schema.org/draft/2020-12/schema","$id":"urn:typehistory:schema:{stable_name}","type":"object","additionalProperties":false,"properties":{{}},"required":[]}}}}}}}}"#
     ).as_bytes(), SchemaIdentity::new("urn:typehistory:schema:")).expect("empty frozen V1");
     let fields = vec![field(
         vec![
@@ -32,9 +32,13 @@ fn frozen_inventory_rejects_an_update_that_invents_a_predecessor_field() {
         parse_quote!(String),
     )];
     let plan = HistoryPlan::infer(&opened(), None, &fields).unwrap();
-    let Err(error) =
-        plan.expand_authorized(&opened(), &fields, identity, &baseline, &RecordMetadata {})
-    else {
+    let Err(error) = plan.expand_authorized(
+        &opened(),
+        &fields,
+        stable_name,
+        &baseline,
+        &RecordMetadata {},
+    ) else {
         panic!("an update cannot invent a frozen predecessor field");
     };
     assert!(error.to_string().contains("added_in"), "{error}");

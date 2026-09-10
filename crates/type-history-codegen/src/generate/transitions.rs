@@ -21,7 +21,7 @@ pub(super) fn generate(context: &Context<'_>) -> TokenStream {
         let source_version = format_ident!("__type_history_source_version", span = Span::mixed_site());
         let from = context.version(transition.from);
         let to = context.version(transition.to);
-        let identity = context.identity();
+        let stable_name = context.stable_name();
         let mut borrowed = Vec::new();
         let mut assigned = Vec::new();
         let mut carried = Vec::new();
@@ -36,7 +36,7 @@ pub(super) fn generate(context: &Context<'_>) -> TokenStream {
             assembled.push(quote!(#name: #local));
             let on_error = {
                 let error = format_ident!("__type_history_error", span = Span::mixed_site());
-                quote!(|#error| #error_type::upcast(#identity, #source_version, #from, #to, #error))
+                quote!(|#error| #error_type::upcast(#stable_name, #source_version, #from, #to, #error))
             };
             match field {
                 FieldTransition::Carry { name } => carried.push(with_field_lints(quote!(let #local = #previous.#name;))),

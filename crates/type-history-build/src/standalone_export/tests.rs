@@ -12,7 +12,7 @@ fn inventory() -> PackageInventory<RecordMetadata> {
         root: "/captured/billing".into(),
         declarations: vec![Declaration {
             name: "Invoice".into(),
-            identity: ID.into(),
+            stable_name: ID.into(),
             metadata: RecordMetadata {},
             version: 2,
             retained_from: 1,
@@ -23,8 +23,8 @@ fn inventory() -> PackageInventory<RecordMetadata> {
         declaration_count: 1,
     }
 }
-fn row(identity: &str, versions: &[u32]) -> Value {
-    json!({"identity": identity, "versions": versions.iter().map(|version| json!({
+fn row(stable_name: &str, versions: &[u32]) -> Value {
+    json!({"stable_name": stable_name, "versions": versions.iter().map(|version| json!({
         "version": version,
         "wire": {"type":"object", "properties":{"owner":{"type":"string"}}, "required":["owner"], "additionalProperties":false}
     })).collect::<Vec<_>>()})
@@ -37,9 +37,9 @@ fn output(rows: &[Value]) -> Vec<u8> {
 }
 
 #[test]
-fn complete_exports_keep_exact_identity_versions_schema_and_empty_metadata() {
+fn complete_exports_keep_exact_stable_name_versions_schema_and_empty_metadata() {
     let ledger = decode(&inventory(), &output(&[row(ID, &[1, 2])])).unwrap();
-    assert_eq!(ledger.identities().collect::<Vec<_>>(), vec![ID]);
+    assert_eq!(ledger.stable_names().collect::<Vec<_>>(), vec![ID]);
     assert_eq!(
         ledger.entries()[ID].keys().copied().collect::<Vec<_>>(),
         vec![1, 2]

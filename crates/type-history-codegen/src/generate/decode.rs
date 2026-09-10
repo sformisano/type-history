@@ -10,7 +10,7 @@ pub(super) fn generate(context: &Context<'_>) -> TokenStream {
     let error_type = &context.paths.error;
     let function = context.helper("decode_history");
     let latest = context.payload(context.history.head());
-    let identity = context.identity();
+    let stable_name = context.stable_name();
     let version = format_ident!("__type_history_source_version", span = Span::mixed_site());
     let bytes = format_ident!("__type_history_bytes", span = Span::mixed_site());
     let error = format_ident!("__type_history_error", span = Span::mixed_site());
@@ -21,10 +21,10 @@ pub(super) fn generate(context: &Context<'_>) -> TokenStream {
                 -> ::core::result::Result<#latest, #error_type>
             {
                 if #version.get() != #current {
-                    return ::core::result::Result::Err(#error_type::unsupported(#identity, #version));
+                    return ::core::result::Result::Err(#error_type::unsupported(#stable_name, #version));
                 }
                 #support::serde_json::from_slice::<#latest>(#bytes)
-                    .map_err(|#error| #error_type::decode(#identity, #version, #error))
+                    .map_err(|#error| #error_type::decode(#stable_name, #version, #error))
             }
         };
     }
@@ -43,7 +43,7 @@ pub(super) fn generate(context: &Context<'_>) -> TokenStream {
         quote! {
             #number => #state_type::#variant(
                 #support::serde_json::from_slice::<#payload>(#bytes)
-                    .map_err(|#error| #error_type::decode(#identity, #version, #error))?
+                    .map_err(|#error| #error_type::decode(#stable_name, #version, #error))?
             )
         }
     });
@@ -63,7 +63,7 @@ pub(super) fn generate(context: &Context<'_>) -> TokenStream {
             enum #state_type { #(#variants),* }
             let mut #state = match #version.get() {
                 #(#decoding,)*
-                _ => return ::core::result::Result::Err(#error_type::unsupported(#identity, #version)),
+                _ => return ::core::result::Result::Err(#error_type::unsupported(#stable_name, #version)),
             };
             loop {
                 #state = match #state {

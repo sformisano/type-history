@@ -24,7 +24,7 @@ impl ToRedacted for ConversionError {
     }
 }
 
-#[history_api::versioned(stable_id = "example.stored.secret", redacted)]
+#[history_api::versioned(stable_name = "example.stored.secret", redacted)]
 pub struct Secure {
     #[sensitive]
     #[history(updated_at = v2, previous_type = String, cast_from_previous_value = convert)]
@@ -46,7 +46,7 @@ mod stored_redacted_tests {
     #[test]
     fn raw_historical_storage_and_safe_delayed_conversion_are_separate() {
         CALLS.with(|calls| calls.set(0));
-        let wire = format!(r#"{{"example.stored.secret":{{"1":{{"value":"{SECRET}"}}}}}}"#);
+        let wire = format!(r#"{{"stable_name":"example.stored.secret","version":1,"payload":{{"value":"{SECRET}"}}}}"#);
         let record: Versioned<Secure> = serde_json::from_str(&wire).unwrap();
         assert_eq!(serde_json::to_string(&record).unwrap(), wire);
         assert!(!format!("{record:?}").contains(SECRET));
@@ -77,10 +77,11 @@ mod stored_redacted_tests {
     fn malformed_redacted_envelopes_discard_parser_details_without_conversion() {
         CALLS.with(|calls| calls.set(0));
         for wire in [
-            format!(r#"{{"example.stored.secret":{{"2":{{"value":"{SECRET}"}}}}}}"#),
-            format!(r#"{{"example.stored.secret":{{"1":{{"value":"ok","{SECRET}":true}}}}}}"#),
-            format!(r#"{{"example.stored.secret":{{"1":{{"value":"{SECRET}"}},"2":{{}}}}}}"#),
-            format!(r#"{{"{SECRET}":{{"1":{{"value":"ok"}}}}}}"#),
+            format!(r#"{{"payload":{{"value":"{SECRET}"}},"version":2,"stable_name":"example.stored.secret"}}"#),
+            format!(r#"{{"stable_name":"example.stored.secret","version":1,"payload":{{"value":"ok","{SECRET}":true}}}}"#),
+            format!(r#"{{"stable_name":"example.stored.secret","version":1,"payload":{{"value":"{SECRET}"}},"payload":{{}}}}"#),
+            format!(r#"{{"payload":{{"value":"ok"}},"version":1,"stable_name":"{SECRET}"}}"#),
+            format!(r#"{{"payload":{{"value":"{SECRET}","value":"ok"}},"version":1,"stable_name":"example.stored.secret"}}"#),
         ] {
             let error = serde_json::from_str::<Versioned<Secure>>(&wire).unwrap_err();
             assert!(

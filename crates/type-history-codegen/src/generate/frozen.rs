@@ -27,7 +27,7 @@ pub(super) fn generate(context: &Context<'_>) -> TokenStream {
             let expected_shape = shape_tokens(&expected.schema, &resolved);
             let message = format!(
                 "{} V{} field `{}` changed its frozen wire shape; restore its type/history boundaries and add the next version",
-                context.identity, retained.version, expected.name
+                context.stable_name, retained.version, expected.name
             );
             assertions.push(quote! {
                 const _: () = assert!(
@@ -40,7 +40,7 @@ pub(super) fn generate(context: &Context<'_>) -> TokenStream {
         let expected = shape_tokens(shape, &resolved);
         let message = format!(
             "{} V{}: frozen payload changed; restore its history and add the next version",
-            context.identity, retained.version
+            context.stable_name, retained.version
         );
         assertions.push(quote! {
             const _: () = assert!(

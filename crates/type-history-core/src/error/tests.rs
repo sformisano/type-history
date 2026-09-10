@@ -10,11 +10,11 @@ use std::{
     },
 };
 
-use serde_json::Error as JsonError;
+use serde_json::{to_value, Error as JsonError};
 
 use crate::{
     decode, DecodeError, DecodeFailureKind, HasHistory, History, PayloadVersion, ReadError,
-    TypeIdentity,
+    StableName,
 };
 
 #[derive(Debug)]
@@ -50,7 +50,7 @@ fn version(raw: u32) -> PayloadVersion {
 fn upcast_owns_the_original_error_and_preserves_each_source() {
     let drops = Arc::new(AtomicUsize::new(0));
     let error = DecodeError::upcast(
-        TypeIdentity::new("billing.invoice.issued"),
+        StableName::new("billing.invoice.issued"),
         version(1),
         version(2),
         version(3),
@@ -64,8 +64,12 @@ fn upcast_owns_the_original_error_and_preserves_each_source() {
     assert_eq!(error.source_version(), version(1));
     assert_eq!(error.adjacent_from(), Some(version(2)));
     assert_eq!(error.adjacent_to(), Some(version(3)));
-    assert_eq!(error.identity().as_str(), "billing.invoice.issued");
-    assert_eq!(error.context().identity(), error.identity());
+    assert_eq!(error.stable_name().as_str(), "billing.invoice.issued");
+    assert_eq!(error.context().stable_name(), error.stable_name());
+    assert_eq!(
+        to_value(error.context()).unwrap()["stable_name"],
+        "billing.invoice.issued"
+    );
     assert_eq!(drops.load(Ordering::SeqCst), 0);
 
     let failure = ReadError::Decode(error);
@@ -96,27 +100,27 @@ fn upcast_owns_the_original_error_and_preserves_each_source() {
 }
 
 #[test]
-fn identity_mismatch_returns_before_invoking_the_decoder() {
+fn stable_name_mismatch_returns_before_invoking_the_decoder() {
     struct Current;
 
     impl HasHistory for Current {
-        const TYPE: TypeIdentity = TypeIdentity::new("billing.invoice.issued");
+        const STABLE_NAME: StableName = StableName::new("billing.invoice.issued");
         const VERSION: PayloadVersion = PayloadVersion::INITIAL;
 
         fn history() -> History<Self> {
-            panic!("identity mismatch must precede descriptor and byte access")
+            panic!("stable name mismatch must precede descriptor and byte access")
         }
     }
 
-    let wrong = TypeIdentity::new("billing.invoice.paid");
+    let wrong = StableName::new("billing.invoice.paid");
     let failure = match decode::<Current>(&wrong, version(1), b"not JSON") {
         Err(failure) => failure,
-        Ok(_) => panic!("wrong identity was accepted"),
+        Ok(_) => panic!("wrong stable name was accepted"),
     };
     let ReadError::TypeMismatch { expected, found } = &failure else {
-        panic!("expected identity mismatch");
+        panic!("expected stable name mismatch");
     };
-    assert_eq!(expected, &Current::TYPE);
+    assert_eq!(expected, &Current::STABLE_NAME);
     assert_eq!(found, &wrong);
     assert!(failure.source().is_none());
     assert!(failure.to_string().contains(expected.as_str()));
@@ -134,13 +138,13 @@ fn wire_failure_preserves_the_decoder_error_and_location() {
         original.to_string(),
     );
     let failure = DecodeError::decode(
-        TypeIdentity::new("billing.invoice.issued"),
+        StableName::new("billing.invoice.issued"),
         version(4),
         original,
     );
     assert_eq!(failure.kind(), DecodeFailureKind::Decode);
     assert_eq!(failure.source_version(), version(4));
-    assert_eq!(failure.identity().as_str(), "billing.invoice.issued");
+    assert_eq!(failure.stable_name().as_str(), "billing.invoice.issued");
     assert_eq!(failure.adjacent_from(), None);
     assert_eq!(failure.adjacent_to(), None);
     let source = failure
@@ -160,10 +164,10 @@ fn wire_failure_preserves_the_decoder_error_and_location() {
 
 #[test]
 fn unsupported_version_has_context_without_a_source() {
-    let failure = DecodeError::unsupported(TypeIdentity::new("billing.invoice.issued"), version(5));
+    let failure = DecodeError::unsupported(StableName::new("billing.invoice.issued"), version(5));
     assert_eq!(failure.kind(), DecodeFailureKind::UnsupportedVersion);
     assert_eq!(failure.source_version(), version(5));
-    assert_eq!(failure.identity().as_str(), "billing.invoice.issued");
+    assert_eq!(failure.stable_name().as_str(), "billing.invoice.issued");
     assert_eq!(failure.adjacent_from(), None);
     assert_eq!(failure.adjacent_to(), None);
     assert!(failure.source().is_none());
@@ -176,7 +180,7 @@ fn error_wrappers_support_thread_transfer_and_infallible_callbacks() {
     assert_error::<DecodeError>();
     assert_error::<ReadError>();
     let _: fn(
-        TypeIdentity,
+        StableName,
         PayloadVersion,
         PayloadVersion,
         PayloadVersion,

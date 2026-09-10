@@ -3,7 +3,7 @@ use serde_json::{from_slice, to_vec};
 use std::error::Error;
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let bytes = br#"{"billing.invoice.issued":{"1":{"legacy":"INV-42","count":42}}}"#;
+    let bytes = br#"{"stable_name":"billing.invoice.issued","version":1,"payload":{"legacy":"INV-42","count":42}}"#;
     let historical = Invoice::from_versioned(from_slice(bytes)?)?;
     println!("Read an older invoice as the current type: {historical:?}");
 

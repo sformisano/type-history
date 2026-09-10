@@ -11,13 +11,13 @@ mod history;
 pub mod redaction;
 #[cfg(feature = "redactable")]
 pub use redactable;
-mod identity;
+mod metadata;
 pub mod resolved;
 mod versioned;
 
 pub use error::{decode, DecodeError, HasHistory, ReadError};
 pub use history::{DecodeContext, DecodeFailureKind, History};
-pub use identity::{InvalidPayloadVersion, InvalidTypeIdentity, PayloadVersion, TypeIdentity};
+pub use metadata::{InvalidPayloadVersion, InvalidStableName, PayloadVersion, StableName};
 pub use resolved::{
     ConstantShape, FieldSchema, JsonSchemaField, ResolvedSchema, SchemaShape, WireNode,
 };

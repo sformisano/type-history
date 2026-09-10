@@ -6,7 +6,7 @@ use type_history::{decode, DecodeFailureKind, HasHistory, PayloadVersion, ReadEr
 #[test]
 fn old_bytes_reach_the_current_type() {
     let invoice = decode::<Invoice>(
-        &Invoice::TYPE,
+        &Invoice::STABLE_NAME,
         PayloadVersion::INITIAL,
         br#"{"legacy":"INV-42","count":42}"#,
     )
@@ -25,7 +25,7 @@ fn current_payload_round_trips_without_historical_backfills() {
         revision: 8,
     };
     let bytes = to_vec(&invoice).unwrap();
-    let restored = decode::<Invoice>(&Invoice::TYPE, Invoice::VERSION, &bytes).unwrap();
+    let restored = decode::<Invoice>(&Invoice::STABLE_NAME, Invoice::VERSION, &bytes).unwrap();
     assert_eq!(restored, invoice);
     assert_eq!(
         from_slice::<Value>(&bytes).unwrap(),
@@ -36,7 +36,7 @@ fn current_payload_round_trips_without_historical_backfills() {
 #[test]
 fn callback_failure_keeps_its_source_and_adjacent_versions() {
     let failure = decode::<Invoice>(
-        &Invoice::TYPE,
+        &Invoice::STABLE_NAME,
         PayloadVersion::INITIAL,
         br#"{"legacy":"INV-13","count":13}"#,
     )
@@ -62,7 +62,7 @@ fn callback_failure_keeps_its_source_and_adjacent_versions() {
 #[test]
 fn unknown_historical_fields_are_rejected() {
     let failure = decode::<Invoice>(
-        &Invoice::TYPE,
+        &Invoice::STABLE_NAME,
         PayloadVersion::INITIAL,
         br#"{"legacy":"INV-42","count":42,"unknown":true}"#,
     )

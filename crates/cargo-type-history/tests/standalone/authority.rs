@@ -1,4 +1,4 @@
-use super::support::{failure, success, text, Fixture, ID, LEDGER, V1, V2};
+use super::support::{failure, success, text, Fixture, LEDGER, STABLE_NAME, V1, V2};
 use serde_json::json;
 use toml::Value as TomlValue;
 
@@ -6,21 +6,24 @@ use toml::Value as TomlValue;
 fn standalone_frozen_inventory_and_warm_ledger_changes_are_authoritative() {
     let fixture = Fixture::frozen();
     let original = fixture.read(LEDGER);
-    let entry = fixture.ledger()[ID]["1"].clone();
+    let entry = fixture.ledger()[STABLE_NAME]["1"].clone();
     let cases = [
         ("{broken".to_owned(), "invalid committed history authority"),
         (
-            format!(r#"{{"{ID}":{{"1":{entry},"1":{entry}}}}}"#),
+            format!(r#"{{"{STABLE_NAME}":{{"1":{entry},"1":{entry}}}}}"#),
             "duplicate JSON key",
         ),
-        (format!(r#"{{"{ID}":{{"01":{entry}}}}}"#), "version"),
-        (format!(r#"{{"{ID}":{{"0":{entry}}}}}"#), "version"),
         (
-            format!(r#"{{"{ID}":{{"4294967296":{entry}}}}}"#),
+            format!(r#"{{"{STABLE_NAME}":{{"01":{entry}}}}}"#),
+            "version",
+        ),
+        (format!(r#"{{"{STABLE_NAME}":{{"0":{entry}}}}}"#), "version"),
+        (
+            format!(r#"{{"{STABLE_NAME}":{{"4294967296":{entry}}}}}"#),
             "number too large",
         ),
         (
-            format!(r#"{{"{ID}":{{"1":{entry},"3":{entry}}}}}"#),
+            format!(r#"{{"{STABLE_NAME}":{{"1":{entry},"3":{entry}}}}}"#),
             "non-contiguous",
         ),
         (
@@ -81,7 +84,7 @@ pub struct Details { pub quantity: u32 }
         "src/lib.rs",
         r#"
 mod details;
-#[history_api::versioned(stable_id = "billing.invoice.issued")]
+#[history_api::versioned(stable_name = "billing.invoice.issued")]
 pub struct Invoice { pub details: details::Details }
 "#,
     );
@@ -103,7 +106,7 @@ pub struct Invoice { pub details: details::Details }
     // A valid ledger-only wire change must also invalidate the generated comparison.
     success(&fixture.cargo(&["build", "--locked", "--offline"]));
     let mut changed = fixture.ledger();
-    changed[ID]["1"]["schema"]["properties"]["details"]["properties"]["quantity"] =
+    changed[STABLE_NAME]["1"]["schema"]["properties"]["details"]["properties"]["quantity"] =
         json!({"type":"integer", "minimum":0, "format":"uint64"});
     fixture.set_ledger(&changed);
     failure(
@@ -138,7 +141,7 @@ serde = {{ version = "1.0", features = ["derive"] }}
     fixture.write(
         "src/lib.rs",
         r#"
-#[history_api::versioned(stable_id = "billing.invoice.issued")]
+#[history_api::versioned(stable_name = "billing.invoice.issued")]
 pub struct Invoice { pub details: history_details::Details }
 "#,
     );

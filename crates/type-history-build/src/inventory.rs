@@ -29,8 +29,8 @@ pub enum Admission {
 pub struct Declaration<M> {
     /// Frontend's normalized declaration name.
     pub name: String,
-    /// Stable logical identity.
-    pub identity: String,
+    /// Stable name shared by every version of this type.
+    pub stable_name: String,
     /// Frontend-owned equality-protected metadata.
     pub metadata: M,
     /// Current inferred positive version.
@@ -62,7 +62,7 @@ impl<M: Clone + Eq + Serialize + DeserializeOwned> Declaration<M> {
     /// Authorize a bounded history before reconstructing its retained records.
     pub fn resolve(
         name: String,
-        identity: String,
+        stable_name: String,
         metadata: M,
         plan: HistoryPlan,
         marker: &Ident,
@@ -71,15 +71,15 @@ impl<M: Clone + Eq + Serialize + DeserializeOwned> Declaration<M> {
     ) -> Result<Self> {
         let (readiness, retained_versions) = match ledger {
             Some(ledger) => (
-                ledger.authorize_history(&identity, &metadata, plan)?,
-                plan.expand_authorized(marker, fields, &identity, ledger, &metadata)?
+                ledger.authorize_history(&stable_name, &metadata, plan)?,
+                plan.expand_authorized(marker, fields, &stable_name, ledger, &metadata)?
                     .retained_versions(),
             ),
             None => (HistoryReadiness::Draft, Vec::new()),
         };
         Ok(Self {
             name,
-            identity,
+            stable_name,
             metadata,
             version: plan.head,
             retained_from: plan.floor,
@@ -89,18 +89,22 @@ impl<M: Clone + Eq + Serialize + DeserializeOwned> Declaration<M> {
     }
 }
 
-/// Validate complete identity inventory, including declarations whose macros disappeared.
+/// Validate complete stable name inventory, including declarations whose macros disappeared.
 pub fn validate<M: Clone + Eq + Serialize + DeserializeOwned>(
     inventory: &PackageInventory<M>,
     ledger: &HistoryLedger<M>,
 ) -> Result<()> {
     let mut declared = BTreeSet::new();
     for declaration in &inventory.declarations {
-        if !declared.insert(declaration.identity.as_str()) {
-            return Err(format!("duplicate declared identity: {}", declaration.identity).into());
+        if !declared.insert(declaration.stable_name.as_str()) {
+            return Err(format!(
+                "duplicate declared stable name: {}",
+                declaration.stable_name
+            )
+            .into());
         }
         let readiness = ledger.authorize_history(
-            &declaration.identity,
+            &declaration.stable_name,
             &declaration.metadata,
             HistoryPlan {
                 floor: declaration.retained_from,
@@ -116,14 +120,14 @@ pub fn validate<M: Clone + Eq + Serialize + DeserializeOwned>(
         {
             return Err(format!(
                 "{}: source inventory was not authorized by the current ledger",
-                declaration.identity
+                declaration.stable_name
             )
             .into());
         }
     }
     let missing = ledger
-        .identities()
-        .filter(|identity| !declared.contains(identity))
+        .stable_names()
+        .filter(|stable_name| !declared.contains(stable_name))
         .collect::<Vec<_>>();
     if let Some(first) = missing.first() {
         return Err(format!("{first}: committed history exists but no source declaration declares it; restore the declaration rather than deleting retained history ({} missing in total)", missing.len()).into());
@@ -175,15 +179,15 @@ mod tests {
 
     #[test]
     fn frozen_inventory_survives_erased_source_declarations() {
-        let identity = "billing.invoice.issued";
+        let stable_name = "billing.invoice.issued";
         let schema_identity = SchemaIdentity::new("urn:typehistory:schema:");
         let schema = JsonSchemaDocument::from_shape(
             &SchemaShape::Record { fields: Vec::new() },
-            &schema_identity.schema_id(identity),
+            &schema_identity.schema_id(stable_name),
         );
         let ledger = HistoryLedger::from_entries(
             BTreeMap::from([(
-                identity.to_owned(),
+                stable_name.to_owned(),
                 BTreeMap::from([(
                     1,
                     Snapshot {

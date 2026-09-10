@@ -78,7 +78,7 @@ pub fn compile_package<M: Clone + Eq + Serialize + DeserializeOwned>(
         } else {
             "draft"
         };
-        let message = format!("{} V{} is a {kind}; freeze it with `cargo {} freeze --package {} --{} {} --version {}` before release", declaration.identity, declaration.version, contract.command, source.package, contract.selector, declaration.identity, declaration.version);
+        let message = format!("{} V{} is a {kind}; freeze it with `cargo {} freeze --package {} --{} {} --version {}` before release", declaration.stable_name, declaration.version, contract.command, source.package, contract.selector, declaration.stable_name, declaration.version);
         if strict {
             return Err(message.into());
         }

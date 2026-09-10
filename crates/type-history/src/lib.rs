@@ -12,18 +12,18 @@
 //! conversions and returns the latest type. Application code reads and writes
 //! through that alias.
 //!
-//! Import the attribute and declare its stable identity in an initialized library:
+//! Import the attribute and declare its stable name in an initialized library:
 //!
 //! ```rust,ignore
 //! use type_history::versioned;
 //!
-//! #[versioned(stable_id = "shop.receipt.created")]
+//! #[versioned(stable_name = "shop.receipt.created")]
 //! pub struct ReceiptCreated {
 //!     pub amount_cents: u64,
 //! }
 //! ```
 //!
-//! The identity is frozen with the schemas. Builds reject changes to that value,
+//! The stable name is frozen with the schemas. Builds reject changes to that value,
 //! even when the Rust type or its module is renamed.
 //!
 //! Add the runtime and build hook to `Cargo.toml`:
@@ -48,11 +48,11 @@
 //!
 //! ```
 //! # use std::error::Error;
-//! use type_history::{PayloadVersion, TypeIdentity};
+//! use type_history::{PayloadVersion, StableName};
 //!
-//! let identity = TypeIdentity::try_from("billing.invoice.issued".to_owned())?;
+//! let stable_name = StableName::try_from("billing.invoice.issued".to_owned())?;
 //! let version = PayloadVersion::try_from(1_u32)?;
-//! assert_eq!(identity.as_str(), "billing.invoice.issued");
+//! assert_eq!(stable_name.as_str(), "billing.invoice.issued");
 //! assert_eq!(version.get(), 1);
 //! assert!(PayloadVersion::try_from(0_u32).is_err());
 //! # Ok::<(), Box<dyn Error>>(())
@@ -73,7 +73,7 @@ extern crate self as type_history;
 pub use type_history_core::resolved::{FieldSchema, JsonSchemaField, ResolvedSchema};
 pub use type_history_core::{
     decode, DecodeContext, DecodeError, DecodeFailureKind, HasHistory, History,
-    InvalidPayloadVersion, InvalidTypeIdentity, PayloadVersion, ReadError, TypeIdentity, Versioned,
+    InvalidPayloadVersion, InvalidStableName, PayloadVersion, ReadError, StableName, Versioned,
 };
 #[cfg(feature = "redactable")]
 pub use type_history_core::{redactable, redaction};
