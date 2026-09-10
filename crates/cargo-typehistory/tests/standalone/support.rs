@@ -90,8 +90,8 @@ inherits = "dev"
 debug-assertions = false
 opt-level = 2
 "#,
-                vendor.join("crates/typehistory/typehistory"),
-                vendor.join("crates/typehistory/build"),
+                vendor.join("crates/typehistory"),
+                vendor.join("crates/typehistory-build"),
                 features = if redacted { "[\"redactable\"]" } else { "[]" }
             ),
         );
@@ -273,17 +273,15 @@ opt-level = 2
         assert!(self
             .owner
             .path()
-            .join("vendor/crates/typehistory/build/src/lib.rs")
+            .join("vendor/crates/typehistory-build/src/lib.rs")
             .is_file());
     }
 }
 
 fn copy_family(vendor: &Path) {
     let repository = repository();
-    copy_tree(
-        &repository.join("crates/typehistory"),
-        &vendor.join("crates/typehistory"),
-    );
+    copy_tree(&repository.join("crates"), &vendor.join("crates"));
+    copy_tree(&repository.join("docs"), &vendor.join("docs"));
     let manifest: TomlValue = toml::from_str(
         &fs::read_to_string(repository.join("Cargo.toml")).expect("checked root manifest"),
     )
@@ -307,15 +305,15 @@ fn copy_family(vendor: &Path) {
         "members".into(),
         TomlValue::Array(
             [
-                "core",
-                "codegen",
-                "macros",
+                "typehistory-core",
+                "typehistory-codegen",
+                "typehistory-macros",
                 "typehistory",
-                "build",
+                "typehistory-build",
                 "cargo-typehistory",
             ]
             .into_iter()
-            .map(|name| TomlValue::String(format!("crates/typehistory/{name}")))
+            .map(|name| TomlValue::String(format!("crates/{name}")))
             .collect(),
         ),
     );
@@ -362,7 +360,7 @@ fn copy_tree(source: &Path, destination: &Path) {
 fn repository() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .ancestors()
-        .nth(3)
+        .nth(2)
         .expect("repository root")
         .to_owned()
 }

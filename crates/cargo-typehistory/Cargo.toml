@@ -17,7 +17,7 @@ default = []
 redactable = ["typehistory-build/redactable"]
 
 [dependencies]
-typehistory-build = { path = "../build", version = "0.1.0" }
+typehistory-build = { path = "../typehistory-build", version = "0.1.0" }
 thiserror.workspace = true
 
 [dev-dependencies]

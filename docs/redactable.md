@@ -11,7 +11,7 @@ Keep the regular `build.rs`, `typehistory.toml`, and ledger setup from the main 
 Build the CLI with the same capability:
 
 ```sh
-cargo install --path "$TYPEHISTORY_CHECKOUT/crates/typehistory/cargo-typehistory" --locked --features redactable
+cargo install --path "$TYPEHISTORY_CHECKOUT/crates/cargo-typehistory" --locked --features redactable
 ```
 
 All six Typehistory crates expose the default-disabled feature.

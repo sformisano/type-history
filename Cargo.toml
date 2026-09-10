@@ -1,11 +1,11 @@
 [workspace]
 members = [
-    "crates/typehistory/core",
-    "crates/typehistory/codegen",
-    "crates/typehistory/macros",
-    "crates/typehistory/typehistory",
-    "crates/typehistory/build",
-    "crates/typehistory/cargo-typehistory",
+    "crates/typehistory-core",
+    "crates/typehistory-codegen",
+    "crates/typehistory-macros",
+    "crates/typehistory",
+    "crates/typehistory-build",
+    "crates/cargo-typehistory",
 ]
 resolver = "2"
 

@@ -3,7 +3,7 @@
 The example follows a Rust record from V1 to V3. It checks that earlier fields
 remain available, conversions produce the current type, and frozen schemas reject
 incompatible edits. The complete sources match the marked blocks in the
-[Typehistory README](../../../../README.md).
+[Typehistory README](../../README.md).
 
 The script also runs the introductory Receipt example first. It creates separate
 `receipt-history` and `invoice-history` consumer packages outside this workspace,
@@ -26,7 +26,7 @@ export CARGO_TARGET_DIR="$PWD/target"
 cargo fetch --locked
 cargo build -p cargo-typehistory --locked
 export PATH="$CARGO_TARGET_DIR/debug:$PATH"
-bash crates/typehistory/examples/invoice/verify.sh
+bash examples/invoice/verify.sh
 ```
 
 Keep strict and export environment variables unset for ordinary draft steps.
@@ -54,7 +54,7 @@ The [guide](../../docs/guide.md) explains how those operations relate to the evo
 
 ## Additional compiler coverage
 
-The [standalone compiler suite](../../cargo-typehistory/tests/standalone.rs)
+The [standalone compiler suite](../../crates/cargo-typehistory/tests/standalone.rs)
 adds retained-floor import, renamed dependencies, copied source isolation,
 invalid ledger checks, and cache invalidation.
 

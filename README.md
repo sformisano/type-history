@@ -83,7 +83,7 @@ Set `TYPEHISTORY_CHECKOUT` to the absolute path of your checkout.
 ```sh
 export RUSTUP_TOOLCHAIN=1.97.1
 export TYPEHISTORY_CHECKOUT=/absolute/path/to/typehistory
-cargo install --path "$TYPEHISTORY_CHECKOUT/crates/typehistory/cargo-typehistory" --locked
+cargo install --path "$TYPEHISTORY_CHECKOUT/crates/cargo-typehistory" --locked
 cargo new --lib receipt-history --edition 2024
 cd receipt-history
 ```
@@ -101,12 +101,12 @@ build = "build.rs"
 [workspace]
 
 [dependencies]
-typehistory = { path = "/absolute/path/to/typehistory/crates/typehistory/typehistory" }
+typehistory = { path = "/absolute/path/to/typehistory/crates/typehistory" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0.149"
 
 [build-dependencies]
-typehistory-build = { path = "/absolute/path/to/typehistory/crates/typehistory/build" }
+typehistory-build = { path = "/absolute/path/to/typehistory/crates/typehistory-build" }
 ```
 
 Replace both checkout paths with your actual absolute path. Cargo does not expand
@@ -727,7 +727,7 @@ pub revision: u32,
 The V2 example supplies `backfill_value = 7_u32` to complete the declaration.
 Invalid output types, unsupported error types, async functions, capturing closures,
 duplicate keys, and conflicting version order also fail.
-The [evolution matrix](crates/typehistory/docs/evolution-matrix.md) records the supported and rejected combinations.
+The [evolution matrix](docs/evolution-matrix.md) records the supported and rejected combinations.
 
 ## Decode stored records and handle failures
 
@@ -1016,14 +1016,14 @@ history that needs redacted records and errors. Ordinary histories keep the
 tutorial's traits and error contracts, including when another dependency enables
 the feature.
 
-The [optional integration guide](crates/typehistory/docs/redactable.md) covers
+The [optional integration guide](docs/redactable.md) covers
 field policies, nested records, safe errors, renamed dependencies, and compiled examples.
 It uses the published Redactable 0.12.0 contracts. Payload serialization remains unchanged.
 
 ## Axis integration
 
 Typehistory was extracted from Axis's event field-history implementation.
-The [generation interfaces](crates/typehistory/docs/redactable.md#axis-and-other-macro-frontends)
+The [generation interfaces](docs/redactable.md#axis-and-other-macro-frontends)
 let Axis retain its own structured errors and event traits. A standalone fixture
 checks those interfaces; the existing Axis extraction checkout requires separate integration work.
 The [Axis authoring guide at the extraction revision](https://github.com/sformisano/axis/blob/af7b96c3f0744cdfd170c50bb321d5dfd02be8ea/docs/design/domain-authoring-macros.md#event-field-history)
@@ -1048,8 +1048,8 @@ The workspace separates runtime code, code generation, and development tooling:
 | `typehistory-build` | Build integration and checked ledger operations |
 | `cargo-typehistory` | Cargo subcommand for lifecycle operations |
 
-The [evolution matrix](crates/typehistory/docs/evolution-matrix.md) lists supported
-and rejected cases. The [guide](crates/typehistory/docs/guide.md) explains what
+The [evolution matrix](docs/evolution-matrix.md) lists supported
+and rejected cases. The [guide](docs/guide.md) explains what
 the receipt and invoice checks establish.
 
 Install the pinned Rust toolchain with rustup, plus Bash, Git, and ripgrep.

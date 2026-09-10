@@ -3,7 +3,7 @@ set -euo pipefail
 export RUSTUP_TOOLCHAIN=1.97.1
 
 example_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-repository="$(cd -- "$example_dir/../../../.." && pwd)"
+repository="$(cd -- "$example_dir/../.." && pwd)"
 : "${TMPDIR:?Set TMPDIR to an owned short temporary directory}"
 : "${CARGO_TARGET_DIR:?Set CARGO_TARGET_DIR to the assigned checkout target}"
 command -v cargo-typehistory >/dev/null
@@ -45,11 +45,11 @@ publish = false
 build = "build.rs"
 [workspace]
 [dependencies]
-typehistory = { path = "$repository/crates/typehistory/typehistory" }
+typehistory = { path = "$repository/crates/typehistory" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0.149"
 [build-dependencies]
-typehistory-build = { path = "$repository/crates/typehistory/build" }
+typehistory-build = { path = "$repository/crates/typehistory-build" }
 [profile.release_child]
 inherits = "release"
 debug-assertions = true

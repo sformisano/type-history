@@ -1,6 +1,6 @@
 # Field-history evolution matrix
 
-This matrix summarizes the [Typehistory contract](../../../README.md).
+This matrix summarizes the [Typehistory contract](../README.md).
 Typehistory originated in Axis's event field-history implementation.
 The [Axis matrix at the extraction revision](https://github.com/sformisano/axis/blob/af7b96c3f0744cdfd170c50bb321d5dfd02be8ea/docs/design/event-evolution/evolution-matrix.md)
 documents that revision's aggregate-specific cases.
@@ -125,9 +125,9 @@ Case IDs identify behavior families; this document is not a test-run report.
 
 ## Verification and limits
 
-Parser tests live in [codegen](../codegen/src/history/tests.rs).
+Parser tests live in [codegen](../crates/typehistory-codegen/src/history/tests.rs).
 Real standalone compiler and lifecycle cases live in
-[cargo-typehistory](../cargo-typehistory/tests/standalone.rs). The [invoice example](../examples/invoice/README.md)
+[cargo-typehistory](../crates/cargo-typehistory/tests/standalone.rs). The [invoice example](../examples/invoice/README.md)
 executes the standalone README progression.
 
 Ordinary generated records require `Clone`, `PartialEq`, and `Debug` for their fields.

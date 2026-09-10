@@ -1,7 +1,7 @@
 # Follow a record through its history
 
 Typehistory keeps earlier versions of a Rust record available as its fields change.
-The [README tutorial](../../../README.md#start-an-empty-package) shows the complete
+The [README tutorial](../README.md#start-an-empty-package) shows the complete
 setup and declarations. This guide explains what its examples establish and how
 the executable checks exercise the same changes.
 
@@ -28,7 +28,7 @@ override a currency supplied by current application code.
 
 ## Add conversions that use earlier fields
 
-The [invoice walkthrough](../../../README.md#evolve-an-invoice-through-v1-v2-and-v3)
+The [invoice walkthrough](../README.md#evolve-an-invoice-through-v1-v2-and-v3)
 starts in a separate `invoice-history` package. Keeping it separate lets its V1
 begin with an empty ledger and preserves the Receipt tutorial's history.
 
@@ -71,7 +71,7 @@ The Receipt backfill would still produce a `String` if its currency were wrong.
 
 The executable examples check both properties. Ordinary builds reject incompatible
 declarations, and runtime assertions check specific conversion results. The README's
-[rejection table](../../../README.md#rejected-declarations) explains the invalid edits
+[rejection table](../README.md#rejected-declarations) explains the invalid edits
 used by those compiler checks.
 
 ## Exercise development and release rules
@@ -88,12 +88,12 @@ The original ledger then accepts the source again without a lifecycle command.
 Reset is a separate operation for replacing a frozen experimental version.
 The verifier checks that a reset reservation prevents strict builds, that undo
 requires the original schema, and that an exact freeze accepts a replacement.
-The README's [reset instructions](../../../README.md#reset-and-undo) explain the
+The README's [reset instructions](../README.md#reset-and-undo) explain the
 data-loss risk before those commands.
 
 Import checks use another empty package with a complete ledger and matching source.
 A history beginning above V1 requires an explicit
-[retained-floor import](../../../README.md#import-a-retained-floor).
+[retained-floor import](../README.md#import-a-retained-floor).
 The standalone suite uses a separate V4 history for that case; it does not trim
 V1 through V3 from the invoice walkthrough.
 

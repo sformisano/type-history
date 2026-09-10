@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Place each crate directly under `crates/`, using its package name. Move shared
+  documentation and examples to root-level `docs/` and `examples/` directories.
+
 - Add a default-disabled `redactable` feature across all six Typehistory crates,
   using Redactable 0.12.0. Each history selects its contract with `redacted`.
   Ordinary histories retain their existing traits and error sources when the

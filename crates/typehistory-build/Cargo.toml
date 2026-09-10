@@ -13,7 +13,7 @@ default = []
 redactable = ["typehistory-codegen/redactable"]
 
 [dependencies]
-typehistory-codegen = { path = "../codegen", version = "0.1.0" }
+typehistory-codegen = { path = "../typehistory-codegen", version = "0.1.0" }
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
@@ -22,4 +22,4 @@ tempfile = "3.23.0"
 syn = { version = "2", features = ["full", "extra-traits"] }
 
 [dev-dependencies]
-typehistory-core = { path = "../core", version = "0.1.0" }
+typehistory-core = { path = "../typehistory-core", version = "0.1.0" }

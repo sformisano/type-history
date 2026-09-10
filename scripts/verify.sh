@@ -28,4 +28,4 @@ for mode in plain redactable; do
 done
 cargo build -p cargo-typehistory --locked
 export PATH="$CARGO_TARGET_DIR/debug:$PATH"
-bash crates/typehistory/examples/invoice/verify.sh
+bash examples/invoice/verify.sh

@@ -183,7 +183,7 @@ history_build = {{ package = "typehistory-build", path = {build:?} }}
         success(&fixture.cli(&["freeze", "--package", "plain-history-library"]));
     }
     fixture.write("plain/src/lib.rs", V3);
-    let guide = include_str!("../../../docs/redactable.md");
+    let guide = include_str!("../../../../docs/redactable.md");
     let example = guide
         .split("```rust\n")
         .nth(1)
@@ -235,7 +235,10 @@ fn frontend_generation_preserves_concrete_axis_error_projection() {
         .as_str()
         .unwrap()
         .to_owned();
-    let codegen = Path::new(&build_path).parent().unwrap().join("codegen");
+    let codegen = Path::new(&build_path)
+        .parent()
+        .unwrap()
+        .join("typehistory-codegen");
     let dependencies = manifest["build-dependencies"].as_table_mut().unwrap();
     dependencies.insert(
         "typehistory-codegen".into(),

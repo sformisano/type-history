@@ -15,8 +15,8 @@ default = []
 redactable = ["typehistory-codegen/redactable", "typehistory-core/redactable"]
 
 [dependencies]
-typehistory-codegen = { path = "../codegen", version = "0.1.0" }
-typehistory-core = { path = "../core", version = "0.1.0" }
+typehistory-codegen = { path = "../typehistory-codegen", version = "0.1.0" }
+typehistory-core = { path = "../typehistory-core", version = "0.1.0" }
 syn = { version = "2", features = ["full", "extra-traits"] }
 quote = "1"
 proc-macro2 = "1"
