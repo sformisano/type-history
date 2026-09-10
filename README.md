@@ -61,7 +61,7 @@ pub struct ReceiptCreated {
 ```
 
 - `#[versioned(...)]` marks `ReceiptCreated` as a versioned struct.
-  - Its `stable_id` argument identifies this history.
+  - Its `stable_id` argument identifies this type and its history.
   - Once frozen, changing it fails the build (more on this later).
 - `#[history(...)]` describes the change to the `currency` field.
   - `added_at = v2` introduces `currency` in V2.
