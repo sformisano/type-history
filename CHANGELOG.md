@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Clarify how numbered structs relate to the current type alias, with a
+  generated alias example in the README and matching API documentation.
 - Accept simple stable IDs such as `receipt_created` and optional namespaces
   such as `shop.receipt`. Remove the minimum segment count and its
   `InvalidSegmentCount` error variant; existing dotted IDs remain valid.

@@ -70,8 +70,17 @@ describe the individual changes.
 
 ### 2. Use the current type
 
-Type History generates the historical types and conversions. Application code
-uses `ReceiptCreated`, which always names the latest version, to read earlier data:
+Type History generates `ReceiptCreatedV1` with `amount_cents`, `ReceiptCreatedV2`
+with both fields, and the conversion between them. It keeps the name you
+declared as an alias for the latest struct:
+
+```rust
+pub type ReceiptCreated = ReceiptCreatedV2;
+```
+
+When you introduce V3, the generated alias changes to `ReceiptCreatedV3`.
+Application code keeps using `ReceiptCreated` to construct current values and
+read earlier data:
 
 <!-- overview:read-old.rs -->
 ```rust
@@ -368,9 +377,10 @@ generated types and conversion functions, so it needs neither the ledger nor Car
 
 ## What the macro generates
 
-The struct you write is the history declaration. The macro turns it into the Rust
-types your application uses. In the receipt example, those are `ReceiptCreatedV1`,
-`ReceiptCreatedV2`, and the current alias `ReceiptCreated`.
+The macro replaces your declaration with numbered structs and an alias under
+the original name. A new history starts at V1, even when no field has a history
+attribute. Version numbers in those attributes describe later changes; several
+fields can change in the same version.
 
 | Generated item | What it provides |
 | --- | --- |
@@ -381,6 +391,9 @@ types your application uses. In the receipt example, those are `ReceiptCreatedV1
 | Record implementations | `Clone`, `Debug`, `PartialEq`, Serde serialization and deserialization, and schema support |
 | `HasHistory` on the current type | `TYPE` identifies the history, `VERSION` identifies the current version, and `history()` provides its decoder |
 | `History<ReceiptCreated>` | Lists supported versions and decodes their bytes into the current `ReceiptCreated` |
+
+The alias and numbered structs keep the declaration's visibility.
+Explicitly imported histories can [start above V1](#import-a-retained-floor).
 
 By default, every field type must implement `Clone`, `PartialEq`, and `Debug`,
 including types used only in earlier versions. Generated `Debug` calls each

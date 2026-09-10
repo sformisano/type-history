@@ -17,9 +17,10 @@ Initialization creates `type-history/schemas.json`, the ledger that records froz
 schemas. V1 initially builds as a draft. Freezing it establishes the schema that
 later builds must preserve.
 
-After V2 is added, one declaration generates `ReceiptCreatedV1` and `ReceiptCreatedV2`.
-`ReceiptCreated` becomes an alias of `ReceiptCreatedV2`. The conversion fills
-V2's new currency field while leaving V1's generated type unchanged.
+The initial declaration generates `ReceiptCreatedV1`, with `ReceiptCreated` as
+its alias. Adding V2 retains that struct and generates `ReceiptCreatedV2`.
+`ReceiptCreated` then aliases `ReceiptCreatedV2`. The conversion fills V2's new
+currency field while leaving V1's generated type unchanged.
 
 The [receipt tests](../README.md#6-read-v1-and-write-v2) deserialize a V1
 `Versioned<ReceiptCreated>` and pass it to `ReceiptCreated::from_versioned`.
@@ -59,7 +60,7 @@ Type History cannot infer which revision an application should assign its earlie
 Invoice [V3](../examples/invoice/src/lib.rs) changes the count to a `String`.
 It keeps the V1-to-V2 conversion alongside the new V2-to-V3 conversion.
 Reading V1 with count 42 therefore produces `42_u64` first, then `"42"`.
-The current alias becomes `InvoiceV3`, while both earlier generated types remain available.
+`Invoice` now aliases `InvoiceV3`, while both earlier generated types remain available.
 
 The example rejects count 13 to exercise a failure in the second conversion.
 The [invoice tests](../examples/invoice/tests/history.rs) verify that the resulting

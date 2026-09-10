@@ -1,12 +1,16 @@
 //! Versioned Rust records with explicit field conversions and frozen schema checks.
 //!
 //! `#[versioned]` generates a Rust struct for each supported version of a record.
-//! The original name aliases the latest struct. Use its `into_versioned` method to
-//! create a [`Versioned`] containing the data and its generated metadata.
+//! A new `ReceiptCreated` history starts with `ReceiptCreatedV1`. Later versions
+//! add `ReceiptCreatedV2`, `ReceiptCreatedV3`, and so on. The original name aliases
+//! the latest struct: at V2, the macro generates `pub type ReceiptCreated = ReceiptCreatedV2;`.
+//!
+//! Use the alias's `into_versioned` method to create a [`Versioned`] containing
+//! the data and its generated metadata.
 //! Serialize that record with your chosen Serde format and storage. After
 //! deserialization, the alias's `from_versioned` method applies the declared
-//! conversions and returns the latest type. Application code does not select a
-//! numbered type or supply version metadata.
+//! conversions and returns the latest type. Application code reads and writes
+//! through that alias.
 //!
 //! Import the attribute and declare its stable identity in an initialized library:
 //!

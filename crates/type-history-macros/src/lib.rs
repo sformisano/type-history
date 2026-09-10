@@ -16,13 +16,17 @@ use type_history_codegen::{
     ledger::{HistoryLedger, RecordMetadata, SchemaIdentity},
 };
 
-/// Replace a record inventory with its authorized retained versions.
+/// Generate numbered structs and an alias for the current version.
+///
+/// A new `ReceiptCreated` history generates `ReceiptCreatedV1` and the alias
+/// `ReceiptCreated`. At V2, that alias becomes `pub type ReceiptCreated = ReceiptCreatedV2;`.
+/// Several field changes can share the same version number.
 ///
 /// Requires a `stable_id` and package authority from the
 /// Type History build hook. The optional `retained_from = vN` requires explicit
 /// import authority. Field `#[history(...)]` records describe additions, updates,
-/// and removals newest first. The macro supplies record traits and the current
-/// alias; additional derives on its input are rejected.
+/// and removals newest first. The macro supplies record traits; additional
+/// derives on its input are rejected.
 /// The alias provides `into_versioned` and `from_versioned` methods. They keep
 /// identity and version metadata with the data and load the current type without
 /// requiring application code to select numbered types. The `stable_id` value
