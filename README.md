@@ -45,8 +45,7 @@ so new events need a `currency` field.
 
 ### 1. Describe the change
 
-This example declares a versioned `ReceiptCreated` struct with the new `currency`
-field:
+This example declares a versioned `ReceiptCreated` struct with the `currency` field added in `v2`:
 
 <!-- quick-example:v2.rs -->
 ```rust
