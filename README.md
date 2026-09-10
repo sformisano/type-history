@@ -83,8 +83,7 @@ pub struct ReceiptCreatedV2 {
 }
 ```
 
-It also generates the V1-to-V2 conversion. This simplified view of the internal
-helper omits its error handling:
+It also generates the V1-to-V2 conversion (this is a simplified version that serves as an example):
 
 ```rust
 fn convert_v1_to_v2(previous: ReceiptCreatedV1) -> ReceiptCreatedV2 {
