@@ -12,6 +12,10 @@ description = "Cargo subcommand for standalone type history lifecycle operations
 name = "cargo-typehistory"
 path = "src/main.rs"
 
+[features]
+default = []
+redactable = ["typehistory-build/redactable"]
+
 [dependencies]
 typehistory-build = { path = "../build", version = "0.1.0" }
 thiserror.workspace = true

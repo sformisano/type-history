@@ -19,7 +19,13 @@ use syn::{Error, Ident, Path, Result, Type};
 pub struct GenerationPaths {
     /// Facade module reexporting the shared runtime and codec contracts.
     pub support: Path,
-    /// Frontend error type with unsupported, decode, and upcast constructors.
+    /// Frontend-owned error type. Generated calls pass owned concrete errors.
+    ///
+    /// Requires `unsupported(identity, stored)`, `decode(identity, stored, json_error)`,
+    /// and generic `upcast(identity, stored, from, to, callback_error)` constructors.
+    /// The frontend chooses callback bounds and projects before erasing the type.
+    /// Axis can select its `ToRedactedError` contract here without requiring
+    /// Redactable's distinct `ToRedacted` contract on those errors.
     pub error: Path,
     /// Prefix distinguishing generated functions within the invocation module.
     pub helper_prefix: String,
@@ -54,6 +60,7 @@ pub fn generate_history(
     history: &AuthorizedHistory,
     paths: &GenerationPaths,
 ) -> Result<GeneratedHistory> {
+    crate::redaction::validate(input)?;
     let expected = input
         .fields
         .iter()

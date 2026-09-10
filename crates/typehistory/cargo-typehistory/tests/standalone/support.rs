@@ -24,6 +24,10 @@ pub struct Fixture {
 
 impl Fixture {
     pub fn empty() -> Self {
+        Self::configured(false)
+    }
+
+    pub fn configured(redacted: bool) -> Self {
         let serial = SERIAL.lock().unwrap_or_else(|error| error.into_inner());
         let owner = Builder::new()
             .prefix("history-")
@@ -51,6 +55,8 @@ impl Fixture {
                 "cargo-typehistory",
                 "--locked",
                 "--offline",
+                "--features",
+                if redacted { "redactable" } else { "default" },
             ],
             &[],
         ));
@@ -70,11 +76,11 @@ publish = false
 build = "build.rs"
 [workspace]
 [dependencies]
-history_api = {{ package = "typehistory", path = {:?} }}
+history_api = {{ package = "typehistory", path = {:?}, features = {features} }}
 serde = {{ version = "1.0", features = ["derive"] }}
 serde_json = "1.0.149"
 [build-dependencies]
-history_build = {{ package = "typehistory-build", path = {:?} }}
+history_build = {{ package = "typehistory-build", path = {:?}, features = {features} }}
 [profile.release_child]
 inherits = "release"
 debug-assertions = true
@@ -85,14 +91,17 @@ debug-assertions = false
 opt-level = 2
 "#,
                 vendor.join("crates/typehistory/typehistory"),
-                vendor.join("crates/typehistory/build")
+                vendor.join("crates/typehistory/build"),
+                features = if redacted { "[\"redactable\"]" } else { "[]" }
             ),
         );
         fixture.write("typehistory.toml", "format = 1\n");
         fixture.write("build.rs", "fn main() { history_build::compile(); }\n");
         fixture.write("src/lib.rs", "");
         success(&fixture.cargo(&["generate-lockfile", "--offline"]));
-        fixture.assert_independent_graph();
+        if !redacted {
+            fixture.assert_independent_graph();
+        }
         fixture
     }
 
@@ -280,7 +289,14 @@ fn copy_family(vendor: &Path) {
     )
     .expect("root TOML");
     let mut dependencies = Table::new();
-    for name in ["serde", "serde_json", "schemars", "thiserror", "sha2"] {
+    for name in [
+        "serde",
+        "serde_json",
+        "schemars",
+        "thiserror",
+        "sha2",
+        "redactable",
+    ] {
         dependencies.insert(
             name.into(),
             manifest["workspace"]["dependencies"][name].clone(),

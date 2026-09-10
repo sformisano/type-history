@@ -1,7 +1,8 @@
 //! Retained records, their current alias, and schema expressions.
 //!
-//! Each retained record derives Clone, PartialEq, and ordinary Debug.
-//! Debug formats field values, so every retained field type must implement Debug.
+//! Ordinary records derive Clone, PartialEq, and field-wise Debug.
+//! Explicit redacted records instead receive a fixed masked Debug and structural
+//! redaction contracts, without changing their persisted codecs or schemas.
 
 use crate::{
     lint_attributes::{lint_attributes, scoped_field_type},
@@ -56,21 +57,32 @@ pub(super) fn generate(context: &Context<'_>) -> Result<(TokenStream, Vec<Genera
             fields.iter().map(|field| (&field.name, &field.ty)),
             &support,
         )?;
+        let field_contract = crate::json_schema_derive::field_impl_for_derived(&name, &support);
         let wire_marker = format_ident!("__Typehistory{}Wire", name);
+        let formatting = if context.input.redacted {
+            crate::redaction::record(&name, &fields, &support)?
+        } else {
+            quote!()
+        };
+        let debug = (!context.input.redacted).then(|| quote!(#[derive(::core::fmt::Debug)]));
         declarations.push(quote! {
             #(#field_aliases)*
             #[doc(hidden)]
-            #[derive(::core::clone::Clone, ::core::cmp::PartialEq, ::core::fmt::Debug)]
+            #[derive(::core::clone::Clone, ::core::cmp::PartialEq)]
+            #debug
             #schema_derive
             #visibility struct #name { #(#field_declarations),* }
             #codecs
+            #formatting
             #[doc(hidden)]
             #visibility struct #wire_marker;
             impl #support_path::WireNode for #wire_marker {
                 const SHAPE: #support_path::ConstantShape = <#wire_type as #support_path::WireNode>::SHAPE;
                 fn schema() -> #support_path::SchemaShape { <#wire_type as #support_path::WireNode>::schema() }
             }
+            impl #support_path::NonOptionalNode for #wire_marker {}
             impl #support_path::ResolvedSchema for #name { type Wire = #wire_marker; }
+            #field_contract
         });
         versions.push(GeneratedVersion {
             number: version.version,

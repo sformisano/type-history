@@ -42,9 +42,9 @@ Case IDs identify behavior families; this document is not a test-run report.
 | M85 | Backfill expression uses return or ? | S/R | Typed zero-argument closure contains return; invalid Result propagation fails inside birth-value context and cannot escape transition |
 | M26 | Unknown/wrong callback predecessor type | R | Generated unconditional transition does not satisfy ordinary Rust signature |
 | M27 | Wrong callback output or borrowed output | R | Output must be owned exact destination field type |
-| M28 | Callback error without the required Rust traits | R | Errors must implement std::error::Error + Send + Sync + 'static |
+| M28 | Callback error without the selected contract | R | Ordinary errors require Error + Send + Sync + 'static; redacted errors require ToRedacted |
 | M29 | Non-Copy field | S | Owned unchanged/value fields move; contextual helpers explicitly clone if needed |
-| M30 | Field missing a generated record trait | R | Every retained field type must implement Clone, PartialEq, and Debug |
+| M30 | Field missing a generated record trait | R | Retained fields require Clone and PartialEq; ordinary histories also require Debug, redacted histories require the selected field policy contracts |
 | M31 | Opaque value split by consuming ownership once, without cloning | U | No whole-payload ownership/caching DSL; generated fields already Clone, helpers may clone explicitly |
 | M32 | Cross-output computation requiring exactly-once shared side effect | U | Conversion code must be deterministic/pure; no framework shared cache or external transaction |
 
@@ -75,8 +75,8 @@ Case IDs identify behavior families; this document is not a test-run report.
 | M54 | Supported feature-selected alias | S | Selected compiler-resolved shape checked against same authority |
 | M55 | self/super type, callback, expression, array length | S | Original invocation module and spans retained |
 | M56 | Author field names that resemble helpers (`previous`, `value`, `json`, `__typehistory_*`, or `__axis_*`) | S | Generated identifiers hygienic; field names cannot shadow transition input/local bindings |
-| M57 | Field attributes outside history, documentation, and lints | R | The declaration parser rejects unsupported attributes |
-| M58 | Per-version derives or Serde customization | U/R | Generated versions use the same ordinary traits and strict codecs; unsupported attributes fail |
+| M57 | Unsupported field attributes | R | Accept history, documentation, lints, and redaction policies on opted histories; reject other attributes |
+| M58 | Per-version derives or Serde customization | U/R | Generated versions use the history's selected trait contract and strict codecs; unsupported attributes fail |
 | M59 | Asynchronous or capturing-closure callback | R | Ordinary synchronous function path required |
 
 ## Freeze, draft, decode, and delivery combinations
@@ -99,10 +99,29 @@ Case IDs identify behavior families; this document is not a test-run report.
 | M73 | Dev draft vs release draft | S/R | Warning in dev; hard error in release family and strict dev |
 | M75 | Decode old record requiring backfill despite current serde permissiveness | S | Decode exact old type then explicit adjacent addition; never try current first |
 | M76 | Omitted Option key versus explicit null | S | Preserve existing exact-type serde behavior; omission may deserialize as None |
-| M77 | Missing required field/unknown JSON key/invalid newtype | R | Exact Vn decoder returns its JSON error |
+| M77 | Missing required field/unknown JSON key/invalid newtype | R | Exact Vn decoder fails; ordinary errors retain the JSON source, redacted errors capture a fixed safe message |
 | M78 | Duplicate JSON object key | R | Feed raw bytes to exact typed decoder, preserving existing duplicate-field rejection; do not preprocess into map/Value |
 | M79 | Requested below-floor/future version | R | Unsupported version, no speculative current decode |
-| M83 | Failed adjacent conversion | R | No current value; preserve the original error through Error::source, the stored version, and the failing step |
+| M83 | Failed adjacent conversion | R | Preserve stored version and failing step; ordinary errors retain the original source, redacted errors retain only the safe projection |
+
+## Optional Redactable combinations
+
+| ID | Case | Class | Rule / expected outcome |
+|---|---|---|---|
+| M100 | Feature disabled | S | Ordinary consumers resolve no Redactable package |
+| M101 | Feature enabled, ordinary history | S | Same ordinary record traits and original callback/JSON error sources |
+| M102 | Plain and redacted consumer libraries in one graph | S | Feature unification never strengthens plain callback bounds |
+| M103 | Explicit `redacted` history | S | All retained records and current alias have fixed masked Debug and structural redaction |
+| M104 | Policy without explicit opt-in or required capability | R | Diagnostic; no requested policy is ignored |
+| M105 | Invalid policy or missing inherited Redactable | R | Declaration or trait failure, including predecessor field types |
+| M106 | Nested type with raw or panicking Debug | S | Generated redacted Debug never reads fields |
+| M107 | Add, convert, or remove a policy-bearing field | S | Policy follows its retained lifetime and is checked for every retained type |
+| M108 | Edit formatting policy only | S | Revalidate policies without changing frozen wire schemas |
+| M109 | Redacted callback/JSON failure | R | Preserve identity and version context; capture only safe causes and terminate raw source chains |
+| M110 | Redactable wrapper or nested history field | S | Core-owned transparent schema adapters and generated nested schema contracts |
+| M111 | Renamed Typehistory without direct Redactable | S | Generated records use runtime reexports |
+| M112 | Upstream Redactable derive on supporting record | S | Requires direct Redactable 0.12.0 dependency; renamed dependency supported |
+| M113 | Frontend-owned Axis error projection | S | Generic GenerationPaths.error constructors receive concrete owned callback errors |
 
 ## Verification and limits
 
@@ -111,7 +130,10 @@ Real standalone compiler and lifecycle cases live in
 [cargo-typehistory](../cargo-typehistory/tests/standalone.rs). The [invoice example](../examples/invoice/README.md)
 executes the standalone README progression.
 
-Generated records require `Clone`, `PartialEq`, and `Debug` for their fields. Transitions borrow the
+Ordinary generated records require `Clone`, `PartialEq`, and `Debug` for their fields.
+Opted redacted records require `Clone`, `PartialEq`, and the selected field policy contracts;
+their fixed `Debug` has no field `Debug` bound. See the [optional guide](redactable.md).
+Transitions borrow the
 intact predecessor for contextual callbacks, then move values into the destination.
 A callback may explicitly clone a value; transitions add no cloning pass.
 

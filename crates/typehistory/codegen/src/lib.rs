@@ -11,6 +11,7 @@ pub mod ledger;
 pub mod lint_attributes;
 pub mod model;
 pub mod record;
+pub mod redaction;
 pub mod resolved_schema;
 pub use generate::{generate_history, GeneratedHistory, GeneratedVersion, GenerationPaths};
 pub use history::{AuthorizedHistory, HistoryPlan};

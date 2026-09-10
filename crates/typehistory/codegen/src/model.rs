@@ -15,6 +15,8 @@ pub struct NamedField {
 
 /// Complete inventory used to infer and generate one record history.
 pub struct RecordInput {
+    /// Select redacted record contracts; requires the `redactable` capability.
+    pub redacted: bool,
     /// Name of the current alias.
     pub name: Ident,
     /// Visibility of concrete versions and the current alias.

@@ -3,6 +3,18 @@ use std::time::{Duration, Instant};
 use toml::{Table, Value};
 
 #[test]
+fn redaction_requires_the_disabled_by_default_capability() {
+    let fixture = Fixture::empty();
+    success(&fixture.cli(&["init", "--package", "standalone-history-consumer"]));
+    fixture.write("src/lib.rs", "#[history_api::history(id = \"test.redacted.record\", redacted)] pub struct Record { #[sensitive] pub value: String }");
+    failure(
+        &fixture.cargo(&["build", "--locked", "--offline"]),
+        "redacted histories require the `redactable` feature",
+    );
+    fixture.assert_independent_graph();
+}
+
+#[test]
 fn target_dependencies_enforce_drafts_and_frozen_inventory() {
     for inherited in [false, true] {
         let fixture = Fixture::empty();
@@ -102,11 +114,11 @@ fn standalone_compiler_checks_history_contracts_and_macro_hygiene() {
         ),
         (
             V1.replace("pub count", "#[not_sensitive] pub count"),
-            "record fields support only documentation",
+            "field redaction requires",
         ),
         (
             V1.replace("pub count", "#[sensitive] pub count"),
-            "record fields support only documentation",
+            "field redaction requires",
         ),
         (
             V2.replace(", cast_from_previous_value = widen", ""),

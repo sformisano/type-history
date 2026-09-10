@@ -8,6 +8,10 @@ license.workspace = true
 publish = false
 description = "Shared build authority and checked type history lifecycle operations"
 
+[features]
+default = []
+redactable = ["typehistory-codegen/redactable"]
+
 [dependencies]
 typehistory-codegen = { path = "../codegen", version = "0.1.0" }
 serde.workspace = true

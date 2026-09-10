@@ -7,6 +7,10 @@
 pub mod canonical_json;
 mod error;
 mod history;
+#[cfg(feature = "redactable")]
+pub mod redaction;
+#[cfg(feature = "redactable")]
+pub use redactable;
 mod identity;
 pub mod resolved;
 

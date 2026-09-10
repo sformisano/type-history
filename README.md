@@ -362,7 +362,7 @@ in the older generated structs where it belonged.
 | `HasHistory` on the current type | Stable `TYPE`, positive `VERSION`, and the `history()` descriptor |
 | `History<Receipt>` | Selection of an earlier version followed by conversions into `Receipt` |
 
-Every field type used in a generated version must implement `Clone`, `PartialEq`,
+By default, every field type used in a generated version must implement `Clone`, `PartialEq`,
 and `Debug`. This includes fields present only in earlier versions. `Debug` formats
 each field through that field type's `Debug` implementation.
 
@@ -932,7 +932,8 @@ Other Serde or Schemars attributes that change the representation are rejected.
 If supporting types use Schemars directly, keep `schemars = "=1.2.2"`.
 
 Public supporting records can contain private nested field types. Generated history
-types cannot themselves be nested fields; use separate supporting records.
+versions and their current aliases can also be nested fields, including through
+`Option`. Their schema describes the selected version's payload structure.
 
 The following module adds an independent `AddressRecord` history to an initialized
 library. Its `Address` value has a schema and ordinary Serde implementations.
@@ -993,9 +994,24 @@ Generated code grows with the retained version range. Version ranges are checked
 against the ledger before allocation or expansion, so an unauthorized huge range
 is rejected. A history starting above V1 needs an explicit retained-floor import.
 
+## Optional Redactable integration
+
+Enable the default-disabled `redactable` feature on the runtime, build hook, and
+CLI. Then select `#[history(id = "billing.receipt.recorded", redacted)]` for each
+history that needs redacted records and errors. Ordinary histories keep the
+tutorial's traits and error contracts, including when another dependency enables
+the feature.
+
+The [optional integration guide](crates/typehistory/docs/redactable.md) covers
+field policies, nested records, safe errors, renamed dependencies, and compiled examples.
+It uses the published Redactable 0.12.0 contracts. Payload serialization remains unchanged.
+
 ## Axis integration
 
 Typehistory was extracted from Axis's event field-history implementation.
+The [generation interfaces](crates/typehistory/docs/redactable.md#axis-and-other-macro-frontends)
+let Axis retain its own structured errors and event traits. A standalone fixture
+checks those interfaces; the existing Axis extraction checkout requires separate integration work.
 The [Axis authoring guide at the extraction revision](https://github.com/sformisano/axis/blob/af7b96c3f0744cdfd170c50bb321d5dfd02be8ea/docs/design/domain-authoring-macros.md#event-field-history)
 records that origin and its `aggregate!` syntax.
 
@@ -1032,7 +1048,7 @@ cargo fetch --locked
 bash scripts/verify.sh
 ```
 
-The script runs formatting, Clippy, workspace tests, doctests, public documentation,
+The script runs both feature modes for Clippy, workspace tests, doctests, and public documentation,
 and the executable receipt and invoice examples. GitHub Actions runs the same script.
 The example verifier compares the marked README blocks with their source files
 before running them. Normal builds use `target`; Clippy uses `target/clippy`.

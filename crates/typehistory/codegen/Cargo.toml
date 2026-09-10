@@ -8,6 +8,10 @@ license.workspace = true
 publish = false
 description = "Shared type history parsing, authority, and Rust generation"
 
+[features]
+default = []
+redactable = ["typehistory-core/redactable"]
+
 [dependencies]
 typehistory-core = { path = "../core", version = "0.1.0" }
 serde.workspace = true

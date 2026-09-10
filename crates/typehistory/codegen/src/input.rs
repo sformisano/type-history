@@ -15,22 +15,32 @@ use typehistory_core::TypeIdentity;
 pub struct Arguments {
     id: LitStr,
     floor: Option<Ident>,
+    redacted: bool,
 }
 
 impl Parse for Arguments {
     fn parse(input: ParseStream<'_>) -> Result<Self> {
         let mut id = None;
         let mut floor = None;
+        let mut redacted = false;
         while !input.is_empty() {
             let key: Ident = input.parse()?;
-            input.parse::<Token![=]>()?;
+            if key != "redacted" {
+                input.parse::<Token![=]>()?;
+            }
             match key.to_string().as_str() {
                 "id" if id.is_none() => id = Some(input.parse()?),
                 "retained_from" if floor.is_none() => floor = Some(input.parse()?),
-                "id" | "retained_from" => {
+                "redacted" if !redacted => redacted = true,
+                "id" | "retained_from" | "redacted" => {
                     return Err(Error::new_spanned(key, "duplicate history argument"))
                 }
-                _ => return Err(Error::new_spanned(key, "expected `id` or `retained_from`")),
+                _ => {
+                    return Err(Error::new_spanned(
+                        key,
+                        "expected `id`, `retained_from`, or `redacted`",
+                    ))
+                }
             }
             if input.is_empty() {
                 break;
@@ -40,6 +50,7 @@ impl Parse for Arguments {
         Ok(Self {
             id: id.ok_or_else(|| input.error("history requires an explicit `id`"))?,
             floor,
+            redacted,
         })
     }
 }
@@ -47,6 +58,7 @@ impl Parse for Arguments {
 /// Parse the authored record inventory identically for macro and source discovery.
 pub fn parse(arguments: Arguments, item: ItemStruct) -> Result<(RecordInput, String)> {
     reject_generics(&item.generics)?;
+    crate::redaction::require_capability(arguments.redacted, &item.ident)?;
     let identity = arguments.id.value();
     TypeIdentity::try_from(identity.clone())
         .map_err(|error| Error::new_spanned(&arguments.id, error))?;
@@ -71,13 +83,18 @@ pub fn parse(arguments: Arguments, item: ItemStruct) -> Result<(RecordInput, Str
     let mut fields = Vec::new();
     for field in &named.named {
         for attribute in &field.attrs {
-            if !allowed(attribute) {
+            if crate::redaction::is_policy(attribute) {
+                if !arguments.redacted {
+                    return Err(Error::new_spanned(attribute, "field redaction requires `#[history(..., redacted)]` and the `redactable` feature"));
+                }
+            } else if !allowed(attribute) {
                 return Err(Error::new_spanned(
                     attribute,
                     "record fields support only documentation, lints, and `#[history(...)]`",
                 ));
             }
         }
+        crate::redaction::parse_policy(&field.attrs)?;
         let name = field.ident.clone().expect("named field");
         field_visibility.insert(
             name.to_string().trim_start_matches("r#").to_owned(),
@@ -90,6 +107,7 @@ pub fn parse(arguments: Arguments, item: ItemStruct) -> Result<(RecordInput, Str
         });
     }
     let input = RecordInput {
+        redacted: arguments.redacted,
         name: item.ident,
         visibility: item.vis,
         attributes,
@@ -170,10 +188,12 @@ mod tests {
             let Err(error) = result else {
                 panic!("unsupported field attribute was accepted: {attribute:?}");
             };
-            assert_eq!(
-                error.to_string(),
-                "record fields support only documentation, lints, and `#[history(...)]`",
-            );
+            let expected = if attribute.path().is_ident("cfg_attr") {
+                "record fields support only documentation, lints, and `#[history(...)]`"
+            } else {
+                "field redaction requires `#[history(..., redacted)]` and the `redactable` feature"
+            };
+            assert_eq!(error.to_string(), expected);
         }
     }
 }

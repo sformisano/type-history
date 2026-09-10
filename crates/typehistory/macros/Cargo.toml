@@ -10,6 +10,10 @@ publish = false
 [lib]
 proc-macro = true
 
+[features]
+default = []
+redactable = ["typehistory-codegen/redactable", "typehistory-core/redactable"]
+
 [dependencies]
 typehistory-codegen = { path = "../codegen", version = "0.1.0" }
 typehistory-core = { path = "../core", version = "0.1.0" }

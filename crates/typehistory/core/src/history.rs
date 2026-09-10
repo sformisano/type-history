@@ -58,7 +58,7 @@ pub enum DecodeFailureKind {
 }
 
 /// Immutable original and adjacent version context for a decoding failure.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct DecodeContext {
     identity: TypeIdentity,
     source_version: PayloadVersion,
@@ -68,7 +68,8 @@ pub struct DecodeContext {
 }
 
 impl DecodeContext {
-    pub(crate) fn unsupported(identity: TypeIdentity, source_version: PayloadVersion) -> Self {
+    /// Construct context for an unsupported stored version.
+    pub fn unsupported(identity: TypeIdentity, source_version: PayloadVersion) -> Self {
         Self {
             identity,
             source_version,
@@ -78,7 +79,8 @@ impl DecodeContext {
         }
     }
 
-    pub(crate) fn decode(identity: TypeIdentity, source_version: PayloadVersion) -> Self {
+    /// Construct context for failed historical JSON decoding.
+    pub fn decode(identity: TypeIdentity, source_version: PayloadVersion) -> Self {
         Self {
             identity,
             source_version,
@@ -88,7 +90,8 @@ impl DecodeContext {
         }
     }
 
-    pub(crate) fn upcast(
+    /// Construct context for one failing adjacent conversion.
+    pub fn upcast(
         identity: TypeIdentity,
         source_version: PayloadVersion,
         adjacent_from: PayloadVersion,

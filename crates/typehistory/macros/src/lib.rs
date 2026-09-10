@@ -24,8 +24,12 @@ use typehistory_codegen::{
 /// and removals newest first. The macro supplies record traits and the current
 /// alias; additional derives on its input are rejected.
 ///
-/// Generated records implement `Clone`, `PartialEq`, and ordinary `Debug`.
-/// `Debug` formats field values. Every retained field type must implement these traits.
+/// Ordinary records implement `Clone`, `PartialEq`, and field-wise `Debug`.
+/// The optional `redacted` argument requires the `redactable` feature on the
+/// runtime, build hook, and CLI. It selects fixed masked `Debug`, structural
+/// Redactable traits, and `HasRedactedHistory` instead of `HasHistory`.
+/// Field `#[sensitive]`, `#[sensitive(Policy)]`, and `#[not_sensitive]` policies
+/// apply across all retained occurrences. See the runtime's `redaction` module.
 #[proc_macro_attribute]
 pub fn history(arguments: TokenStream, item: TokenStream) -> TokenStream {
     match expand(
@@ -88,9 +92,17 @@ fn expand(arguments: Arguments, item: ItemStruct) -> Result<Tokens> {
     )?;
     let facade = facade();
     let support: Path = syn::parse_quote!(#facade::__private);
+    let (error, history_trait) = if input.redacted {
+        (
+            quote!(#facade::redaction::RedactedDecodeError),
+            quote!(#facade::redaction::HasRedactedHistory),
+        )
+    } else {
+        (quote!(#facade::DecodeError), quote!(#facade::HasHistory))
+    };
     let paths = GenerationPaths {
         support,
-        error: syn::parse_quote!(#facade::__private::DecodeError),
+        error: syn::parse2(error.clone())?,
         helper_prefix: helper_prefix(&input.name),
     };
     let generated = generate_history(&input, &identity, &history, &paths)?;
@@ -115,13 +127,13 @@ fn expand(arguments: Arguments, item: ItemStruct) -> Result<Tokens> {
     Ok(quote! {
         const _: &str = include_str!(#ledger_path);
         #items
-        impl #facade::HasHistory for #current {
+        impl #history_trait for #current {
             const TYPE: #facade::TypeIdentity = #facade::TypeIdentity::new(#identity);
             const VERSION: #facade::PayloadVersion = match #facade::PayloadVersion::try_from_raw(#head) {
                 ::core::result::Result::Ok(version) => version,
                 ::core::result::Result::Err(_) => panic!("non-positive history version"),
             };
-            fn history() -> #facade::History<Self> {
+            fn history() -> #facade::History<Self, #error> {
                 const RETAINED: &[#facade::PayloadVersion] = &[#(match #facade::PayloadVersion::try_from_raw(#retained) {
                     ::core::result::Result::Ok(version) => version,
                     ::core::result::Result::Err(_) => panic!("non-positive history version"),
@@ -152,7 +164,8 @@ fn required_environment(name: &str, expected: &str, marker: &Ident) -> Result<()
 fn facade() -> Path {
     match crate_name("typehistory") {
         Ok(FoundCrate::Name(name)) => {
-            let name = Ident::new(&name, Span::call_site());
+            let name = syn::parse_str::<Ident>(&name)
+                .unwrap_or_else(|_| Ident::new_raw(&name, Span::call_site()));
             syn::parse_quote!(::#name)
         }
         Ok(FoundCrate::Itself) | Err(_) => syn::parse_quote!(::typehistory),

@@ -29,6 +29,11 @@
 //! [`ResolvedSchema`] describes structural wire types. [`JsonSchemaField`] and
 //! [`FieldSchema`] adapt those field types for schema export. The [`Schema`]
 //! derive supplies the field contract for supporting named records.
+//!
+//! The optional `redactable` feature enables explicit `#[history(..., redacted)]`
+//! histories. Enable it on the build hook and CLI too. These histories use
+//! `redaction::HasRedactedHistory` and `redaction::decode`, with separate safe
+//! errors. Ordinary histories retain the contracts above in every feature mode.
 
 extern crate self as typehistory;
 
@@ -37,6 +42,8 @@ pub use typehistory_core::{
     decode, DecodeContext, DecodeError, DecodeFailureKind, HasHistory, History,
     InvalidPayloadVersion, InvalidTypeIdentity, PayloadVersion, ReadError, TypeIdentity,
 };
+#[cfg(feature = "redactable")]
+pub use typehistory_core::{redactable, redaction};
 pub use typehistory_macros::{history, Schema};
 
 /// Dependencies addressed by generated code.
