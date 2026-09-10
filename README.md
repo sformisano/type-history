@@ -62,7 +62,7 @@ pub struct ReceiptCreated {
 
 - `#[versioned(...)]` marks `ReceiptCreated` as a versioned struct.
   - Its `stable_id` argument identifies this type and its history.
-  - Once frozen, changing it fails the build (more on this later).
+  - Once frozen, changing it fails the build (more on how this works later).
 - `#[history(...)]` describes the change to the `currency` field.
   - `added_at = v2` introduces `currency` in V2.
   - `backfill_value` supplies `"USD"` when converting V1 events, because the shop accepted only US dollars then.
