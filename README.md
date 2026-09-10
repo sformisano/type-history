@@ -29,6 +29,7 @@ Compile-time checks cover:
 
 ## Table of contents
 
+- [When to use Typehistory](#when-to-use-typehistory)
 - [Quick example](#quick-example)
 - [Start an empty package](#start-an-empty-package)
 - [Design principles](#design-principles)
@@ -42,38 +43,60 @@ Compile-time checks cover:
 - [Build profiles and environment](#build-profiles-and-environment)
 - [Modules, dependency names, and nested values](#modules-dependency-names-and-nested-values)
 - [Supported types and limits](#supported-scope)
+- [Optional Redactable integration](#optional-redactable-integration)
 - [Origin in Axis](#axis-integration)
 - [Crates and development](#crates-and-development)
 
+## When to use Typehistory
+
+Persisted data often outlives the code that wrote it. A production application
+may need to read years of records after its Rust structs have changed.
+
+Typehistory helps when those records need to become the types your application
+uses today. Common examples include:
+
+- **Stored events:** Read events written before a field was added or changed.
+- **Saved snapshots:** Restore a record written by an earlier application version.
+- **Versioned documents:** Read records with different stored versions through
+  one current Rust type.
+
+Your application stores each record's identity, version, and JSON bytes.
+Typehistory reads those bytes and applies the conversions needed to produce the
+current type. Your application handles storage, event replay, and any writes
+back to the database.
+
 ## Quick example
 
-Suppose a shop originally accepted only US dollars. Its `Receipt` record needed
-an amount in cents, because every receipt had the same currency. The shop now
-accepts other currencies, so the next record version needs a `currency` field.
+Suppose a shop originally accepted only US dollars. Its `Receipt` record stored
+an amount in cents. The shop now accepts other currencies, so new receipts need
+a `currency` field as well.
 
-Earlier receipts have no such field. Reading one as the new type requires a
-choice: which currency should it receive? In this example, the shop's history
-justifies assigning `"USD"`. Typehistory records that choice alongside the new
-field and generates both versions of `Receipt`.
+Earlier receipts have no currency field, but their amounts still mean US dollars.
+We can therefore assign `"USD"` when converting them to the new type.
+Typehistory records that rule alongside the field and generates both versions
+of `Receipt`.
 
-The following tutorial starts from an empty package. It introduces V1, freezes
-it, then adds and tests V2 in the same package.
+The tutorial follows this change from start to finish:
+
+1. Declare the original receipt as V1 and freeze its schema.
+2. Add currency in V2, with `"USD"` as the value for older receipts.
+3. Test reading V1 and writing V2, then freeze V2 for release.
 
 ## Start an empty package
 
 ### 1. Create the package
 
-The crates are pre-release and are not published on crates.io. This setup uses
-an authorized checkout of the private repository. A
-[Git dependency option](#use-a-git-revision) follows the complete tutorial.
+The crates are not yet published on crates.io. This tutorial uses a local
+checkout of the private repository, which requires repository access.
+You can also [depend on an exact Git revision](#use-a-git-revision).
 
 Three packages have different jobs:
 
 | Package | Why the example needs it |
 | --- | --- |
 | `typehistory` | Provides the history declaration, generated types, and decoder |
-| `typehistory-build` | Checks historical schemas whenever Cargo builds the package |
-| `cargo-typehistory` | Initializes the schema file and freezes new versions |
+| `typehistory-build` | Makes Cargo check that previously frozen versions remain intact |
+| `cargo-typehistory` | Creates the schema file and freezes new versions |
 
 Use the repository's pinned Rust 1.97.1 toolchain. Choose a directory outside
 this repository's workspace for the new package.
@@ -110,17 +133,21 @@ typehistory-build = { path = "/absolute/path/to/typehistory/crates/typehistory-b
 ```
 
 Replace both checkout paths with your actual absolute path. Cargo does not expand
-environment variables inside TOML. The tests use `serde_json` to write a current
-receipt. Serde is also available for the supporting types shown later.
+environment variables inside TOML. The tests use `serde_json` to write receipts.
+The nested record example later in this README also uses Serde derives.
 
 ### 2. Initialize the schema file
 
-A schema describes a version's serialized field names, field types, and supported
-nested structure.
+A **schema** describes a record's serialized field names, field types, and nested
+structure. Typehistory saves frozen schemas in a file called the **ledger**.
+Later builds compare your declaration with that file to check that older versions
+remain intact.
 
-Typehistory uses `build.rs` to check each build against previously frozen schemas.
-The package configuration enables those checks, and a schema file records what
-they must preserve. This file is called the **ledger**.
+The setup uses three files:
+
+- `typehistory.toml` enables Typehistory for the package.
+- `build.rs` runs the schema checks during Cargo builds.
+- `typehistory/schemas.json` stores the ledger. The `init` command creates it.
 
 Create `typehistory.toml`:
 
@@ -144,9 +171,9 @@ cargo fetch --locked
 cargo typehistory init --package receipt-history
 ```
 
-`init` creates the empty ledger at `typehistory/schemas.json`. It requires a
-package with no history declarations and refuses to replace an existing ledger.
-Ordinary builds require this file, even before the first history exists.
+`init` creates an empty ledger at `typehistory/schemas.json`. Run it before adding
+the first history declaration. It refuses to replace an existing ledger.
+Cargo builds require this file even when the package has no histories yet.
 
 Lifecycle commands run with `--locked --offline`. Fetching dependencies first
 allows their compiler checks to run without network access. After changing the
@@ -159,9 +186,9 @@ Add this line to `.gitignore`:
 **/typehistory/.schemas.lock
 ```
 
-Commit the manifest, Cargo lockfile, configuration, build hook, source, and ledger
-with your project. The `.schemas.lock` file only coordinates concurrent commands;
-it is disposable.
+Commit `Cargo.toml`, `Cargo.lock`, `typehistory.toml`, `build.rs`, your source, and
+`typehistory/schemas.json` with your project. The `.schemas.lock` file prevents
+concurrent commands from changing the ledger at the same time. It can be recreated.
 
 ### 3. Declare V1
 
@@ -175,18 +202,21 @@ pub struct Receipt {
 }
 ```
 
-The attribute gives this history the stable identity `shop.receipt.created`.
-That identity stays the same if you later rename the Rust type or move its module.
+This declaration gives Typehistory two pieces of information:
 
-Typehistory generates a concrete `ReceiptV1` struct containing `amount_cents`.
-It also makes `Receipt` an alias of `ReceiptV1`, so application code can use the
-original name. A field with no history annotation exists from V1 by default.
+- **Identity:** `shop.receipt.created` identifies this history in stored records.
+  Keep it unchanged when renaming the Rust type or moving its module.
+- **Initial fields:** `amount_cents` belongs to V1. Fields without history
+  attributes exist from V1 by default.
+
+Typehistory generates `ReceiptV1` with an `amount_cents` field. It also makes
+`Receipt` an alias of `ReceiptV1`, so application code can use the original name.
 
 ### 4. Freeze V1
 
-The first version starts as a **draft**: you can still change it during development.
-A development build accepts the draft and prints a warning. Freezing records
-its schema in the ledger, which makes later builds check that V1 remains intact.
+The first version starts as a **draft**, which you can edit during development.
+Development builds allow drafts with a warning. Freezing V1 saves its schema in
+the ledger and makes later builds reject changes to that schema.
 
 Build the declaration, then freeze V1:
 
@@ -195,9 +225,8 @@ cargo build --locked
 cargo typehistory freeze --package receipt-history
 ```
 
-For example, changing the frozen V1 field from `u64` to `String` now fails a
-build. That edit would change the representation of an existing version.
-Adding V2 describes the change while preserving V1.
+Changing `amount_cents` from `u64` to `String` now fails compilation because it
+would change frozen V1. Describe further changes in V2 so V1 remains available.
 
 ### 5. Add currency in V2
 
@@ -214,10 +243,11 @@ pub struct Receipt {
 }
 ```
 
-`added_at = v2` says that `currency` first exists in V2.
-`backfill_value` supplies its value when converting a receipt from before that
-addition. The expression assigns `"USD"`, because the example's V1 receipts all
-used US dollars.
+The new field's attribute describes both parts of the addition:
+
+- **Version:** `added_at = v2` introduces `currency` in V2.
+- **Value for older records:** `backfill_value` supplies `"USD"`
+  when converting a V1 receipt, because all V1 receipts used US dollars.
 
 One declaration now generates both record versions:
 
@@ -227,9 +257,9 @@ One declaration now generates both record versions:
 | `ReceiptV2` | `amount_cents: u64`, `currency: String` |
 | `Receipt` | Alias of `ReceiptV2` |
 
-The conversion preserves the amount and fills in the currency. V1's schema stays
-unchanged. V2 is the new editable draft, and application code using `Receipt`
-now sees its two fields.
+The conversion keeps the amount and fills in the currency. V1's schema stays
+unchanged. V2 becomes the new draft, and application code using `Receipt` now
+sees both fields.
 
 ### 6. Read V1 and write V2
 
@@ -239,10 +269,12 @@ A V1 receipt can be represented as this JSON:
 {"amount_cents":1200}
 ```
 
-`decode::<Receipt>` selects the Receipt history. The decoder checks that the stored
-identity matches `Receipt::TYPE`. The stored version selects its starting record type.
-Reading these bytes as V1 creates a `ReceiptV1`, then converts it into the current
-`ReceiptV2` using the declared backfill.
+Pass these bytes to `decode::<Receipt>` with the stored identity and version.
+The decoder then:
+
+1. Checks that the identity matches `Receipt::TYPE`.
+2. Uses the version to read the JSON as `ReceiptV1`.
+3. Converts it into `ReceiptV2`, assigning `"USD"` to the new field.
 
 Append these tests to `src/lib.rs`:
 
@@ -285,14 +317,16 @@ mod receipt_tests {
 }
 ```
 
-The first test checks that the earlier receipt becomes an amount of 1200 with
-currency `"USD"`. The second constructs a current receipt with `"EUR"`, writes
-it through Serde, and reads it back as V2.
+These tests check two uses of the same current type:
 
-New receipts supply their currency explicitly. The backfill applies when converting
-older records; it does not supply fields for current constructors or rewrite
-stored bytes. An application that saves these records must keep identity,
-version, and bytes together in its storage format.
+- **Read an old receipt:** V1 bytes become a `Receipt` with amount 1200 and currency
+  `"USD"`.
+- **Write a new receipt:** A `Receipt` with currency `"EUR"` keeps that value when
+  serialized and read back as V2.
+
+The backfill runs only when converting older records. New `Receipt` values must
+supply their currency explicitly. Decoding leaves the stored bytes unchanged.
+When saving a record, keep its identity, version, and bytes together.
 
 Run the tests:
 
@@ -346,59 +380,66 @@ Update the lockfile and fetch dependencies before the next lifecycle command.
 
 ## Design principles
 
-A history describes the versions your program still supports. Its stable identity
-connects them even when Rust names change. Each version has a concrete generated
-type, so a conversion function receives the fields that actually existed at that
-point in the history.
+The receipt example uses a few rules that also apply to longer histories:
 
-Conversions run between consecutive versions. Reading V1 as V3 first converts V1
-to V2, then V2 to V3. Each step expresses one change. Added fields need an explicit
-value or conversion function because the correct interpretation of missing data
-depends on the application.
+- **One history, one identity:** The identity connects stored records to their
+  history even when Rust type names change.
+- **One Rust type per version:** Earlier types keep the fields that existed in
+  that version. Application code can use the current alias or a specific version.
+- **One conversion per step:** Reading V1 as V3 first converts V1 to V2, then V2
+  to V3. Each new version builds on the existing conversions.
+- **Explicit values for old data:** You choose what an added field means for
+  older records. Typehistory cannot infer that choice from the field's type.
 
-The build hook checks declarations against the ledger. Runtime decoding uses the
-generated types and conversion functions, so it needs no ledger or Cargo process.
-Freezing protects historical schemas; conversion tests check whether the chosen
-values still mean the right thing.
+The ledger is needed when building the application. The running application uses
+generated types and conversion functions, so it needs neither the ledger nor Cargo.
 
 ## What the macro generates
 
-`#[typehistory::history(...)]` replaces a named struct declaration with its
-versioned structs and a current alias. For the Receipt example, it generates
-`ReceiptV1`, `ReceiptV2`, and the alias `Receipt`. A removed field remains present
-in the older generated structs where it belonged.
+The struct you write is the history declaration. The macro turns it into the Rust
+types your application uses. In the receipt example, those are `ReceiptV1`,
+`ReceiptV2`, and the current alias `Receipt`.
 
 | Generated item | What it provides |
 | --- | --- |
-| `ReceiptV1`, `ReceiptV2`, and later types | One concrete record for each supported version recorded by the history |
+| `ReceiptV1`, `ReceiptV2`, and later types | One struct with the fields and types for that version |
 | `Receipt` | Alias of the latest generated type, including an allowed draft |
-| Record implementations | `Clone`, `Debug`, `PartialEq`, strict Serde serialization and deserialization, and structural schema support |
-| `HasHistory` on the current type | Stable `TYPE`, positive `VERSION`, and the `history()` descriptor |
-| `History<Receipt>` | Selection of an earlier version followed by conversions into `Receipt` |
+| Record implementations | `Clone`, `Debug`, `PartialEq`, Serde serialization and deserialization, and schema support |
+| `HasHistory` on the current type | `TYPE` identifies the history, `VERSION` identifies the current version, and `history()` provides its decoder |
+| `History<Receipt>` | Lists supported versions and decodes their bytes into the current `Receipt` |
 
-By default, every field type used in a generated version must implement `Clone`, `PartialEq`,
-and `Debug`. This includes fields present only in earlier versions. `Debug` formats
-each field through that field type's `Debug` implementation.
+By default, every field type must implement `Clone`, `PartialEq`, and `Debug`,
+including types used only in earlier versions. Generated `Debug` calls each
+field's own `Debug` implementation. Histories that opt into
+[Redactable support](#optional-redactable-integration) use different formatting and error contracts.
 
-The macro supplies these implementations. Do not add derives to the outer history
-declaration. Documentation attributes and `allow`, `warn`, and `deny` are supported.
-Lint attributes follow Rust's usual scope; field naming lints belong on the record.
+The macro owns the generated implementations, so do not add derives to the history
+declaration. You can add documentation and `allow`, `warn`, or `deny` attributes.
+Put field naming lints on the record, following Rust's usual lint scope.
 Other attributes that transform the declaration are unsupported.
 
-The identity has at least three dot-separated segments and at most 255 ASCII bytes.
-Each segment starts with a lowercase letter. Its remaining characters are lowercase
-letters, digits, or underscores. `billing.invoice.issued` is a valid identity.
+A history identity such as `billing.invoice.issued` follows these rules:
+
+- At least three segments, separated by dots.
+- Each segment starts with a lowercase letter and contains only lowercase
+  letters, digits, or underscores.
+- At most 255 ASCII bytes in total.
 
 ## Evolve an invoice through V1, V2, and V3
 
-The Receipt tutorial introduced a field with a constant backfill. This example
-adds conversions that consume an earlier field or borrow the entire earlier record.
-It also shows how a failed conversion identifies its original version and failing step.
+The receipt needed a fixed value for its new field. An invoice shows what happens
+when a conversion needs data from the previous version.
+
+This example covers:
+
+- **Type changes:** Convert a count from `u32` to `u64`, then to `String`.
+- **Renames:** Read `legacy` from the previous record to populate the new `label` field.
+- **Failures:** Find the original stored version and the conversion step that failed.
 
 ### Prepare a separate invoice package
 
-This example uses a fresh package called `invoice-history`. Its V1 declaration
-must exist before V2, just as in the Receipt tutorial.
+Create a fresh package called `invoice-history`. It needs its own ledger so you
+can declare and freeze V1 before adding V2.
 
 Choose a directory outside both `receipt-history` and this repository's workspace.
 
@@ -407,9 +448,12 @@ cargo new --lib invoice-history --edition 2024
 cd invoice-history
 ```
 
-Use the [setup manifest](#1-create-the-package), with `name = "invoice-history"` in its `[package]` section.
-Create the same `typehistory.toml` and `build.rs` from [initialization](#2-initialize-the-schema-file).
-Empty `src/lib.rs` before running these commands:
+1. Copy the [setup manifest](#1-create-the-package).
+2. Set `name = "invoice-history"` in its `[package]` section.
+3. Create `typehistory.toml` and `build.rs` using the [initialization instructions](#2-initialize-the-schema-file).
+4. Empty `src/lib.rs`.
+
+Initialize the package:
 
 ```sh
 cargo generate-lockfile
@@ -417,8 +461,7 @@ cargo fetch --locked
 cargo typehistory init --package invoice-history
 ```
 
-The package now has its own empty ledger. The following steps operate only on
-this invoice package.
+Continue in `invoice-history` for the following steps.
 
 ### V1: retain the original fields
 
@@ -444,13 +487,13 @@ cargo typehistory freeze --package invoice-history
 
 ### V2: remove, convert, and add fields
 
-V2 stores the old label under `label`, makes room for larger counts with `u64`,
-and records a revision number. This example assigns revision 7 to earlier invoices;
-an application must choose a value justified by its own history.
+V2 makes three changes:
 
-Replacing a field name requires two declarations: removing the old field and
-adding the new one. The old `legacy` field remains in `InvoiceV1`, so a conversion
-can read it while constructing V2's `label`.
+- **Rename `legacy` to `label`:** Mark `legacy` as removed and add `label` in V2.
+  Keep the `legacy` declaration so Typehistory can generate `InvoiceV1`.
+- **Widen `count` to `u64`:** Record its previous type, `u32`, and provide a conversion.
+- **Add `revision`:** Assign 7 to earlier invoices. This value is a choice made
+  for the example; your application needs a value that fits its own history.
 
 Replace `src/lib.rs` with this complete source:
 
@@ -493,13 +536,19 @@ fn label(previous: &InvoiceV1) -> Result<String, ConvertError> {
 }
 ```
 
-`widen` consumes the previous `count` and returns its `u64` value.
-`label` borrows `InvoiceV1` because it needs a different field from that record.
-Typehistory runs callbacks that borrow the whole record before moving any fields
-out of it. The removed `legacy` value is therefore still available to `label`.
+The two conversion functions take different inputs:
 
-Both callbacks return `Result`, even though these two conversions always succeed.
-The shared error type becomes useful in V3, where a conversion can fail.
+- **`widen` takes the old field value:** `cast_from_previous_value` passes it the
+  previous `count` by value. It returns the count as `u64`.
+- **`label` takes the old record:** `cast_from_previous_payload` passes it
+  `&InvoiceV1`. It clones `legacy` to produce the new label.
+
+The rename needs access to the whole previous record because V1 has no field
+called `label`. Typehistory calls record conversions before moving any fields,
+so `legacy` remains available until `label` has read it.
+
+Conversion functions, also called callbacks, return `Result`. These two always
+return `Ok`; V3 introduces a conversion that can fail.
 
 Build and freeze V2:
 
@@ -564,13 +613,18 @@ fn stringify(value: u64) -> Result<String, ConvertError> {
 }
 ```
 
-The newest update appears first on the field. These annotations describe
-`u32` in V1, `u64` in V2, and `String` in V3.
-The example rejects 13 solely to demonstrate a conversion failure.
+The newest update appears first on `count`. Its history now describes `u32` in
+V1, `u64` in V2, and `String` in V3.
 
-Reading a V1 invoice with count 42 runs `widen`, then `stringify`, producing
-the current count `"42"`. A count of 13 passes the first conversion and fails
-the second. The error preserves source version V1 and identifies the V2-to-V3 step.
+Reading V1 runs both conversions in order:
+
+| Stored count | V1 to V2: `widen` | V2 to V3: `stringify` |
+| --- | --- | --- |
+| 42 | Produces `42_u64` | Produces `"42"` |
+| 13 | Produces `13_u64` | Returns `ConvertError(13)` |
+
+The rejection of 13 exists only to demonstrate failure handling. The resulting
+error records V1 as the source version and V2-to-V3 as the failed step.
 
 Append this test module to `src/lib.rs`:
 
@@ -637,18 +691,23 @@ cargo build --release --locked
 
 ## Field history reference
 
-A **boundary** is a version where a field is added, changed, or removed.
-The **retained floor** is the earliest version kept in a history, normally V1.
-An unannotated field exists from that floor. The latest version is the highest
-field boundary, or the floor when no field has changed.
+Field attributes record when each change happened and how to construct the next
+version. Write versions as `v1`, `v2`, and so on. Version zero and values that
+overflow the version number are rejected.
 
-Write versions as `v1`, `v2`, and so on. Version zero and overflowing values
-are rejected.
+Two terms appear in this reference:
 
-| Attribute key | Placement and meaning |
+- **Boundary:** A version where a field is added, changed, or removed.
+- **Retained floor:** The earliest supported version, normally V1. A field without
+  history attributes exists from this version.
+
+The latest boundary determines the current version. If no fields have changed,
+the retained floor is also the current version.
+
+| Attribute key | Where it goes and what it declares |
 | --- | --- |
-| `id = "billing.invoice.issued"` | Required outer attribute identity; stable across Rust renames |
-| `retained_from = vN` | Optional outer attribute for an imported retained floor; requires a matching ledger and explicit import |
+| `id = "billing.invoice.issued"` | On the struct; identifies the history independently of its Rust name |
+| `retained_from = vN` | On the struct; starts an imported history at N; requires a matching ledger and explicit import |
 | `added_at = vN` | Field first exists in N; provide one backfill or conversion function |
 | `updated_at = vN` | Field changes in N; provide its previous type and one conversion function |
 | `removed_at = vN` | Field disappears in N; keep its source declaration for earlier versions |
@@ -657,23 +716,35 @@ are rejected.
 | `cast_from_previous_value = path` | Update only; a synchronous function consumes the previous field value |
 | `cast_from_previous_payload = path` | Addition or update; a synchronous function borrows the complete previous record |
 
-| Change | Allowed assignments | Callback signature |
+### Values and conversion functions
+
+An addition or update must explain how to construct the destination field.
+Choose one rule for each change:
+
+| Change | Required rule | Conversion signature |
 | --- | --- | --- |
 | Addition | One backfill value or one record callback | `fn(&InvoiceVn) -> Result<AddedType, E>` for a callback |
 | Update | One field callback or one record callback, plus `previous_type` | `fn(PreviousType) -> Result<Destination, E>` or `fn(&InvoiceVn) -> Result<Destination, E>` |
 | Removal | None | None; record callbacks can still read the removed field from the previous version |
 
-`E` must implement `std::error::Error + Send + Sync + 'static`.
-Return `Ok(value)` for a conversion that cannot fail. An added `Option` still
-needs an explicit `backfill_value = None` or callback. `Type::default()` is allowed
-when the author explicitly chooses it.
+For ordinary histories, `E` must implement `std::error::Error + Send + Sync + 'static`.
+For redacted histories, it must implement `ToRedacted`; see the
+[callback error contract](docs/redactable.md#callback-errors-and-causes).
+Return `Ok(value)` when a conversion cannot fail.
+
+Defaults are explicit choices:
+
+- An added `Option` still needs `backfill_value = None` or a conversion function.
+- `backfill_value = Type::default()` is allowed when that default is right for older records.
 
 ### Order and lifetime of a field
 
-A field can be added once, changed several times, and removed once. Its history
-attributes appear newest first. Their versions must be distinct, above the retained
-floor, after the field's addition, and before its removal where applicable.
-A removed field name stays reserved.
+A field can be added once, updated several times, and removed once.
+Write its history attributes newest first:
+
+- Each attribute uses a different version above the retained floor.
+- Updates follow the field's addition and precede its removal.
+- A removed field name stays reserved for its earlier versions.
 
 When an added field later changes type, its backfill must produce the type it
 had when first added. The next update's `previous_type` records that earlier type.
@@ -681,35 +752,43 @@ Each conversion then receives the type from the immediately previous version.
 
 ### Rename, merge, or split fields
 
-Rename a field by removing its old name and adding a distinct new name at the
-same boundary. A record callback reads the old field to produce the new one.
-The invoice's `legacy`-to-`label` change follows this pattern.
+Use `cast_from_previous_payload` when a new value depends on other fields.
+The conversion borrows the complete previous record and returns one destination
+field's value. It supports several kinds of change:
 
-Merging or splitting fields uses separate destination callbacks that borrow the
-same previous record. Each callback sees the intact previous record, never partially
-computed output. All record callbacks finish before any fields move. A callback
-can clone a value when it needs ownership.
+- **Rename:** Remove the old field and add the new field in the same version.
+  The conversion reads the old name, as `label` reads `legacy` in the invoice example.
+- **Merge:** Remove the old fields and add a field whose conversion combines their values.
+- **Split:** Remove the old field and add new fields, each with its own conversion.
+  Each conversion reads the original value from the previous record.
+
+All record callbacks run before fields move. They read the previous record's
+values, including removed fields. They cannot read another callback's output.
+Clone a value when the new field needs ownership.
 
 ### Changes that keep the same type
 
-An update may preserve a field's Rust type while changing its meaning. It still
-requires `previous_type` and a conversion callback. Intermediate versions can
-also carry a field unchanged.
+A field can change meaning while keeping its Rust type. Record that change with
+`updated_at`, the same type as `previous_type`, and a conversion function.
+Fields without a change at that version carry their values forward.
 
-The latest field boundary determines the current version. There is no separate
-version header for appending a version with no field boundary.
+Every new version needs a field boundary. There is no separate version header
+for adding a version with no field changes.
 
 ## Rejected declarations
 
-The following edits apply to the complete V2 invoice source. Each fails an
-ordinary build. The diagnostic excerpts identify the rule the edit violates.
+The compiler checks both the history attributes and the functions they name.
+For example, it rejects an addition without a value for older records or a
+conversion that accepts the wrong previous type.
+
+Each edit below applies to the complete V2 invoice source and fails a Cargo build:
 
 | Rejected edit | Diagnostic excerpt | Correction |
 | --- | --- | --- |
 | Remove `backfill_value = 7_u32` | `an added field requires` | Supply the value for earlier invoices through a backfill or record callback |
 | Replace `previous_type = u32` with `from = u32` | `unknown history key` | Use `previous_type` |
 | Remove `cast_from_previous_value = widen` | `an updated field requires` | Supply one conversion |
-| Add a record callback beside the backfill | `exactly one assignment rule` | Keep one assignment |
+| Add a record callback beside the backfill | `exactly one assignment rule` | Choose either the backfill or the callback |
 | Change `widen(value: u32)` to `widen(value: u16)` | `mismatched types` | Accept the previous field's exact type, `u32` |
 | Return `Result<String, ConvertError>` from `widen` | `mismatched types` | Return the V2 field type, `u64` |
 | Change `label` to accept `&InvoiceV2` | `mismatched types` | Borrow the previous version, `&InvoiceV1` |
@@ -725,77 +804,114 @@ pub revision: u32,
 ```
 
 The V2 example supplies `backfill_value = 7_u32` to complete the declaration.
-Invalid output types, unsupported error types, async functions, capturing closures,
-duplicate keys, and conflicting version order also fail.
+Other rejected declarations include unsupported error types, async callbacks,
+capturing closures, duplicate attribute keys, and attributes in the wrong version order.
 The [evolution matrix](docs/evolution-matrix.md) records the supported and rejected combinations.
 
 ## Decode stored records and handle failures
 
-The application supplies `decode::<Invoice>(&identity, version, bytes)` with an
-identity, a positive version, and JSON bytes. Validate a dynamic identity with
-`TypeIdentity::try_from(String)` and a raw version with `PayloadVersion::try_from_raw(u32)`.
+Use `decode::<Invoice>(&identity, version, bytes)` to read a stored invoice into
+the current type. Supply the metadata saved with those bytes:
 
-The decoder checks the identity first. It then selects the exact historical type,
-reads the JSON into that type, and converts through each subsequent version.
-It never guesses a version from the fields present in the JSON.
+- **Identity:** Which history the record belongs to. Convert an identity read
+  from storage with `TypeIdentity::try_from(String)`.
+- **Version:** Which version wrote the record. Convert a raw number with
+  `PayloadVersion::try_from_raw(u32)`; zero is invalid.
+- **Bytes:** The record's JSON payload.
+
+The decoder checks the identity and version before parsing JSON. It then reads
+the matching historical type and applies each conversion up to the current version.
+The fields present in the JSON do not determine its version.
+
 `Invoice::history().retained_versions()` lists the accepted versions.
-The descriptor's `decode` method assumes the caller already selected the correct identity.
+Calling `Invoice::history().decode(...)` directly skips the identity check, so
+use it only after selecting the correct history yourself.
 
-Unknown versions fail before JSON parsing. Generated record deserializers reject
-sequences, unknown fields, duplicate fields, malformed JSON, and missing required
-fields. An absent supported `Option` field may decode as `None`.
+### Invalid records
 
-`ReadError` distinguishes an identity mismatch from `DecodeError`. A conversion
-failure records the original version and the two versions joined by the failed
-step. Reading V1 and failing at V2-to-V3 therefore reports source V1 and adjacent
-versions V2 and V3.
+Generated record decoders accept JSON objects. Reading fails for:
 
-Both error types implement ordinary `Debug`, `Display`, and `std::error::Error`.
-Their `Error::source()` chain retains the original decoder or conversion error.
-Applications can inspect that cause along with Typehistory's version metadata.
-The wrappers do not provide `Serialize`, `Clone`, or equality guarantees.
+- An unsupported version, before attempting to parse its bytes.
+- Malformed JSON or a sequence in place of a record object.
+- Unknown fields, duplicate fields, or missing required fields.
 
-Decoding returns a current record or an error. It reads no ledger and compares
-no schema fingerprint at runtime. It does not load application state, run a
-reducer, write to a database, or replay events.
+A missing supported `Option` field may decode as `None`.
+
+### Conversion failures
+
+For ordinary histories, `ReadError` separates an identity mismatch from a
+`DecodeError`. A `DecodeError` identifies whether the version was unsupported,
+JSON decoding failed, or a conversion failed.
+
+When a conversion fails, its error includes:
+
+- **Source version:** The version originally read from storage.
+- **Failed step:** The previous and destination versions of that conversion.
+- **Cause:** The error returned by your conversion function, available through `Error::source()`.
+
+For example, reading V1 can fail in the V2-to-V3 conversion. The error still
+reports V1 as the source version, as the invoice test demonstrates.
+
+`ReadError` and `DecodeError` implement `Debug`, `Display`, and `std::error::Error`.
+The source chain preserves the original JSON or conversion error when one exists.
+These error types do not implement `Serialize`, `Clone`, or equality traits.
+Histories that opt into Redactable use [separate error types](docs/redactable.md).
+
+Decoding returns a current record or an error. It neither rewrites stored bytes
+nor checks a schema fingerprint at runtime. Your application decides what to do
+with the result.
 
 ## Frozen shapes and business meaning
 
-A schema describes a version's serialized field names, field types, and supported
-nested structure. Freezing saves that schema in the ledger. The build checks
-compiler-resolved types against it, including nested types, so changing an alias
-or dependency cannot silently replace an earlier representation.
+Freezing protects the structure of earlier records. The build checks the actual
+types resolved by the compiler against the saved schema, including nested types.
+This catches changes made through type aliases or dependencies as well as direct edits.
 
-Changing a frozen nested structure, deleting a frozen history, or losing a retained
-version fails an ordinary build. A missing or malformed ledger also fails.
-Ledger parsing rejects duplicate JSON keys, invalid or gapped versions, and
-inconsistent metadata. Version ranges are checked before generating their types.
+### What builds reject
 
-These checks cannot determine whether a conversion returns the right business
-value. For example, they cannot establish whether `"USD"` is correct for an old
-receipt. A callback can change its answer without changing any schema.
+- **Changed historical fields:** A frozen version must keep its serialized field
+  names, types, and nested structure.
+- **Deleted history:** A frozen history or retained version cannot disappear from
+  the declaration during ordinary development.
+- **Invalid ledger:** A missing or malformed ledger fails the build. Duplicate
+  JSON keys, version gaps, and inconsistent metadata are rejected too.
 
-Some source changes also preserve schemas. Equivalent nominal Rust types can
-have the same serialized representation. Reordering equivalent fields can pass
-while changing callback order. Removing a same-shape semantic step can pass if
-the remaining boundaries still describe every retained version.
+If a nested record needs a new structure, keep its earlier definition and add a
+field update that converts it to the new type.
 
-Test conversion rules against representative historical records. Keep callbacks
-deterministic and free of I/O, clocks, randomness, and externally visible side effects.
+### What conversion tests must check
 
-If a nested value needs a new serialized structure, preserve its earlier definition.
-Add a field update that converts the earlier nested type into the new one.
-Typehistory does not supply application state versioning, conversions to older
-versions, inferred defaults, or recursive business validation.
+The compiler can check that a backfill returns a `String`. It cannot determine
+whether `"USD"` is the correct currency for an old receipt. A conversion can also
+return the wrong value while preserving the expected type.
+
+Schemas describe serialized structure, so some source edits leave them unchanged:
+
+- Replacing a Rust type with another that has an equivalent serialized structure.
+- Reordering fields, which can change the order in which callbacks run.
+- Removing a conversion that preserves the schema, if other field boundaries
+  still describe every retained version.
+
+Test conversions with representative historical records. Make each conversion
+depend on its input: avoid I/O, clocks, randomness, and externally visible side effects.
+
+The generated conversion chain runs from older versions to the current type.
+It does not provide conversions back to older versions. Rust callers also need
+updating when the current type's fields change, as the removal example shows.
 
 ## Lifecycle commands
 
-Run these commands from the consumer workspace. Every command that writes a
-ledger requires one exact `--package NAME`. When selecting a version,
-`--type EXACT_ID` and `--version N` must appear together. Wildcards are rejected.
+The CLI creates and updates the ledger used by Cargo builds. Run its commands
+from your application's workspace.
 
-Optional `--features LIST` and `--target TRIPLE` select compiler inputs.
-Custom target files are unsupported.
+- **Choose a package:** Every command that writes a ledger requires `--package NAME`.
+- **Choose a version:** Supply `--type EXACT_ID` and `--version N` together when
+  selecting one version. Wildcards are rejected.
+- **Choose build settings:** Use `--features LIST` or `--target TRIPLE` when needed.
+  Custom target files are unsupported.
+
+The tutorial uses `init` and `freeze`. `check` validates existing histories.
+The remaining commands handle experimental resets or imported histories.
 
 | Command | Effect |
 | --- | --- |
@@ -813,42 +929,53 @@ Custom target files are unsupported.
 WARNING: Draft edits can make development records unreadable. Freeze a version
 before relying on its representation for data you must retain.
 
-After freezing V2, you can revise V3 repeatedly in development. A history allows
-one ordinary latest draft at a time. Freeze V3 before appending V4.
+After freezing V2, you can edit V3 repeatedly while developing its conversion.
+Each history allows one new draft at a time. Freeze V3 before adding V4.
 
-To discard the invoice's unfrozen V3, restore the complete V2 source and its callers.
-That restores the earlier field types and removes V3's fields and boundaries.
-`Invoice` becomes an alias of `InvoiceV2` again. No ledger command is needed.
+To discard an unfrozen version:
 
-Removing only the annotation while keeping `count: String` changes frozen V2,
-so the build rejects it. Any remaining V3 boundary keeps the draft present.
-A history containing only a draft can be deleted entirely.
+1. Restore the complete source for the last frozen version.
+2. Update callers to use that version's fields and types.
+3. Build again. No ledger command is needed.
+
+For the invoice, restoring V2 makes `Invoice` an alias of `InvoiceV2` again.
+Removing only the V3 attribute while keeping `count: String` would change frozen
+V2, so the build rejects it. Any remaining V3 boundary keeps the draft present.
+
+A history with no frozen versions can be deleted entirely.
 
 ### Reset and undo
 
 WARNING: Replacing a frozen schema can make stored records unreadable. Use reset
 only for disposable experimental data. Add a successor version for durable records.
 
-Reset opens the highest frozen version for experimental edits. It requires no
-successor draft. The ledger keeps the original schema and records a **reservation**
-for its replacement. Earlier versions remain protected.
+Reset lets you replace the highest frozen version during experiments. It is
+allowed only when there is no newer draft. The ledger keeps the original schema
+and marks that version as open for replacement, called a **reset reservation**.
 
-Development builds permit edits to the reserved version, but strict builds reject
-the reservation. You cannot append a successor while it exists. Deleting source
-does not remove it.
+While the reservation exists:
 
-Freeze the exact reserved identity and version to accept its replacement.
-A package-wide freeze rejects pending reservations, so that decision must be explicit.
+- Development builds allow edits to that version. Builds requiring frozen
+  versions, including release builds, reject the reservation.
+- Earlier versions remain protected.
+- You cannot add a newer version or clear the reservation by deleting source.
 
-To undo a reset, restore source that produces the saved schema. Then run
-`reset --undo` for the exact identity and version. Undo does not edit source;
-a mismatch leaves the reservation pending.
+Finish a reset in one of two ways:
+
+- **Accept the replacement:** Run `freeze` with the exact identity and version.
+  Freezing the whole package rejects pending reservations.
+- **Undo the reset:** Restore source that matches the saved schema, then run
+  `reset --undo` with the exact identity and version. Undo does not edit source;
+  a schema mismatch leaves the reservation open.
 
 ### Import a retained floor
 
-Some imported histories begin above V1. Their **retained floor** identifies the
-earliest version the program still keeps. Import requires a complete ledger in
-the current format and cannot change or remove existing frozen entries.
+Use import when bringing an existing history and its ledger into a package.
+Some histories start above V1. Their retained floor is the earliest version the
+program supports.
+
+Import requires a complete ledger in the current format. It cannot change or
+remove entries already frozen in the destination ledger.
 
 Each imported floor above V1 requires a matching `--floor EXACT_ID=N` argument.
 The declaration must state the same floor:
@@ -857,34 +984,38 @@ The declaration must state the same floor:
 #[typehistory::history(id = "billing.invoice.issued", retained_from = v4)]
 ```
 
-This fragment describes a separate history beginning at V4. In that history,
-unannotated fields start at V4 and no V1-to-V3 types are generated. It is not
-an edit to the walkthrough's V1-to-V3 invoice.
+This fragment belongs to a separate history starting at V4. Unannotated fields
+start at V4, and Typehistory generates no V1, V2, or V3 types for it.
+Do not apply it to the tutorial's existing V1-to-V3 history to discard old versions.
 
-The imported ledger must contain every declared identity and retained version.
-A floor annotation alone cannot establish those earlier schemas.
-The source must also express the imported latest version through its floor or
-field boundaries; import does not silently trim history that cannot be expressed.
+The source and imported ledger must agree:
+
+- The ledger contains every declared identity and supported version.
+- The floor annotation matches the imported floor and its `--floor` argument.
+- The declaration's floor or field boundaries describe its latest version.
+
+The annotation alone cannot supply missing historical schemas.
 
 ### Failed commands and recovery
 
-Commands that change a ledger take a package lock and capture the compiler inputs.
-They validate a candidate ledger and check that source has not changed before
-atomically replacing the file. The lock remains held until the result is read back.
+Ledger writes are validated before the file is replaced. A package lock prevents
+concurrent writes, and the command checks that its source inputs have not changed.
+The lock stays held until the command reads back the result.
 
-A busy lock, stale input, or failure before replacement leaves the ledger unchanged.
-Temporary candidate files are disposable.
+Recovery depends on whether the replacement happened:
 
-A failure after replacement reports `COMMITTED`. Inspect the live ledger before
-retrying, because the operation has already changed it. Commands do not promise
-a transaction across packages or modify stored record bytes.
+- **Before replacement:** A busy lock, changed input, or validation failure leaves
+  the ledger unchanged. Temporary candidate files can be discarded.
+- **After replacement:** The error includes `COMMITTED`. Inspect the live ledger
+  before retrying because the operation has already changed it.
+
+Each package is updated separately. These commands do not modify stored record bytes.
 
 ## Build profiles and environment
 
-Every normal build checks source and configuration against the committed ledger.
-Changes to the ledger, relevant modules, manifests, or strict settings invalidate
-the checks. Builds never freeze, repair, or rewrite the ledger.
-Compiler assertions also check changed nested dependencies when build output is cached.
+Development builds let you work on a draft. Release builds require every version
+to be frozen. You can also require frozen versions in a development build with
+`TYPEHISTORY_REQUIRE_FROZEN=1`.
 
 | Consumer profile or setting | Ordinary draft or reset reservation |
 | --- | --- |
@@ -895,62 +1026,72 @@ Compiler assertions also check changed nested dependencies when build output is 
 | Custom profile inheriting `dev` | Development rules |
 | Custom profile inheriting `release` | Release rules |
 
-Both strict variables accept only unset or exactly `1`. Empty strings, `0`, and
-`true` fail, even when the other variable equals `1`. Neither variable can relax
-release checks. The consuming profile's family determines these rules, independently
-of `debug_assertions` and optimization.
+`AXIS_REQUIRE_FROZEN_EVENTS` is also accepted for compatibility with Axis tooling.
+Both strict variables must be unset or exactly `1`. Empty strings, `0`, and `true`
+fail, even when the other variable equals `1`. Neither can relax release checks.
+Custom profiles follow their inherited family, regardless of optimization or `debug_assertions`.
 
-`TYPEHISTORY_SCHEMA_EXPORT` and `AXIS_SCHEMA_EXPORT` are tooling signals.
-They accept only unset or `1` and cannot relax release or explicit strict checks.
-Lifecycle export uses captured development sources. Forced Cargo environment
-settings remain effective; conflicting forced settings fail.
+### When checks run
 
-The build hook supplies `TYPEHISTORY_LEDGER_PATH`, `TYPEHISTORY_SCHEMA_ID_PREFIX`,
-and `TYPEHISTORY_AUTHORITY_KIND`. Do not set them yourself. The package requires
-a library target and accepts only `format = 1` in `typehistory.toml`.
-No `links` value, manifest metadata, or second declaration file is needed.
-The ledger location is fixed at `typehistory/schemas.json`.
+Cargo builds check source and configuration against the committed ledger.
+Changes to the ledger, relevant modules, manifests, or strict settings rerun the
+checks. Compiler assertions also check changed nested dependencies when build
+output is cached. Builds do not freeze, repair, or rewrite the ledger.
 
-A package cannot configure both standalone and Axis ledgers. Depending on the
-Typehistory runtime does not itself enable standalone ledger checks.
+### Package configuration
+
+- A consumer needs a library target, the `build.rs` hook, and `format = 1` in
+  `typehistory.toml`. Depending on the runtime alone does not enable ledger checks.
+- The ledger lives at `typehistory/schemas.json`; its location is fixed.
+- No `links` value, manifest metadata, or second declaration file is needed.
+- A package cannot configure both standalone and Axis ledgers.
+
+### Variables used by tooling
+
+The build hook sets `TYPEHISTORY_LEDGER_PATH`, `TYPEHISTORY_SCHEMA_ID_PREFIX`, and
+`TYPEHISTORY_AUTHORITY_KIND`. Do not set them yourself.
+
+`TYPEHISTORY_SCHEMA_EXPORT` and `AXIS_SCHEMA_EXPORT` are used by export tooling.
+They must be unset or `1` and cannot relax release or explicit strict checks.
+Lifecycle export uses a captured copy of development sources. Forced Cargo
+environment settings remain effective; conflicting forced settings fail.
 
 ## Modules, dependency names, and nested values
 
 ### Modules and dependency names
 
-Histories use ordinary `mod` declarations and explicit macro imports. A renamed
-dependency works through `package = "typehistory"`. Invoke its chosen name,
-such as `#[history_api::history(...)]`. Renaming the build dependency likewise
-changes the call in `build.rs`. Generated paths follow those dependency names.
+Put histories in ordinary Rust modules and import the macro explicitly.
+Types, conversion functions, and expressions resolve where the declaration
+appears, including supported `self`, `super`, and `crate` paths.
 
-Runtime dependencies can use ordinary or target-specific dependency tables,
-including renamed and workspace-inherited entries. History declarations themselves
-must remain unconditional. Source directories may be named `target`; lifecycle
-snapshots exclude Cargo's resolved output directory.
+The following rules also apply:
 
-Types, callback paths, and expressions resolve where the original declaration
-appears. Supported `self`, `super`, and `crate` paths keep that meaning.
-Raw identifiers keep their Rust spelling; `r#type` has the serialized key `type`.
-Duplicate canonical names and collisions with generated `InvoiceVn` names fail.
+- **Renamed dependencies:** Use `package = "typehistory"` and invoke the macro
+  through the dependency's chosen name, such as `#[history_api::history(...)]`.
+  If you rename `typehistory-build`, use that name in `build.rs` too.
+- **Dependency tables:** Runtime dependencies can be target-specific or inherited
+  from the workspace. History declarations themselves must be unconditional.
+- **Generated names:** Avoid collisions with names such as `InvoiceV1` and
+  `InvoiceV2`. Raw identifiers keep their Rust spelling; `r#type` is stored as `type`.
+  Duplicate serialized field names are rejected.
+- **Source directories:** A source directory can be named `target`. Lifecycle
+  snapshots exclude Cargo's actual build output directory.
 
 ### Nested records
 
-A history field can contain a separate named record. Deriving `typehistory::Schema`
-on that supporting record describes its nested structure for frozen checks.
-The derive creates `ResolvedSchema` and schema export support. It does not supply
-Serde implementations, constructors, or business validation.
+A field can contain another named struct. Typehistory needs to know that struct's
+schema so a later edit cannot silently change a frozen record's nested fields.
 
-Nested records must use the supported closed representation, which rejects
-unknown fields. Pair ordinary Serde derives with `#[serde(deny_unknown_fields)]`.
-Other Serde or Schemars attributes that change the representation are rejected.
-If supporting types use Schemars directly, keep `schemars = "=1.2.2"`.
+For a supporting struct such as `Address`:
 
-Public supporting records can contain private nested field types. Generated history
-versions and their current aliases can also be nested fields, including through
-`Option`. Their schema describes the selected version's payload structure.
+1. Derive `typehistory::Schema` to describe its structure for the build checks.
+2. Derive Serde's `Serialize` and `Deserialize` for reading and writing its values.
+3. Add `#[serde(deny_unknown_fields)]` so decoding rejects unexpected fields.
 
-The following module adds an independent `AddressRecord` history to an initialized
-library. Its `Address` value has a schema and ordinary Serde implementations.
+`Schema` supplies `ResolvedSchema` and schema export support. The other derives
+supply serialization; constructors and application validation remain your code's responsibility.
+
+Add this module to an initialized library:
 
 <!-- example:nested-example.rs -->
 ```rust
@@ -986,53 +1127,74 @@ pub mod addresses {
 ```
 
 The test accepts an address with `number` and rejects one with an unknown field.
-Adding this module creates a new V1 draft, which must be frozen before a release build.
+Adding this module creates a new V1 draft. Freeze it before a release build.
+
+Nested types follow these additional rules:
+
+- Public supporting records may contain private nested field types.
+- Generated history versions and current aliases can also be nested fields,
+  including through `Option`. Their schema is the selected version's structure.
+- Other Serde or Schemars attributes that change the representation are rejected.
+- If a supporting type uses Schemars directly, use `schemars = "=1.2.2"`.
 
 ## Supported scope
 
-History declarations support concrete named records, including empty records.
-Supported field types include `bool`, signed and unsigned 8-to-128-bit integers,
-`String`, vectors, fixed arrays, optional values, and nested resolved records.
-`Vec<u8>` uses the existing byte representation; array length is part of its schema.
+History declarations use structs with named fields, including empty structs.
+Supported field types include:
 
-The authoring API does not support floats, pointer-sized integers, enums,
-tuple or unit history structs, generics, recursive histories, maps, sets, or nested
-options. Asynchronous callbacks and callbacks that consume a whole record are
-also unsupported.
+| Kind | Supported types |
+| --- | --- |
+| Scalars | `bool`, `String`, and signed or unsigned integers from 8 to 128 bits |
+| Containers | Vectors, fixed arrays, and optional values with supported element types |
+| Nested records | Named records with schema support, including generated history versions |
 
-Conditional history inventories and Serde `rename`, `default`, `flatten`, `skip`,
-`alias`, and `with` attributes are rejected. Supported feature-selected aliases
-remain subject to compiler-resolved frozen checks.
+Array length is part of the schema. `Vec<u8>` has a dedicated byte schema;
+other vectors use a sequence schema.
 
-Generated code grows with the retained version range. Version ranges are checked
-against the ledger before allocation or expansion, so an unauthorized huge range
-is rejected. A history starting above V1 needs an explicit retained-floor import.
+The authoring API currently rejects:
+
+- **Unsupported shapes:** Enums, tuple structs, unit structs, generics, and recursive histories.
+- **Unsupported field types:** Floats, pointer-sized integers, maps, sets, and nested options.
+- **Unsupported callbacks:** Async functions and functions that consume the whole previous record.
+- **Conditional declarations:** The set of histories must not change with conditional compilation.
+  Supported feature-selected type aliases still undergo frozen schema checks.
+- **Serialization overrides:** Serde `rename`, `default`, `flatten`, `skip`, `alias`, and `with`.
+  Use history attributes to describe field changes.
+
+Generated code grows with the number of supported versions. The ledger limits
+which version ranges can be generated, and these checks run before expansion.
+A history starting above V1 needs an explicit [import](#import-a-retained-floor).
 
 ## Optional Redactable integration
 
-Enable the default-disabled `redactable` feature on the runtime, build hook, and
-CLI. Then select `#[history(id = "billing.receipt.recorded", redacted)]` for each
-history that needs redacted records and errors. Ordinary histories keep the
-tutorial's traits and error contracts, including when another dependency enables
-the feature.
+If records contain sensitive data, the optional Redactable integration provides
+redacted output and errors for the histories you select. It is disabled by default.
 
-The [optional integration guide](docs/redactable.md) covers
-field policies, nested records, safe errors, renamed dependencies, and compiled examples.
-It uses the published Redactable 0.12.0 contracts. Payload serialization remains unchanged.
+To use it:
+
+1. Enable the `redactable` feature on `typehistory`, `typehistory-build`, and the CLI.
+2. Select each history with `#[history(id = "billing.receipt.recorded", redacted)]`.
+3. Declare its field policies and use the redacted decoding API from the
+   [integration guide](docs/redactable.md).
+
+Enabling the feature alone does not change ordinary histories, even when another
+dependency enables it. They keep the tutorial's traits and error types.
+Ordinary Serde serialization still writes the original field values, including
+for redacted histories. Persist those payloads; use redacted output for display.
+
+The guide covers field policies, nested records, callback errors, and renamed
+dependencies, with examples using Redactable 0.12.0.
 
 ## Axis integration
 
-Typehistory was extracted from Axis's event field-history implementation.
-The [generation interfaces](docs/redactable.md#axis-and-other-macro-frontends)
-let Axis retain its own structured errors and event traits. A standalone fixture
-checks those interfaces; the existing Axis extraction checkout requires separate integration work.
-The [Axis authoring guide at the extraction revision](https://github.com/sformisano/axis/blob/af7b96c3f0744cdfd170c50bb321d5dfd02be8ea/docs/design/domain-authoring-macros.md#event-field-history)
-records that origin and its `aggregate!` syntax.
+Typehistory was extracted from Axis's event history implementation. The
+[Axis authoring guide at the extraction revision](https://github.com/sformisano/axis/blob/af7b96c3f0744cdfd170c50bb321d5dfd02be8ea/docs/design/domain-authoring-macros.md#event-field-history)
+describes its original use in `aggregate!` declarations.
 
-At that revision, Axis used `schema_build::compile()`, `axis/event-schemas.json`,
-and `cargo axis` commands for its event histories. Axis also owned aggregate roles,
-reducers, state, and delivery. The pinned guide describes that revision; current
-standalone Typehistory behavior is defined by this repository.
+The [generation interfaces](docs/redactable.md#axis-and-other-macro-frontends)
+allow an integrating framework to supply its own errors and traits.
+A standalone consumer tests the interfaces intended for Axis. Updating Axis's
+own macros to use them is separate integration work.
 
 ## Crates and development
 
@@ -1048,9 +1210,11 @@ The workspace separates runtime code, code generation, and development tooling:
 | `typehistory-build` | Build integration and checked ledger operations |
 | `cargo-typehistory` | Cargo subcommand for lifecycle operations |
 
-The [evolution matrix](docs/evolution-matrix.md) lists supported
-and rejected cases. The [guide](docs/guide.md) explains what
-the receipt and invoice checks establish.
+For more detail:
+
+- The [evolution matrix](docs/evolution-matrix.md) lists supported and rejected cases.
+- The [example guide](docs/guide.md) explains what the receipt and invoice tests check.
+- The [example runner instructions](examples/invoice/README.md) show how to run those checks on their own.
 
 Install the pinned Rust toolchain with rustup, plus Bash, Git, and ripgrep.
 Set `TMPDIR` to a short disk path with room for disposable consumer builds.
@@ -1062,10 +1226,12 @@ cargo fetch --locked
 bash scripts/verify.sh
 ```
 
-The script runs both feature modes for Clippy, workspace tests, doctests, and public documentation,
-and the executable receipt and invoice examples. GitHub Actions runs the same script.
-The example verifier compares the marked README blocks with their source files
-before running them. Normal builds use `target`; Clippy uses `target/clippy`.
+The script runs Clippy, workspace tests, doctests, documentation builds, and release
+builds with the optional integration both disabled and enabled. It then runs the
+receipt and invoice examples. GitHub Actions uses the same script.
+
+Before running the examples, their verifier checks that the marked README code
+blocks match the source files. Normal builds use `target`; Clippy uses `target/clippy`.
 
 ## License
 
