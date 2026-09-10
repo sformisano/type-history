@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Name receipt event examples `ReceiptCreated` and `ReceiptRecorded` to match
+  their stable IDs.
 - Rename the struct macro to `typehistory`; field attributes remain `history`.
   Use explicit imports in the README, guides, and reference application.
 - Put a receipt example before setup and add tested field, decoding, and redaction

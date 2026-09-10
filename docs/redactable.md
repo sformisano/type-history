@@ -45,16 +45,16 @@ use typehistory::redactable::ToRedacted;
 use typehistory::typehistory;
 
 #[typehistory(stable_id = "billing.receipt.recorded", redacted)]
-pub struct Receipt {
+pub struct ReceiptRecorded {
     #[sensitive]
     pub customer: String,
     #[not_sensitive]
     pub amount: u32,
 }
 
-pub fn read_receipt(bytes: &[u8]) -> Result<Receipt, Box<dyn Error>> {
+pub fn read_receipt(bytes: &[u8]) -> Result<ReceiptRecorded, Box<dyn Error>> {
     let stored = from_slice(bytes)?;
-    let receipt = Receipt::from_versioned(stored)?;
+    let receipt = ReceiptRecorded::from_versioned(stored)?;
     let safe_json = receipt.to_redacted().json();
     assert_eq!(safe_json["customer"], "[REDACTED]");
     Ok(receipt)
@@ -149,7 +149,7 @@ The generated call passes the concrete error into `RedactedDecodeError::upcast` 
 The constructor projects it once and drops the raw value.
 The safe wrapper never stores a raw error for later formatting.
 
-`Receipt::from_versioned` returns `RedactedDecodeError` when a conversion fails.
+`ReceiptRecorded::from_versioned` returns `RedactedDecodeError` when a conversion fails.
 `Debug`, `Display`, Serde output, and `ToRedacted` expose only validated metadata and captured safe causes.
 Metadata includes identity, stored version, failure kind, and failing adjacent versions.
 `RedactedDecodeError::source()` returns `None`; `redacted_cause()` exposes the captured safe value.

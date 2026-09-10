@@ -18,7 +18,7 @@ use typehistory_codegen::{
 
 /// Replace a record inventory with its authorized retained versions.
 ///
-/// Requires `stable_id = "billing.invoice.issued"` and package authority from the
+/// Requires a `stable_id` and package authority from the
 /// Typehistory build hook. The optional `retained_from = vN` requires explicit
 /// import authority. Field `#[history(...)]` records describe additions, updates,
 /// and removals newest first. The macro supplies record traits and the current
@@ -40,8 +40,8 @@ use typehistory_codegen::{
 /// ```rust,ignore
 /// use typehistory::typehistory;
 ///
-/// #[typehistory(stable_id = "billing.receipt.recorded")]
-/// pub struct Receipt {
+/// #[typehistory(stable_id = "shop.receipt.created")]
+/// pub struct ReceiptCreated {
 ///     pub amount_cents: u64,
 /// }
 /// ```

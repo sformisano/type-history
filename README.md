@@ -39,12 +39,13 @@ uses today. Common examples include:
 
 ## How it works
 
-Suppose a shop originally accepted only US dollars. Its receipts stored an amount
-in cents. The shop now accepts other currencies, so receipts need a `currency` field.
+Suppose a shop originally accepted only US dollars. Each purchase produced a
+`ReceiptCreated` event with an amount in cents. The shop now accepts other currencies,
+so new events need a `currency` field.
 
 ### 1. Describe the change
 
-Field attributes describe when the field appeared and what value older receipts
+Field attributes describe when the field appeared and what value older events
 should use:
 
 <!-- quick-example:v2.rs -->
@@ -52,7 +53,7 @@ should use:
 use typehistory::typehistory;
 
 #[typehistory(stable_id = "shop.receipt.created")]
-pub struct Receipt {
+pub struct ReceiptCreated {
     pub amount_cents: u64,
 
     #[history(added_at = v2, backfill_value = "USD".to_owned())]
@@ -62,7 +63,7 @@ pub struct Receipt {
 
 - `stable_id` identifies this history. Keep it unchanged when renaming the Rust type.
 - `added_at = v2` introduces `currency` in V2.
-- `backfill_value` supplies `"USD"` when converting V1 receipts, because all V1 receipts used US dollars.
+- `backfill_value` supplies `"USD"` when converting V1 events, because the shop accepted only US dollars then.
 
 `#[typehistory(...)]` applies to the struct. Its `#[history(...)]` field attributes
 describe the individual changes.
@@ -70,7 +71,7 @@ describe the individual changes.
 ### 2. Use the current type
 
 Typehistory generates the historical types and conversions. Application code
-uses `Receipt`, which always names the latest version, to read earlier data:
+uses `ReceiptCreated`, which always names the latest version, to read earlier data:
 
 <!-- overview:read-old.rs -->
 ```rust
@@ -79,14 +80,14 @@ use serde_json::from_slice;
 let stored = from_slice(
     br#"{"shop.receipt.created":{"1":{"amount_cents":1200}}}"#,
 )?;
-let receipt = Receipt::from_versioned(stored)?;
+let receipt = ReceiptCreated::from_versioned(stored)?;
 
 assert_eq!(receipt.amount_cents, 1200);
 assert_eq!(receipt.currency, "USD");
 ```
 
 This example uses JSON. Your application chooses storage and a supported Serde
-format. `Versioned<Receipt>` keeps the stable identity, version, and data together.
+format. `Versioned<ReceiptCreated>` keeps the stable identity, version, and data together.
 
 ### 3. Check changes at compile time
 
@@ -208,7 +209,7 @@ Write this complete `src/lib.rs`:
 use typehistory::typehistory;
 
 #[typehistory(stable_id = "shop.receipt.created")]
-pub struct Receipt {
+pub struct ReceiptCreated {
     pub amount_cents: u64,
 }
 ```
@@ -220,8 +221,8 @@ This declaration gives Typehistory two pieces of information:
 - **Initial fields:** `amount_cents` belongs to V1. Fields without history
   attributes exist from V1 by default.
 
-Typehistory generates `ReceiptV1` with an `amount_cents` field. It also makes
-`Receipt` an alias of `ReceiptV1`, so application code can use the original name.
+Typehistory generates `ReceiptCreatedV1` with an `amount_cents` field. It also makes
+`ReceiptCreated` an alias of `ReceiptCreatedV1`, so application code can use the original name.
 
 ### 4. Freeze V1
 
@@ -241,24 +242,24 @@ would change frozen V1. Describe further changes in V2 so V1 remains available.
 
 ### 5. Add currency in V2
 
-Replace `src/lib.rs` with the [V2 `Receipt` declaration above](#1-describe-the-change).
+Replace `src/lib.rs` with the [V2 `ReceiptCreated` declaration above](#1-describe-the-change).
 It adds `currency` with `"USD"` as the value for older receipts.
 
 One declaration now generates both record versions:
 
 | Type | Fields |
 | --- | --- |
-| `ReceiptV1` | `amount_cents: u64` |
-| `ReceiptV2` | `amount_cents: u64`, `currency: String` |
-| `Receipt` | Alias of `ReceiptV2` |
+| `ReceiptCreatedV1` | `amount_cents: u64` |
+| `ReceiptCreatedV2` | `amount_cents: u64`, `currency: String` |
+| `ReceiptCreated` | Alias of `ReceiptCreatedV2` |
 
 The conversion keeps the amount and fills in the currency. V1's schema stays
-unchanged. V2 becomes the new draft, and application code using `Receipt` now
+unchanged. V2 becomes the new draft, and application code using `ReceiptCreated` now
 sees both fields.
 
 ### 6. Read V1 and write V2
 
-A V1 `Versioned<Receipt>` has this JSON representation:
+A V1 `Versioned<ReceiptCreated>` has this JSON representation:
 
 ```json
 {"shop.receipt.created":{"1":{"amount_cents":1200}}}
@@ -267,9 +268,9 @@ A V1 `Versioned<Receipt>` has this JSON representation:
 The outer map identifies the history. The inner map identifies the payload version.
 Both maps contain exactly one entry. The payload keeps its original fields.
 
-Deserialize the bytes, then pass the result to `Receipt::from_versioned`.
+Deserialize the bytes, then pass the result to `ReceiptCreated::from_versioned`.
 Typehistory checks the identity and selects V1 before reading the payload.
-`from_versioned` converts it into the current `Receipt`, assigning `"USD"` to the new field.
+`from_versioned` converts it into the current `ReceiptCreated`, assigning `"USD"` to the new field.
 Application code supplies neither a numbered Rust type nor separate metadata.
 
 Append these tests to `src/lib.rs`:
@@ -278,7 +279,7 @@ Append these tests to `src/lib.rs`:
 ```rust
 #[cfg(test)]
 mod receipt_tests {
-    use super::Receipt;
+    use super::ReceiptCreated;
     use serde_json::{from_slice, to_vec};
 
     #[test]
@@ -286,7 +287,7 @@ mod receipt_tests {
         let stored = from_slice(
             br#"{"shop.receipt.created":{"1":{"amount_cents":1200}}}"#,
         ).unwrap();
-        let receipt = Receipt::from_versioned(stored).unwrap();
+        let receipt = ReceiptCreated::from_versioned(stored).unwrap();
 
         assert_eq!(receipt.amount_cents, 1200);
         assert_eq!(receipt.currency, "USD");
@@ -294,7 +295,7 @@ mod receipt_tests {
 
     #[test]
     fn write_a_current_receipt() {
-        let receipt = Receipt {
+        let receipt = ReceiptCreated {
             amount_cents: 3000,
             currency: "EUR".to_owned(),
         };
@@ -302,7 +303,7 @@ mod receipt_tests {
         let bytes = to_vec(&stored).unwrap();
 
         // The application stores and retrieves these bytes.
-        let restored = Receipt::from_versioned(from_slice(&bytes).unwrap()).unwrap();
+        let restored = ReceiptCreated::from_versioned(from_slice(&bytes).unwrap()).unwrap();
         assert_eq!(restored.amount_cents, 3000);
         assert_eq!(restored.currency, "EUR");
     }
@@ -311,15 +312,15 @@ mod receipt_tests {
 
 These tests check two uses of the same current type:
 
-- **Read an old receipt:** V1 bytes become a `Receipt` with amount 1200 and currency
+- **Read an old receipt:** V1 bytes become a `ReceiptCreated` with amount 1200 and currency
   `"USD"`.
-- **Write a new receipt:** A `Receipt` with currency `"EUR"` keeps that value when
+- **Write a new receipt:** A `ReceiptCreated` with currency `"EUR"` keeps that value when
   serialized and read back as V2.
 
-The backfill runs only when converting older records. New `Receipt` values must
+The backfill runs only when converting older records. New `ReceiptCreated` values must
 supply their currency explicitly. Decoding leaves the stored bytes unchanged.
 `into_versioned` stamps the current identity and version automatically.
-`Versioned<Receipt>` keeps them with the matching data and provides no metadata setters.
+`Versioned<ReceiptCreated>` keeps them with the matching data and provides no metadata setters.
 No trait import is needed for `into_versioned` or `from_versioned`.
 
 Existing raw JSON such as `{"amount_cents":1200}` has no identity or version.
@@ -367,18 +368,18 @@ generated types and conversion functions, so it needs neither the ledger nor Car
 ## What the macro generates
 
 The struct you write is the history declaration. The macro turns it into the Rust
-types your application uses. In the receipt example, those are `ReceiptV1`,
-`ReceiptV2`, and the current alias `Receipt`.
+types your application uses. In the receipt example, those are `ReceiptCreatedV1`,
+`ReceiptCreatedV2`, and the current alias `ReceiptCreated`.
 
 | Generated item | What it provides |
 | --- | --- |
-| `ReceiptV1`, `ReceiptV2`, and later types | One struct with the fields and types for that version |
-| `Receipt` | Alias of the latest generated type, including an allowed draft |
-| `Receipt::into_versioned()` | Wraps a current value in `Versioned<Receipt>` with its generated identity and version |
-| `Receipt::from_versioned(...)` | Converts a deserialized `Versioned<Receipt>` into the current `Receipt` |
+| `ReceiptCreatedV1`, `ReceiptCreatedV2`, and later types | One struct with the fields and types for that version |
+| `ReceiptCreated` | Alias of the latest generated type, including an allowed draft |
+| `ReceiptCreated::into_versioned()` | Wraps a current value in `Versioned<ReceiptCreated>` with its generated identity and version |
+| `ReceiptCreated::from_versioned(...)` | Converts a deserialized `Versioned<ReceiptCreated>` into the current `ReceiptCreated` |
 | Record implementations | `Clone`, `Debug`, `PartialEq`, Serde serialization and deserialization, and schema support |
 | `HasHistory` on the current type | `TYPE` identifies the history, `VERSION` identifies the current version, and `history()` provides its decoder |
-| `History<Receipt>` | Lists supported versions and decodes their bytes into the current `Receipt` |
+| `History<ReceiptCreated>` | Lists supported versions and decodes their bytes into the current `ReceiptCreated` |
 
 By default, every field type must implement `Clone`, `PartialEq`, and `Debug`,
 including types used only in earlier versions. Generated `Debug` calls each
@@ -721,7 +722,7 @@ For redacted histories, it must implement `ToRedacted`; see the
 Return `Ok(value)` when a conversion cannot fail.
 
 An optional field still needs an explicit value for older data. For example,
-adding a reference to `Receipt` in V3 could use `None`:
+adding a reference to `ReceiptCreated` in V3 could use `None`:
 
 <!-- reference:optional-field.rs -->
 ```rust
@@ -729,7 +730,7 @@ adding a reference to `Receipt` in V3 could use `None`:
 pub reference: Option<String>,
 ```
 
-This is a field fragment for the history declaration. New `Receipt` constructors
+This is a field fragment for the history declaration. New `ReceiptCreated` constructors
 must supply `reference`, even when its value is `None`.
 `backfill_value = Type::default()` is also allowed when that default is right for older records.
 
@@ -869,7 +870,7 @@ versioned value back to the current type:
 ```rust
 use serde_json::{from_slice, to_vec};
 
-let receipt = Receipt {
+let receipt = ReceiptCreated {
     amount_cents: 3000,
     currency: "EUR".to_owned(),
 };
@@ -877,7 +878,7 @@ let bytes = to_vec(&receipt.into_versioned())?;
 
 // After the application retrieves the bytes:
 let stored = from_slice(&bytes)?;
-let restored = Receipt::from_versioned(stored)?;
+let restored = ReceiptCreated::from_versioned(stored)?;
 assert_eq!(restored.currency, "EUR");
 ```
 
@@ -902,7 +903,7 @@ which serializes structs with their field names:
 use rmp_serde::{from_slice, to_vec_named};
 
 let bytes = to_vec_named(&receipt.into_versioned())?;
-let receipt = Receipt::from_versioned(from_slice(&bytes)?)?;
+let receipt = ReceiptCreated::from_versioned(from_slice(&bytes)?)?;
 ```
 
 This fragment assumes an existing `receipt`, an `rmp-serde` dependency, and a function that propagates errors.
@@ -921,12 +922,12 @@ You can inspect the source version before choosing to convert:
 use serde_json::from_slice;
 use typehistory::Versioned;
 
-let stored: Versioned<Receipt> = from_slice(
+let stored: Versioned<ReceiptCreated> = from_slice(
     br#"{"shop.receipt.created":{"1":{"amount_cents":1200}}}"#,
 )?;
 assert_eq!(stored.source_version().get(), 1);
 
-let receipt = Receipt::from_versioned(stored)?;
+let receipt = ReceiptCreated::from_versioned(stored)?;
 let current = receipt.into_versioned();
 assert_eq!(current.source_version().get(), 2);
 ```
@@ -945,7 +946,7 @@ use serde_json::from_slice;
 use typehistory::Versioned;
 
 let invalid = br#"{"shop.receipt.created":{"1":{"amount_cents":1200,"currency":"USD"}}}"#;
-assert!(from_slice::<Versioned<Receipt>>(invalid).is_err());
+assert!(from_slice::<Versioned<ReceiptCreated>>(invalid).is_err());
 ```
 
 Deserializing a `Versioned` fails for:
@@ -961,7 +962,7 @@ The fields present in a payload never determine its version.
 
 ### Conversion failures
 
-`Receipt::from_versioned` returns a `DecodeError` if an ordinary history's conversion fails.
+`ReceiptCreated::from_versioned` returns a `DecodeError` if an ordinary history's conversion fails.
 This separate step preserves the callback's concrete error without reducing it to a Serde error message.
 
 The invoice rejects a count of 13 during its V2-to-V3 conversion. Read such an
@@ -1002,7 +1003,7 @@ use typehistory::{decode, PayloadVersion, TypeIdentity};
 let identity = TypeIdentity::try_from("shop.receipt.created".to_owned())?;
 let version = PayloadVersion::try_from_raw(1)?;
 let bytes = br#"{"amount_cents":1200}"#;
-let receipt = decode::<Receipt>(&identity, version, bytes)?;
+let receipt = decode::<ReceiptCreated>(&identity, version, bytes)?;
 
 assert_eq!(receipt.currency, "USD");
 ```
@@ -1014,7 +1015,7 @@ It then applies adjacent conversions. `ReadError` distinguishes identity mismatc
 The source chain preserves the original JSON or callback error when one exists.
 `Invoice::history().decode(...)` skips the identity check; `history()` requires the `HasHistory` trait in scope.
 
-Raw JSON has no versioned wrapper, so deserializing it as `Versioned<Receipt>` fails.
+Raw JSON has no versioned wrapper, so deserializing it as `Versioned<ReceiptCreated>` fails.
 After loading it through `decode`, `into_versioned` prepares the current value for
 serialization with its identity and version.
 Any decision to replace stored data remains with the application.
@@ -1392,7 +1393,7 @@ For example, this separate receipt history hides the customer in redacted output
 use typehistory::typehistory;
 
 #[typehistory(stable_id = "billing.receipt.recorded", redacted)]
-pub struct Receipt {
+pub struct ReceiptRecorded {
     #[sensitive]
     pub customer: String,
     #[not_sensitive]
@@ -1406,7 +1407,7 @@ Request a redacted projection when displaying the value:
 ```rust
 use typehistory::redactable::ToRedacted;
 
-let receipt = Receipt { customer: "Alice".to_owned(), amount: 42 };
+let receipt = ReceiptRecorded { customer: "Alice".to_owned(), amount: 42 };
 let safe = receipt.to_redacted();
 assert_eq!(safe.json()["customer"], "[REDACTED]");
 assert_eq!(safe.json()["amount"], 42);

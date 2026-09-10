@@ -14,7 +14,7 @@
 //! use typehistory::typehistory;
 //!
 //! #[typehistory(stable_id = "shop.receipt.created")]
-//! pub struct Receipt {
+//! pub struct ReceiptCreated {
 //!     pub amount_cents: u64,
 //! }
 //! ```

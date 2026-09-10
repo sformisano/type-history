@@ -30,7 +30,7 @@ pub(super) fn receipt_tests() -> String {
     cases.push((
         "messagepack",
         format!(
-            "let receipt = Receipt {{ amount_cents: 3000, currency: \"EUR\".to_owned() }};\n\
+            "let receipt = ReceiptCreated {{ amount_cents: 3000, currency: \"EUR\".to_owned() }};\n\
              let expected = receipt.clone();\n{}\nassert_eq!(receipt, expected);\n",
             documented("decoding:messagepack.rs")
         ),
@@ -87,7 +87,7 @@ pub(super) fn receipt_v3() -> String {
 let stored = serde_json::from_slice(
     br#"{"shop.receipt.created":{"2":{"amount_cents":1200,"currency":"eur"}}}"#,
 )?;
-let receipt = Receipt::from_versioned(stored)?;
+let receipt = ReceiptCreated::from_versioned(stored)?;
 assert_eq!(receipt.amount_cents, 1200);
 assert_eq!(receipt.currency, "EUR");
 assert_eq!(receipt.reference, None);
