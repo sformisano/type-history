@@ -34,7 +34,7 @@ Type History requires Rust 1.97 or later. Follow the
 [package setup](https://github.com/sformisano/type-history/blob/main/book/src/setup.md)
 to connect the build hook and initialize the schema ledger.
 
-## Quick Example
+## How to Use
 
 A shop initially accepts only US dollars. Its `ReceiptCreated` event starts with
 an amount in cents. Later, the shop adds other currencies and supports refunds.
