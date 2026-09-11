@@ -1,8 +1,8 @@
 # Type History
 
 Type History is a Rust library that lets you evolve structs while preserving
-support for data written using earlier versions. It uses simple field attributes
-to describe changes and compile-time checks to catch missing or incorrect
+support for data written using earlier versions. It uses field attributes
+to describe changes, and compile-time checks to catch missing or incorrect
 attributes before they cause runtime failures in production.
 
 ## When to use Type History
