@@ -15,7 +15,7 @@ historical version separately.
 
 Common examples include:
 
-- **Stored events:** Read events written before a field was added or changed.
+- **Stored events:** Read events written before a field was added, changed, or removed.
 - **Saved snapshots:** Restore a record written by an earlier application version.
 - **Versioned documents:** Read records with different stored versions through
   one current Rust type.
