@@ -246,12 +246,13 @@ mod nested {{
 }}
 #[test]
 fn public_aliases_and_raw_names_are_usable() {{
+    use nested::Raw;
     let _: AB = ABV1 {{}};
     let _: Ab = AbV1 {{}};
     use history_api::{{decode, HasHistory, PayloadVersion}};
     let _: AB = decode::<AB>(&AB::STABLE_NAME, PayloadVersion::INITIAL, b"{{}}").unwrap();
     let _: Ab = decode::<Ab>(&Ab::STABLE_NAME, PayloadVersion::INITIAL, b"{{}}").unwrap();
-    let value = nested::Raw {{ r#type: 7 }};
+    let value = Raw {{ r#type: 7 }};
     assert_eq!(value.r#type, 7);
 }}
 "#

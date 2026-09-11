@@ -23,7 +23,7 @@ pub use resolved::{
 };
 pub use versioned::Versioned;
 #[doc(hidden)]
-pub use versioned::VersionedHistory;
+pub use versioned::{decode_json_payload, VersionedHistory};
 
 #[doc(hidden)]
 pub use {schemars, serde, serde_json};

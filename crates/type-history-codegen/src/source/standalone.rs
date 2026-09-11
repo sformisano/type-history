@@ -7,7 +7,7 @@ use std::{
 
 use syn::{punctuated::Punctuated, Attribute, Error, Item, Meta, Path as SynPath, Token};
 
-use super::{path_segments, reject_shape_cfg, relative, SourceDiagnostic, SourceGraph, SourceUnit};
+use super::{reject_shape_cfg, relative, SourceDiagnostic, SourceGraph, SourceUnit};
 use crate::{
     input::{self, Arguments},
     model::RecordInput,
@@ -117,15 +117,13 @@ fn is_versioned(
     unit: &SourceUnit,
     graph: &SourceGraph,
 ) -> Result<bool, SourceDiagnostic> {
-    let path = path_segments(path);
     if graph
         .imports
-        .resolves_entrypoint(&unit.module_path, &path, "versioned")?
+        .resolves_entrypoint(&unit.module_path, path, "versioned")?
     {
         return Ok(true);
     }
-    if path.len() == 1
-        && path[0] == "versioned"
+    if path.is_ident("versioned")
         && graph
             .imports
             .glob_can_supply(&unit.module_path, "versioned")?
@@ -195,6 +193,94 @@ mod tests {
     use super::discover;
     use crate::source::{SourceDiagnostic, SourceGraph};
     use std::fs;
+    use syn::parse_quote;
+
+    #[test]
+    fn absolute_paths_bypass_local_and_conditional_facade_shadows() {
+        let root = tempfile::tempdir().expect("package");
+        let library = root.path().join("lib.rs");
+        for shadow in [
+            "mod history_api {}",
+            "#[cfg(feature=\"optional\")] mod history_api {}",
+            "#[cfg(feature=\"optional\")] use another_api as history_api;",
+        ] {
+            for declaration in [
+                "#[::history_api::versioned(stable_name=\"billing.invoice.issued\")] struct Invoice {}",
+                "use ::history_api::versioned; #[versioned(stable_name=\"billing.invoice.issued\")] struct Invoice {}",
+                "use ::history_api::{self as api, versioned as evolve}; #[evolve(stable_name=\"billing.invoice.issued\")] struct Invoice {}",
+                "mod records { use ::history_api::versioned; #[versioned(stable_name=\"billing.invoice.issued\")] struct Invoice {} }",
+            ] {
+                let source = format!("{shadow} {declaration}");
+                fs::write(&library, &source).unwrap();
+                let found = discover(root.path(), &library, &["history_api".to_owned()]).unwrap();
+                assert_eq!(found.declarations.len(), 1, "{source}");
+            }
+        }
+        // An absolute path to another dependency cannot use a local reexport.
+        for declaration in [
+            "#[::other::versioned(stable_name=\"billing.invoice.issued\")] struct Invoice {}",
+            "use ::other::versioned; #[versioned(stable_name=\"billing.invoice.issued\")] struct Invoice {}",
+        ] {
+            fs::write(
+                &library,
+                format!("mod other {{ pub use history_api::versioned; }} {declaration}"),
+            )
+            .unwrap();
+            assert!(
+                discover(root.path(), &library, &["history_api".to_owned()])
+                    .unwrap()
+                    .declarations
+                    .is_empty(),
+                "{declaration}"
+            );
+        }
+    }
+
+    #[test]
+    fn unrelated_conditional_imports_do_not_select_history_branches() {
+        let root = tempfile::tempdir().expect("package");
+        let library = root.path().join("lib.rs");
+        for imports in [
+            "#[cfg(unix)] mod platform { pub struct Thing; } use platform::Thing;",
+            "#[cfg(unix)] mod platform { pub struct Thing; } #[cfg(not(unix))] mod platform { pub struct Thing; } use platform::Thing;",
+            "#[cfg(unix)] mod platform { pub struct Thing; } use crate::platform::Thing;",
+            "#[cfg(unix)] mod platform { pub struct Thing; } use platform as selected; use selected::Thing;",
+            "#[cfg(unix)] mod platform { pub struct Thing; } use platform::*;",
+            "#[cfg(unix)] use other::Thing as Native; use Native as Thing;",
+        ] {
+            let source = format!(
+                "{imports} #[history_api::versioned(stable_name=\"billing.invoice.issued\")] struct Invoice {{ value: u32 }}"
+            );
+            fs::write(&library, &source).unwrap();
+            let found = discover(root.path(), &library, &["history_api".to_owned()]).unwrap();
+            assert_eq!(found.declarations.len(), 1, "{source}");
+        }
+    }
+
+    #[test]
+    fn conditional_facade_selection_still_fails_through_aliases_and_globs() {
+        let root = tempfile::tempdir().expect("package");
+        let library = root.path().join("lib.rs");
+        for source in [
+            "#[cfg(any())] mod history_api {} #[history_api::versioned(stable_name=\"billing.invoice.issued\")] struct Invoice {}",
+            "#[cfg(any())] mod history_api {} use history_api::versioned as evolve; #[evolve(stable_name=\"billing.invoice.issued\")] struct Invoice {}",
+            "#[cfg(any())] mod history_api {} use history_api as api; use api::versioned as evolve; #[evolve(stable_name=\"billing.invoice.issued\")] struct Invoice {}",
+            "mod records { #[cfg(any())] mod history_api {} use history_api::versioned as evolve; #[evolve(stable_name=\"billing.invoice.issued\")] struct Invoice {} }",
+            "#[cfg(any())] mod history_api {} use history_api::*; #[versioned(stable_name=\"billing.invoice.issued\")] struct Invoice {}",
+            "#[cfg(any())] use another_api as history_api; use history_api::versioned as evolve; #[evolve(stable_name=\"billing.invoice.issued\")] struct Invoice {}",
+            "#[cfg(any())] mod api { pub use history_api::versioned; } use api::versioned as evolve; #[evolve(stable_name=\"billing.invoice.issued\")] struct Invoice {}",
+            "#[cfg(any())] use history_api::versioned as evolve; use evolve as selected; #[selected(stable_name=\"billing.invoice.issued\")] struct Invoice {}",
+        ] {
+            fs::write(&library, source).unwrap();
+            assert!(
+                matches!(
+                    discover(root.path(), &library, &["history_api".to_owned()]),
+                    Err(SourceDiagnostic::ConditionalSchema { .. })
+                ),
+                "{source}"
+            );
+        }
+    }
 
     #[test]
     fn conditional_attribute_wrappers_and_imported_modules_are_rejected() {
@@ -324,7 +410,7 @@ mod tests {
             assert!(
                 graph
                     .imports
-                    .resolves_entrypoint(&[], &["Schema".to_owned()], "Schema")
+                    .resolves_entrypoint(&[], &parse_quote!(Schema), "Schema")
                     .unwrap()
             );
         }
@@ -377,7 +463,7 @@ mod tests {
             assert!(
                 graph
                     .imports
-                    .resolves_entrypoint(&[], &["Schema".to_owned()], "Schema")
+                    .resolves_entrypoint(&[], &parse_quote!(Schema), "Schema")
                     .unwrap(),
                 "the macro import must not shadow the crate prefix: {source}"
             );

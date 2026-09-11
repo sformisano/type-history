@@ -30,7 +30,7 @@ pub(super) fn generate(context: &Context<'_>) -> TokenStream {
                 context.stable_name, retained.version, expected.name
             );
             assertions.push(quote! {
-                const _: () = assert!(
+                const _: () = ::core::assert!(
                     <<#ty as #resolved::ResolvedSchema>::Wire as #resolved::WireNode>::SHAPE.same(&#expected_shape),
                     #message,
                 );
@@ -43,7 +43,7 @@ pub(super) fn generate(context: &Context<'_>) -> TokenStream {
             context.stable_name, retained.version
         );
         assertions.push(quote! {
-            const _: () = assert!(
+            const _: () = ::core::assert!(
                 <<#payload as #resolved::ResolvedSchema>::Wire as #resolved::WireNode>::SHAPE.same(&#expected),
                 #message,
             );

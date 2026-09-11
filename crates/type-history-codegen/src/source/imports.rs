@@ -10,10 +10,10 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use syn::{Item, UseTree};
+use syn::{Item, Path as SynPath, UseTree};
 
 use super::{
-    graph::{has_shape_cfg, source_ident, SourceUnit},
+    graph::{has_shape_cfg, path_segments, source_ident, SourceUnit},
     modules::relative,
     SourceDiagnostic,
 };
@@ -21,7 +21,7 @@ use super::{
 #[derive(Clone, PartialEq, Eq)]
 struct Symbol {
     path: Vec<String>,
-    facade: bool,
+    external: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -109,8 +109,8 @@ impl ImportIndex {
                         }
                         let source = source_ident(&item_extern.ident);
                         let target = Symbol {
-                            path: vec![source.clone()],
-                            facade: output.facades.contains(&source),
+                            path: vec![source],
+                            external: true,
                         };
                         if output.local_definitions.contains(&key)
                             || output.bindings.insert(key.clone(), vec![target]).is_some()
@@ -128,12 +128,14 @@ impl ImportIndex {
             for item in &unit.items {
                 let Item::Use(item_use) = item else { continue };
                 let mut leaves = Vec::new();
+                let external = item_use.leading_colon.is_some();
                 flatten_use(&item_use.tree, Vec::new(), &mut leaves)?;
                 if unit.conditional {
                     // Preserve enough explicit resolution for selectors to reject declarations
                     // inside conditional units, without admitting those units as authority.
                     for leaf in leaves {
-                        let target = output.normalize(&unit.module_path, &leaf.target, None)?;
+                        let target =
+                            output.normalize(&unit.module_path, &leaf.target, external, None)?;
                         if leaf.glob {
                             output
                                 .globs
@@ -167,7 +169,8 @@ impl ImportIndex {
                     continue;
                 }
                 for leaf in leaves {
-                    let target = output.normalize(&unit.module_path, &leaf.target, None)?;
+                    let target =
+                        output.normalize(&unit.module_path, &leaf.target, external, None)?;
                     if leaf.glob {
                         output
                             .globs
@@ -184,6 +187,7 @@ impl ImportIndex {
                         targets.len(),
                         unit.module_path.clone(),
                         leaf.target,
+                        external,
                     ));
                     targets.push(target);
                 }
@@ -194,8 +198,8 @@ impl ImportIndex {
         // prefixes are independent of declaration and module traversal order.
         for _ in 0..=pending_imports.len() {
             let mut changed = false;
-            for (key, index, module, raw) in &pending_imports {
-                let target = output.normalize(module, raw, None)?;
+            for (key, index, module, raw, external) in &pending_imports {
+                let target = output.normalize(module, raw, *external, None)?;
                 let stored = &mut output.bindings.get_mut(key).expect("pending import")[*index];
                 if *stored != target {
                     *stored = target;
@@ -238,6 +242,7 @@ impl ImportIndex {
         &self,
         module: &[String],
         raw: &[String],
+        external: bool,
         attribute: Option<&str>,
     ) -> Result<Symbol, SourceDiagnostic> {
         let Some(first) = raw.first() else {
@@ -245,6 +250,14 @@ impl ImportIndex {
                 name: "<empty>".to_owned(),
             });
         };
+        // In Rust 2018+, a leading `::` selects the extern prelude even
+        // when a local module or import has the same name.
+        if external {
+            return Ok(Symbol {
+                path: raw.to_vec(),
+                external: true,
+            });
+        }
         let mut path = module.to_vec();
         let mut offset = 0;
         match first.as_str() {
@@ -267,9 +280,19 @@ impl ImportIndex {
                 let mut local = module.to_vec();
                 local.push(first.clone());
                 if let Some(conditional) = self.conditional_bindings.get(&local) {
-                    return Err(SourceDiagnostic::ConditionalSchema {
-                        construct: conditional.construct,
-                        path: conditional.path.clone(),
+                    if attribute.is_some() {
+                        return Err(SourceDiagnostic::ConditionalSchema {
+                            construct: conditional.construct,
+                            path: conditional.path.clone(),
+                        });
+                    }
+                    // Index ordinary imports without choosing a cfg branch.
+                    // Entrypoint selection checks the retained binding later.
+                    let mut path = local;
+                    path.extend_from_slice(&raw[1..]);
+                    return Ok(Symbol {
+                        path,
+                        external: false,
                     });
                 }
                 if let Some(targets) = self.bindings.get(&local) {
@@ -293,7 +316,7 @@ impl ImportIndex {
                     path.extend(raw.iter().cloned());
                     return Ok(Symbol {
                         path,
-                        facade: false,
+                        external: false,
                     });
                 }
                 if attribute.is_some()
@@ -302,13 +325,13 @@ impl ImportIndex {
                 {
                     return Ok(Symbol {
                         path: local,
-                        facade: false,
+                        external: false,
                     });
                 }
                 if self.facades.contains(first) {
                     return Ok(Symbol {
                         path: raw.to_vec(),
-                        facade: true,
+                        external: true,
                     });
                 }
             }
@@ -316,7 +339,7 @@ impl ImportIndex {
         path.extend(raw[offset..].iter().cloned());
         Ok(Symbol {
             path,
-            facade: false,
+            external: false,
         })
     }
 
@@ -324,10 +347,15 @@ impl ImportIndex {
     pub fn resolves_entrypoint(
         &self,
         module: &[String],
-        raw: &[String],
+        path: &SynPath,
         entrypoint: &str,
     ) -> Result<bool, SourceDiagnostic> {
-        let symbol = self.normalize(module, raw, Some(entrypoint))?;
+        let symbol = self.normalize(
+            module,
+            &path_segments(path),
+            path.leading_colon.is_some(),
+            Some(entrypoint),
+        )?;
         self.resolve(
             symbol,
             Namespace::Macro(Some(entrypoint)),
@@ -341,7 +369,10 @@ impl ImportIndex {
         namespace: Namespace<'_>,
         visiting: &mut BTreeSet<Vec<String>>,
     ) -> Result<bool, SourceDiagnostic> {
-        if symbol.facade {
+        if symbol.external {
+            if !self.facades.contains(&symbol.path[0]) {
+                return Ok(matches!(namespace, Namespace::Module));
+            }
             return Ok(match namespace {
                 Namespace::Module => symbol.path.len() != 2 || !is_facade_macro(&symbol.path[1]),
                 Namespace::Macro(name) => {
@@ -358,7 +389,23 @@ impl ImportIndex {
         for length in (1..=symbol.path.len()).rev() {
             let prefix = &symbol.path[..length];
             if let Some(conditional) = self.conditional_bindings.get(prefix) {
+                // Namespace indexing must tolerate ordinary conditional imports.
+                // Only a selected macro chain can affect history authority.
+                if !matches!(namespace, Namespace::Macro(Some(_))) {
+                    continue;
+                }
                 if conditional.module {
+                    // An absent local module can expose the same-named
+                    // dependency, even without facade reexports in that module.
+                    if prefix
+                        .last()
+                        .is_some_and(|name| self.facades.contains(name))
+                    {
+                        return Err(SourceDiagnostic::ConditionalSchema {
+                            construct: conditional.construct,
+                            path: conditional.path.clone(),
+                        });
+                    }
                     conditional_module = Some(conditional);
                     continue;
                 }

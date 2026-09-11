@@ -11,6 +11,9 @@ documentation = "https://docs.rs/type-history-core"
 license.workspace = true
 publish = false
 
+[package.metadata.docs.rs]
+features = ["redactable"]
+
 [features]
 default = []
 redactable = ["dep:redactable"]

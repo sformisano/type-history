@@ -2,67 +2,41 @@
 
 ## Unreleased
 
-- Move the user guides and reference into an mdBook, with a chapter explaining
-  how the current alias reads historical payloads. Share the README journey with
-  the book, retain executable example checks, and add a Pages artifact build.
-
-- Follow one receipt history from V1 through drafts, freezing, field changes,
-  compile-time checks, and reading older data in the README. Move setup and
-  detailed reference material into focused documentation pages.
-- Name each type's history with `stable_name` in declarations, generated APIs,
-  and serialized `Versioned<T>` values. All values and versions share that name;
-  builds reject changes after freezing.
-- Serialize `Versioned<T>` with named `stable_name`, `version`, and `payload`
-  fields. Accept fields in any order, require a positive numeric version, and
-  check historical payload fields before conversion. Preserve 128-bit integers
-  and document JSON's reserved numeric-marker parsing limitation.
-- Keep `from_versioned` as the single API for converting a `Versioned<T>` into
-  the current type. Remove `Versioned::into_current` and explain the wrapper
-  before the README's deserialization and conversion examples.
-- Rename the field-history attribute `added_at` to `added_in`.
-  Frozen schemas remain unchanged.
-- Show the generated structs and conversion before introducing the current
-  type alias in the README overview.
-- Explain the README's struct and field attributes in the order they appear.
-- State explicitly that builds reject changes to a frozen `stable_name`.
-- Clarify how numbered structs relate to the current type alias, with a
-  generated alias example in the README and matching API documentation.
-- Accept simple stable names such as `receipt_created` and optional namespaces
-  such as `shop.receipt`. Remove the minimum segment count and its
-  `InvalidSegmentCount` error variant; dotted names remain valid.
-- Rename the packages to `type-history` and `type-history-*`, with
-  `type_history` imports and the `cargo type-history` command.
-  Configuration now uses `type-history.toml`, `type-history/schemas.json`, and
-  `TYPE_HISTORY_*` build settings. Frozen schema identities stay unchanged.
-- Name receipt event examples `ReceiptCreated` and `ReceiptRecorded` to match
-  their stable names.
-- Rename the struct macro to `versioned`; field attributes remain `history`.
-  Use explicit imports in the README, guides, and reference application.
-- Put a receipt example before setup and add tested field, decoding, and redaction
-  snippets throughout the README.
-- Document crates.io setup and separate the introduction, workflow, and field reference.
-- Add `stable_name` declarations checked against the frozen history ledger.
-- Add `Versioned<T>` with generated `into_versioned` and `from_versioned`
-  methods on the current alias. Stable name, version, and data travel together;
-  deserialization selects the historical type before conversion to the current
-  type. Support Serde formats with named maps, including JSON and MessagePack.
-  Existing raw JSON APIs and payload schemas remain available unchanged.
-
-- Replace shell verification runners with Cargo integration tests that compile
-  the README examples. Add a runnable invoice reference crate with a committed
-  frozen ledger, and run Cargo checks directly in CI.
-
-- Place each crate directly under `crates/`, using its package name. Keep runnable
-  examples in the root-level `examples/` directory.
-
-- Add a default-disabled `redactable` feature across all six Type History crates,
-  using Redactable 0.12.0. Each history selects its contract with `redacted`.
-  Ordinary histories retain their existing traits and error sources when the
-  feature is enabled elsewhere in the dependency graph.
-- Add field policies, nested record support, fixed masked `Debug`, and captured
-  safe callback errors for opted histories. Payload serialization and frozen
-  wire schemas remain independent of redaction policies.
-- Document custom frontend error projection through `GenerationPaths.error`.
-  A standalone consumer exercises the interface with structured errors.
-- Extend repository checks to both feature modes, including external consumers,
-  documentation examples, doctests, and release builds.
+- Provide six crates for the runtime, schema model, code generation, procedural
+  macros, build integration, and `cargo type-history` commands. Keep runnable
+  examples under `examples/`.
+- Generate numbered structs and adjacent conversions from `#[versioned]` and
+  field `#[history]` attributes. The authored struct name always aliases the
+  latest type. Support additions, type changes, renames, and removals.
+- Identify each history with a frozen `stable_name`. Accept lowercase letters,
+  digits, and underscores, with optional dot-separated namespaces.
+- Keep the stable name, numeric version, and payload together in `Versioned<T>`.
+  Deserialize the matching historical type, then use `from_versioned` to apply
+  conversions until the value reaches the current type. Support Serde formats
+  with named maps, including JSON and MessagePack, and preserve 128-bit integers.
+  Document JSON's reserved numeric-marker parsing limitation.
+- Provide lower-level JSON decoding when applications manage version metadata
+  themselves. Both decoding APIs require named fields in nested records and
+  reject positional records before conversion.
+- Track drafts and freeze supported versions in a committed schema ledger.
+  Build checks protect frozen wire schemas and stable names. CLI checks and
+  unchanged freezes also validate ordinary library builds before reporting success.
+- Keep generated checks and type references correct when callers shadow Rust
+  built-ins, use absolute macro paths or unrelated conditional imports, or reference
+  declaration-scope `Self` in field types.
+- Validate candidate ledgers in owned snapshots of the local Cargo graph.
+  Preserve symlinked Cargo configuration and absolute Cargo paths, and support
+  workspace-local temporary directories without capturing the snapshot itself.
+- Offer an optional `redactable` feature across all six crates. Opted histories
+  support field policies, nested records, masked `Debug`, and safe callback errors.
+  Ordinary histories retain their traits and error sources when the feature is
+  enabled elsewhere. Redaction policies do not change payloads or frozen schemas.
+- Support custom frontend error projection through `GenerationPaths.error`,
+  exercised by a standalone consumer with structured errors.
+- Follow a receipt from creation through freezing, changes, and decoding in the
+  README. Provide an mdBook for concepts, tasks, and reference, plus a GitHub Pages
+  artifact build. Rust documentation exposes the current generated type's fields,
+  methods, and traits; docs.rs builds include the optional redaction API.
+- Validate README and book examples through Cargo integration tests. Include a
+  runnable invoice example with a frozen ledger, and check external consumers,
+  doctests, and release builds with and without optional redaction support.

@@ -8,7 +8,7 @@ mod versioned;
 
 use crate::{
     history::{AuthorizedHistory, RetainedField},
-    lint_attributes::{scoped_field_type, with_lints},
+    lint_attributes::{scoped_field_type_for_owner, with_lints},
     model::RecordInput,
 };
 use proc_macro2::{Span, TokenStream};
@@ -143,7 +143,14 @@ impl Context<'_> {
 
     fn field_type(&self, version: u32, name: &Ident) -> Type {
         let (index, field) = self.field(version, name);
-        scoped_field_type(&self.payload(version), index, &field.ty, &field.attributes).0
+        scoped_field_type_for_owner(
+            &self.payload(version),
+            &self.input.name,
+            index,
+            &field.ty,
+            &field.attributes,
+        )
+        .0
     }
 
     fn payload(&self, version: u32) -> Ident {
@@ -169,7 +176,7 @@ impl Context<'_> {
         quote! {
             match #support::PayloadVersion::try_from_raw(#value) {
                 ::core::result::Result::Ok(#version) => #version,
-                ::core::result::Result::Err(_) => panic!("generated history has a non-positive retained version"),
+                ::core::result::Result::Err(_) => ::core::panic!("generated history has a non-positive retained version"),
             }
         }
     }

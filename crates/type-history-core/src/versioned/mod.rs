@@ -5,9 +5,18 @@ mod serde_impl;
 
 use std::fmt::{Debug, Formatter, Result as FmtResult};
 
-use serde::{Deserializer, Serialize};
+use serde::{de::DeserializeOwned, Deserializer, Serialize};
+use serde_json::Error as JsonError;
 
 use crate::{PayloadVersion, StableName};
+use buffer::BufferedValue;
+
+/// Decode a generated JSON payload using the same named-record rules as `Versioned`.
+#[doc(hidden)]
+pub fn decode_json_payload<T: DeserializeOwned>(bytes: &[u8]) -> Result<T, JsonError> {
+    let buffered: BufferedValue = serde_json::from_slice(bytes)?;
+    T::deserialize(buffered)
+}
 
 /// Generated bridge between a current record and its retained historical types.
 #[doc(hidden)]
@@ -57,6 +66,7 @@ pub trait VersionedHistory: Sized {
 /// The payload is buffered until its metadata has been checked, then decoded
 /// into the matching historical type. Supported formats include JSON and
 /// MessagePack with named fields; payload structs must be represented as maps.
+/// This includes supporting records nested in fields and containers.
 /// JSON integers use `serde_json`'s arbitrary-precision representation, which can
 /// also interpret that library's reserved numeric-marker objects as integers.
 ///

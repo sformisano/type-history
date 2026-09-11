@@ -46,7 +46,7 @@ pub fn record(name: &Ident, fields: &[NamedField], support: &TokenStream) -> Tok
         }
         impl #serde::Serialize for #name {
             fn serialize<__TypeHistorySerializer: #serde::Serializer>(&self, serializer:__TypeHistorySerializer) -> ::core::result::Result<__TypeHistorySerializer::Ok,__TypeHistorySerializer::Error> {
-                let mut record = #serde::Serializer::serialize_struct(serializer,stringify!(#name),#length)?;
+                let mut record = #serde::Serializer::serialize_struct(serializer,::core::stringify!(#name),#length)?;
                 #(#serde::ser::SerializeStruct::serialize_field(&mut record,#keys,&self.#names)?;)*
                 #serde::ser::SerializeStruct::end(record)
             }

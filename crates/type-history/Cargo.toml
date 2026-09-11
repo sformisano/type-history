@@ -11,6 +11,9 @@ homepage.workspace = true
 documentation = "https://docs.rs/type-history"
 publish = false
 
+[package.metadata.docs.rs]
+features = ["redactable"]
+
 [features]
 default = []
 redactable = ["type-history-core/redactable", "type-history-macros/redactable"]

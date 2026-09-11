@@ -5,7 +5,7 @@
 //! redaction contracts, without changing their persisted codecs or schemas.
 
 use crate::{
-    lint_attributes::{lint_attributes, scoped_field_type},
+    lint_attributes::{lint_attributes, scoped_field_type_for_owner},
     model::NamedField,
 };
 use proc_macro2::TokenStream;
@@ -29,8 +29,13 @@ pub(super) fn generate(context: &Context<'_>) -> Result<(TokenStream, Vec<Genera
             .iter()
             .enumerate()
             .map(|(index, field)| {
-                let (ty, declaration) =
-                    scoped_field_type(&name, index, &field.ty, &field.attributes);
+                let (ty, declaration) = scoped_field_type_for_owner(
+                    &name,
+                    &context.input.name,
+                    index,
+                    &field.ty,
+                    &field.attributes,
+                );
                 field_aliases.push(declaration);
                 NamedField {
                     name: field.name.clone(),
@@ -65,9 +70,19 @@ pub(super) fn generate(context: &Context<'_>) -> Result<(TokenStream, Vec<Genera
             quote!()
         };
         let debug = (!context.input.redacted).then(|| quote!(#[derive(::core::fmt::Debug)]));
+        let docs = if version.version == context.history.head() {
+            let attributes = context
+                .input
+                .attributes
+                .iter()
+                .filter(|attribute| attribute.path().is_ident("doc"));
+            quote!(#(#attributes)*)
+        } else {
+            quote!(#[doc(hidden)])
+        };
         declarations.push(quote! {
             #(#field_aliases)*
-            #[doc(hidden)]
+            #docs
             #[derive(::core::clone::Clone, ::core::cmp::PartialEq)]
             #debug
             #schema_derive

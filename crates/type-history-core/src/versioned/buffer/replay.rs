@@ -128,9 +128,21 @@ impl<'de> Deserializer<'de> for BufferedValue {
         self.human_readable
     }
 
+    fn deserialize_struct<V: Visitor<'de>>(
+        self,
+        _name: &'static str,
+        _fields: &'static [&'static str],
+        visitor: V,
+    ) -> Result<V::Value, Self::Error> {
+        if !matches!(self.value, Content::Map(_)) {
+            return Err(JsonError::custom("a history record must use named fields"));
+        }
+        self.deserialize_any(visitor)
+    }
+
     serde::forward_to_deserialize_any! {
         bool f32 f64 char str string bytes byte_buf unit unit_struct
-        tuple_struct map struct enum identifier ignored_any
+        tuple_struct map enum identifier ignored_any
     }
 }
 

@@ -236,3 +236,124 @@ fn cargo_command_preserves_subcommand_and_uses_only_checked_configs() {
     assert_eq!(arguments[3], "--config");
     assert_eq!(arguments[4], snapshot.mapped(&snapshot.configs[0]).unwrap());
 }
+
+#[test]
+fn workspace_local_snapshot_owner_is_excluded_without_ignoring_neighboring_inputs() {
+    let mut snapshot = fixture();
+    let root = snapshot.roots[0].clone();
+    let temporary = root.join("scratch");
+    fs::create_dir_all(&temporary).unwrap();
+    let owner = TempBuilder::new()
+        .prefix("capture-")
+        .tempdir_in(&temporary)
+        .unwrap();
+    // Retain the fixture source owner separately from the nested snapshot owner.
+    let _source_owner = std::mem::replace(&mut snapshot._owner, owner);
+    snapshot.mirror = snapshot._owner.path().join("tree");
+    let neighbor = temporary.join("user-input.txt");
+    fs::write(&neighbor, "captured").unwrap();
+    fs::write(snapshot._owner.path().join("scratch-file"), "disposable").unwrap();
+    snapshot.before = snapshot.fingerprint().unwrap();
+    assert!(snapshot.before.contains_key(&neighbor));
+    assert!(!snapshot
+        .before
+        .keys()
+        .any(|path| path.starts_with(snapshot._owner.path())));
+    snapshot.copy_tree(&root).unwrap();
+    snapshot.verify_complete_copy().unwrap();
+    assert_eq!(snapshot.before, snapshot.fingerprint().unwrap());
+    fs::write(&neighbor, "changed").unwrap();
+    assert_ne!(snapshot.before, snapshot.fingerprint().unwrap());
+}
+
+#[cfg(unix)]
+#[test]
+fn config_symlinks_keep_identity_contents_and_mapped_absolute_targets() {
+    use std::os::unix::fs::symlink;
+
+    for absolute in [false, true] {
+        let mut snapshot = fixture();
+        let root = snapshot.roots[0].clone();
+        let config = root.join(".cargo/config.toml");
+        let target = root.join("shared-config.toml");
+        fs::create_dir_all(config.parent().unwrap()).unwrap();
+        fs::write(&target, "[profile.dev]\ndebug = 1\n").unwrap();
+        let link = if absolute {
+            target.clone()
+        } else {
+            PathBuf::from("../shared-config.toml")
+        };
+        symlink(&link, &config).unwrap();
+        snapshot.extra.push(config.clone());
+        snapshot.configs.push(config.clone());
+        snapshot.before = snapshot.fingerprint().unwrap();
+        assert_eq!(snapshot.before[&config][0], 2);
+        snapshot.copy_tree(&root).unwrap();
+        snapshot.verify_complete_copy().unwrap();
+        snapshot.check_config_preservation().unwrap();
+        assert_eq!(snapshot.before, snapshot.fingerprint().unwrap());
+        assert_eq!(
+            fs::read_link(snapshot.mapped(&config).unwrap()).unwrap(),
+            if absolute {
+                snapshot.mapped(&target).unwrap()
+            } else {
+                link
+            }
+        );
+        fs::write(&target, "[profile.dev]\ndebug = 2\n").unwrap();
+        assert_ne!(snapshot.before, snapshot.fingerprint().unwrap());
+        // A changed target cannot be copied even if the source is later restored.
+        assert!(snapshot
+            .copy_file(&target)
+            .unwrap_err()
+            .to_string()
+            .contains("InputsChanged"));
+        fs::write(&target, "[profile.dev]\ndebug = 1\n").unwrap();
+        let copied = snapshot.mapped(&config).unwrap();
+        fs::remove_file(&copied).unwrap();
+        symlink("../missing-config.toml", &copied).unwrap();
+        assert!(snapshot.verify_complete_copy().is_err());
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn external_config_symlinks_capture_target_bytes_inside_or_outside_the_graph() {
+    use std::os::unix::fs::symlink;
+
+    for target_in_graph in [false, true] {
+        let mut snapshot = fixture();
+        let root = snapshot.roots[0].clone();
+        let target = if target_in_graph {
+            root.join("shared-config.toml")
+        } else {
+            snapshot._owner.path().join("dotfiles/cargo-config.toml")
+        };
+        let config = snapshot._owner.path().join("external/config.toml");
+        fs::create_dir_all(config.parent().unwrap()).unwrap();
+        fs::create_dir_all(target.parent().unwrap()).unwrap();
+        let captured = "[profile.dev]\ndebug = 1\n";
+        fs::write(&target, captured).unwrap();
+        symlink(&target, &config).unwrap();
+        snapshot.extra.push(config.clone());
+        snapshot.configs.push(config.clone());
+        snapshot.before = snapshot.fingerprint().unwrap();
+        assert_eq!(snapshot.before[&config][0], 1);
+        snapshot.copy_tree(&root).unwrap();
+        snapshot.copy_file(&config).unwrap();
+        snapshot.verify_complete_copy().unwrap();
+        snapshot.check_config_preservation().unwrap();
+        let copied = snapshot.mapped(&config).unwrap();
+        assert!(fs::symlink_metadata(&copied).unwrap().is_file());
+        assert_eq!(fs::read_to_string(&copied).unwrap(), captured);
+        assert_eq!(snapshot.before, snapshot.fingerprint().unwrap());
+
+        fs::write(&target, "[profile.dev]\ndebug = 2\n").unwrap();
+        assert_ne!(snapshot.before, snapshot.fingerprint().unwrap());
+        let error = snapshot.copy_file(&config).unwrap_err();
+        fs::write(&target, captured).unwrap();
+        assert!(error.to_string().contains("InputsChanged"));
+        assert_eq!(snapshot.before, snapshot.fingerprint().unwrap());
+        assert_eq!(fs::read_to_string(&copied).unwrap(), captured);
+    }
+}

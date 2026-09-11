@@ -122,6 +122,7 @@ pub fn execute<M: Clone + Eq + Serialize + DeserializeOwned>(
         Action::Init => unreachable!("init handled above"),
     };
     if candidate == before {
+        export::validate(&snapshot, &package.name, options, contract)?;
         snapshot.ensure_fresh()?;
         println!(
             "{}: selected authority is already frozen and unchanged; no-op",
@@ -159,6 +160,7 @@ fn check<M: Clone + Eq + Serialize + DeserializeOwned>(
     let copied_root = snapshot.mapped(package.root())?;
     let observed = export::export(&snapshot, &copied_root, options, contract, ops)?;
     compare_frozen(&baseline, &observed)?;
+    export::validate(&snapshot, &package.name, options, contract)?;
     snapshot.ensure_fresh()?;
     println!(
         "{}: frozen history schemas match; ordinary development drafts remain drafts",

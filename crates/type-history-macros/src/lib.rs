@@ -146,19 +146,19 @@ fn expand(arguments: Arguments, item: ItemStruct) -> Result<Tokens> {
         .to_str()
         .ok_or_else(|| Error::new_spanned(&input.name, "history authority path must be UTF-8"))?;
     Ok(quote! {
-        const _: &str = include_str!(#ledger_path);
+        const _: &str = ::core::include_str!(#ledger_path);
         #items
         #stored_record
         impl #history_trait for #current {
             const STABLE_NAME: #facade::StableName = #facade::StableName::new(#stable_name);
             const VERSION: #facade::PayloadVersion = match #facade::PayloadVersion::try_from_raw(#head) {
                 ::core::result::Result::Ok(version) => version,
-                ::core::result::Result::Err(_) => panic!("non-positive history version"),
+                ::core::result::Result::Err(_) => ::core::panic!("non-positive history version"),
             };
             fn history() -> #facade::History<Self, #error> {
                 const RETAINED: &[#facade::PayloadVersion] = &[#(match #facade::PayloadVersion::try_from_raw(#retained) {
                     ::core::result::Result::Ok(version) => version,
-                    ::core::result::Result::Err(_) => panic!("non-positive history version"),
+                    ::core::result::Result::Err(_) => ::core::panic!("non-positive history version"),
                 }),*];
                 #facade::History::new(RETAINED, #decoder)
             }

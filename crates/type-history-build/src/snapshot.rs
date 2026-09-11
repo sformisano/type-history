@@ -16,6 +16,7 @@ use tempfile::TempDir;
 use toml::Value;
 
 mod cargo_config;
+mod manifest;
 #[cfg(test)]
 mod tests;
 
@@ -49,7 +50,7 @@ impl Snapshot {
     ) -> Result<Self> {
         let owner = TempBuilder::new()
             .prefix("type-history-schema-")
-            .tempdir()?;
+            .tempdir_in(env::temp_dir().canonicalize()?)?;
         let mirror = owner.path().join("tree");
         let mut roots = vec![metadata.workspace_root.canonicalize()?];
         let mut manifests = BTreeSet::from([metadata.workspace_root.join("Cargo.toml")]);
@@ -136,9 +137,13 @@ impl Snapshot {
             snapshot.copy_tree(root)?;
         }
         for path in &snapshot.extra {
-            if !path.is_file() {
+            if snapshot.roots.iter().any(|root| path.starts_with(root))
+                || snapshot.before.get(path).is_some_and(|value| value == &[0])
+            {
                 continue;
             }
+            // Inputs outside the source graph are individual files, including
+            // global Cargo configs whose symlink targets live in a dotfiles repo.
             snapshot.copy_file(path)?;
         }
         snapshot.verify_complete_copy()?;
@@ -192,18 +197,18 @@ impl Snapshot {
             self.collect(root, &mut files)?;
         }
         for path in &self.extra {
-            let bytes = match fs::read(path) {
-                Ok(bytes) => Some(bytes),
-                Err(error) if error.kind() == ErrorKind::NotFound => None,
+            if files.contains_key(path) {
+                continue;
+            }
+            match fs::read(path) {
+                Ok(bytes) => {
+                    files.insert(path.clone(), file_fingerprint(&bytes));
+                }
+                Err(error) if error.kind() == ErrorKind::NotFound => {
+                    files.insert(path.clone(), vec![0]);
+                }
                 Err(error) => return Err(error.into()),
-            };
-            files.insert(
-                path.clone(),
-                match bytes {
-                    Some(bytes) => [vec![1], Sha256::digest(bytes).to_vec()].concat(),
-                    None => vec![0],
-                },
-            );
+            }
         }
         Ok(files)
     }
@@ -237,7 +242,10 @@ impl Snapshot {
         Ok(())
     }
     fn excluded(&self, path: &Path) -> bool {
-        path.starts_with(&self.excluded_target)
+        // Skip only this capture's owner when TMPDIR lies in the workspace.
+        // Traversal stops here, before it can visit the growing mirror.
+        path == self._owner.path()
+            || path.starts_with(&self.excluded_target)
             || self.excluded_caches.contains(path)
             || path
                 .file_name()
@@ -307,6 +315,26 @@ impl Snapshot {
                     )
                 })?;
                 self.verify_captured(path, &file_fingerprint(&copied))?;
+            } else if expected.first() == Some(&2) {
+                let target = fs::read_link(self.mapped(path)?).map_err(|_| {
+                    format!(
+                        "InputsChanged: captured symlink {} is missing from the copied graph",
+                        path.display()
+                    )
+                })?;
+                // Absolute link targets change only by acquiring the mirror prefix.
+                let original =
+                    if target.is_absolute() {
+                        Path::new("/").join(target.strip_prefix(&self.mirror).map_err(|_| {
+                            "InputsChanged: copied symlink points outside the mirror"
+                        })?)
+                    } else {
+                        target
+                    };
+                self.verify_captured(
+                    path,
+                    &[vec![2], original.as_os_str().as_encoded_bytes().to_vec()].concat(),
+                )?;
             }
         }
         Ok(())
@@ -319,7 +347,11 @@ impl Snapshot {
                 continue;
             }
             let bytes = fs::read(&copied)?;
-            self.verify_captured(path, &file_fingerprint(&bytes))?;
+            // A config may itself be a captured link. Verify its resolved copied
+            // file without replacing the link's separate identity fingerprint.
+            let resolved = copied.canonicalize()?;
+            let original = Path::new("/").join(resolved.strip_prefix(&self.mirror)?);
+            self.verify_captured(&original, &file_fingerprint(&bytes))?;
             cargo_config::validate(path, &bytes, &self.roots, &self.mirror)?;
             cargo_config::check_environment(path, &bytes, &self.environment)?;
         }
@@ -334,7 +366,7 @@ impl Snapshot {
             }
             let text = fs::read_to_string(&copied)?;
             let mut document: Value = toml::from_str(&text)?;
-            if remap_paths(&mut document, &self.mirror, &self.roots)? {
+            if manifest::remap_paths(&mut document, &self.mirror, &self.roots)? {
                 let staged = copied.with_extension("toml.type-history-stage");
                 fs::write(&staged, toml::to_string(&document)?)?;
                 fs::rename(staged, copied)?;
@@ -356,42 +388,6 @@ fn cargo_cache_roots(roots: &[PathBuf]) -> BTreeSet<PathBuf> {
 }
 fn file_fingerprint(bytes: &[u8]) -> Vec<u8> {
     [vec![1], Sha256::digest(bytes).to_vec()].concat()
-}
-fn remap_paths(value: &mut Value, mirror: &Path, roots: &[PathBuf]) -> Result<bool> {
-    let mut changed = false;
-    match value {
-        Value::Table(table) => {
-            for (key, value) in table {
-                if matches!(key.as_str(), "path" | "workspace") {
-                    if let Some(path) = value
-                        .as_str()
-                        .map(PathBuf::from)
-                        .filter(|path| path.is_absolute())
-                    {
-                        if !roots.iter().any(|root| path.starts_with(root)) {
-                            return Err(format!(
-                                "absolute manifest path {} is outside the checked local graph",
-                                path.display()
-                            )
-                            .into());
-                        }
-                        *value =
-                            Value::String(mirrored(mirror, &path)?.to_string_lossy().into_owned());
-                        changed = true;
-                        continue;
-                    }
-                }
-                changed |= remap_paths(value, mirror, roots)?;
-            }
-        }
-        Value::Array(values) => {
-            for value in values {
-                changed |= remap_paths(value, mirror, roots)?;
-            }
-        }
-        _ => {}
-    }
-    Ok(changed)
 }
 fn mirrored(mirror: &Path, path: &Path) -> Result<PathBuf> {
     Ok(mirror.join(

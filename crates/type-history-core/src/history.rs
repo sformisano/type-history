@@ -41,6 +41,9 @@ impl<T, E> History<T, E> {
     }
 
     /// Decode original JSON bytes and convert to the current record.
+    ///
+    /// Generated decoders buffer the payload and require named fields for nested
+    /// records. A type error found in buffered data may have no JSON position.
     pub fn decode(&self, version: PayloadVersion, bytes: &[u8]) -> Result<T, E> {
         (self.decode)(version, bytes)
     }

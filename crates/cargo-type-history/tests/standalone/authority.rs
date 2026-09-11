@@ -84,8 +84,9 @@ pub struct Details { pub quantity: u32 }
         "src/lib.rs",
         r#"
 mod details;
+use details::Details;
 #[history_api::versioned(stable_name = "billing.invoice.issued")]
-pub struct Invoice { pub details: details::Details }
+pub struct Invoice { pub details: Details }
 "#,
     );
     success(&fixture.cli(&["freeze", "--package", "standalone-history-consumer"]));
@@ -141,8 +142,9 @@ serde = {{ version = "1.0", features = ["derive"] }}
     fixture.write(
         "src/lib.rs",
         r#"
+use history_details::Details;
 #[history_api::versioned(stable_name = "billing.invoice.issued")]
-pub struct Invoice { pub details: history_details::Details }
+pub struct Invoice { pub details: Details }
 "#,
     );
     success(&fixture.cargo(&["generate-lockfile", "--offline"]));

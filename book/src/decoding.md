@@ -167,6 +167,10 @@ It then applies adjacent conversions. `ReadError` distinguishes a stable name mi
 The source chain preserves the original JSON or callback error when one exists.
 `Invoice::history().decode(...)` skips the stable name check; `history()` requires the `HasHistory` trait in scope.
 
+Both decoding APIs buffer payload values and require named fields for nested
+records, too. JSON syntax errors retain their input position. A field-type error
+found when reading the buffered values may have no line or column.
+
 Raw JSON has no versioned wrapper, so deserializing it as `Versioned<ReceiptCreated>` fails.
 After loading it through `decode`, `into_versioned` prepares the current value for
 serialization with its stable name and version.

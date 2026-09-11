@@ -23,7 +23,7 @@ pub(super) fn generate(context: &Context<'_>) -> TokenStream {
                 if #version.get() != #current {
                     return ::core::result::Result::Err(#error_type::unsupported(#stable_name, #version));
                 }
-                #support::serde_json::from_slice::<#latest>(#bytes)
+                #support::decode_json_payload::<#latest>(#bytes)
                     .map_err(|#error| #error_type::decode(#stable_name, #version, #error))
             }
         };
@@ -42,7 +42,7 @@ pub(super) fn generate(context: &Context<'_>) -> TokenStream {
         let payload = context.payload(number);
         quote! {
             #number => #state_type::#variant(
-                #support::serde_json::from_slice::<#payload>(#bytes)
+                #support::decode_json_payload::<#payload>(#bytes)
                     .map_err(|#error| #error_type::decode(#stable_name, #version, #error))?
             )
         }

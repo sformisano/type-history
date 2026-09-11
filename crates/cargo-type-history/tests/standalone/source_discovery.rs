@@ -172,7 +172,7 @@ fn feature_selected_path_dependencies_are_captured_and_checked() {
     );
     fixture.write(
         "../optional/src/lib.rs",
-        "pub type Value = optional_leaf::Value;\n",
+        "use optional_leaf::Value as LeafValue;\npub type Value = LeafValue;\n",
     );
     fixture.write(
         "../optional-leaf/Cargo.toml",
@@ -199,14 +199,17 @@ fn feature_selected_path_dependencies_are_captured_and_checked() {
     fixture.write("Cargo.toml", &toml::to_string(&manifest).unwrap());
     success(&fixture.cargo(&["generate-lockfile", "--offline"]));
     let source = r#"
+use optional_support::Value;
 #[history_api::versioned(stable_name = "billing.invoice.issued")]
 pub struct Invoice {
-    pub value: optional_support::Value,
+    pub value: Value,
 }
 "#;
     fixture.write(
         "src/lib.rs",
-        &source.replace("optional_support::Value", "String"),
+        &source
+            .replace("use optional_support::Value;\n", "")
+            .replace("pub value: Value", "pub value: String"),
     );
     success(&fixture.cli(&["freeze", "--package", "standalone-history-consumer"]));
     success(&fixture.cli(&["check"]));

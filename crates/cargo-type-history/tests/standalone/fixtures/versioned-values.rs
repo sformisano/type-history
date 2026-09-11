@@ -27,7 +27,7 @@ pub struct BinaryPayload {
 #[cfg(test)]
 mod value_tests {
     use super::{BinaryPayload, Detail, Structured, Wide};
-    use history_api::Versioned;
+    use history_api::{HasHistory, PayloadVersion, Versioned};
     use rmp_serde::{from_slice as from_messagepack, to_vec_named};
     use serde::{Serialize, Serializer};
     use serde_json::{from_slice, from_str, to_value, to_vec};
@@ -78,6 +78,8 @@ mod value_tests {
             (u128::MAX, i128::MAX),
         ] {
             let expected = Wide { unsigned, signed };
+            let raw = to_vec(&expected).unwrap();
+            assert_eq!(Wide::history().decode(PayloadVersion::INITIAL, &raw).unwrap(), expected);
             let envelope = PayloadFirst {
                 payload: &expected,
                 version: 1,
@@ -109,6 +111,8 @@ mod value_tests {
                 fixed: [0, u16::MAX],
                 detail: Detail { description: "nested".into(), total: u128::MAX },
             };
+            let raw = to_vec(&expected).unwrap();
+            assert_eq!(Structured::history().decode(PayloadVersion::INITIAL, &raw).unwrap(), expected);
             let envelope = PayloadFirst {
                 payload: &expected,
                 version: 1,
@@ -130,15 +134,20 @@ mod value_tests {
     }
 
     #[test]
-    fn buffered_nested_records_reject_duplicate_and_unknown_fields() {
+    fn nested_records_reject_positional_duplicate_and_unknown_fields() {
         for detail in [
             r#"{"description":"one","description":"two","total":1}"#,
             r#"{"description":"one","total":1,"extra":true}"#,
+            r#"["one",1]"#,
         ] {
+            let payload = format!(
+                r#"{{"enabled":true,"note":null,"numbers":[],"bytes":[],"fixed":[0,1],"detail":{detail}}}"#
+            );
             let wire = format!(
-                r#"{{"payload":{{"enabled":true,"note":null,"numbers":[],"bytes":[],"fixed":[0,1],"detail":{detail}}},"version":1,"stable_name":"example.structured"}}"#
+                r#"{{"payload":{payload},"version":1,"stable_name":"example.structured"}}"#
             );
             assert!(from_str::<Versioned<Structured>>(&wire).is_err());
+            assert!(Structured::history().decode(PayloadVersion::INITIAL, payload.as_bytes()).is_err());
         }
     }
 }

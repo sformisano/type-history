@@ -73,7 +73,7 @@ pub(super) fn expand(input: DeriveInput) -> Result<TokenStream> {
             impl #support::NonOptionalNode for #marker {}
             impl #support::ResolvedSchema for #name { type Wire = #marker; }
             impl #support::schemars::JsonSchema for #name {
-                fn schema_name() -> ::std::borrow::Cow<'static, str> { stringify!(#name).into() }
+                fn schema_name() -> ::std::borrow::Cow<'static, str> { ::core::stringify!(#name).into() }
                 fn json_schema(generator: &mut #support::schemars::SchemaGenerator) -> #support::schemars::Schema {
                     <#helper as #support::schemars::JsonSchema>::json_schema(generator)
                 }
