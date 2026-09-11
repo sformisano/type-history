@@ -5,10 +5,10 @@ support for data written using earlier versions. It uses field attributes
 to describe changes, and compile-time checks to catch missing or incorrect
 attributes before they cause runtime failures in production.
 
-## When to use Type History
+## Use Cases
 
 Persisted data often outlives the code that wrote it. A production application
-may need to read years of records after its Rust structs have changed.
+may need to read *years* of records, with Rust structs having changed over time.
 
 Type History helps when those records need to become the types your application
 uses today. Common examples include:
