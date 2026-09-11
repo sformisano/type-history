@@ -17,8 +17,8 @@ chooses the storage system and a supported Serde format.
 ## Start here
 
 1. [Set up a package](setup.md) with the build hook and schema ledger.
-2. [Follow a receipt](quick-start.md) through its first draft, freezing, field
-   changes, and reading earlier data.
+2. [Evolve the shop's `ReceiptCreated` event type](quick-start.md) through its first
+   draft, freezing, field changes, and reading earlier data.
 3. [Understand the generated types](core-model.md), including how the current
    alias can read every supported version.
 

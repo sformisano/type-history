@@ -33,8 +33,9 @@
   enabled elsewhere. Redaction policies do not change payloads or frozen schemas.
 - Support custom frontend error projection through `GenerationPaths.error`,
   exercised by a standalone consumer with structured errors.
-- Follow a receipt from creation through freezing, changes, and decoding in the
-  README, with generated types, ledger entries, compiler errors, and serialized
+- Follow a shop's `ReceiptCreated` event type through drafts, freezing, changes, and
+  decoding in the README, using `my-shop-demo-project` as the example Cargo
+  package. Show generated types, ledger entries, compiler errors, and serialized
   values. Provide an mdBook for concepts, tasks, and reference, plus a GitHub Pages
   artifact build. Rust documentation exposes the current generated type's fields,
   methods, and traits; docs.rs builds include the optional redaction API.

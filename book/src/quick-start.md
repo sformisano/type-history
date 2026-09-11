@@ -1,13 +1,14 @@
 # A type's journey
 
-A shop initially accepts only US dollars. Its `ReceiptCreated` event starts with
-an amount in cents. Later, the shop adds other currencies and supports refunds.
+This example follows a shop's `ReceiptCreated` event type as its fields change.
+The shop initially accepts only US dollars, so the event starts with an amount
+in cents. Later, the shop adds other currencies and supports refunds.
 
 Complete the [package setup](setup.md) first. Then replace `src/lib.rs` with each
 declaration below as the example advances. The reading and writing snippets belong
 in a function or test that returns a compatible `Result`.
 
-## Evolve the receipt
+## Evolve the event
 
 {{#include ../../README.md:journey}}
 

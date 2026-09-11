@@ -36,7 +36,7 @@ Its released runtime and derive sources define the supported contracts:
 
 ## Declare and read a redacted history
 
-This example belongs in an initialized consumer library:
+This example uses a `ReceiptRecorded` event and belongs in an initialized consumer library:
 
 ```rust
 use serde_json::from_slice;
@@ -68,7 +68,7 @@ Its input is a complete stored record:
 {"stable_name":"billing.receipt.recorded","version":1,"payload":{"customer":"Alice","amount":42}}
 ```
 
-Write a current receipt with `serde_json::to_vec(&receipt.into_versioned())`.
+Write a current `ReceiptRecorded` event with `serde_json::to_vec(&receipt.into_versioned())`.
 Both generated methods use the current alias and need no trait imports.
 `Versioned` keeps `stable_name`, the numeric `version`, and `payload` together.
 It accepts these fields in any order and validates the payload against its historical type.

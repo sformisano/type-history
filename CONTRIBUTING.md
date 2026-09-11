@@ -31,8 +31,8 @@ Normal builds use `target`; Clippy uses `target/clippy`.
 
 ## The book
 
-The README is the short introduction and receipt walkthrough. The mdBook source
-in `book/src/` holds the guides and reference. Rustdoc provides the API reference.
+The README is the short introduction and `ReceiptCreated` event walkthrough.
+The mdBook source in `book/src/` holds the guides and reference. Rustdoc provides the API reference.
 Add or reorder chapters in `book/src/SUMMARY.md`.
 
 Install the same mdBook version used by the Book workflow:
@@ -58,7 +58,7 @@ cargo test -p cargo-type-history --test standalone --all-features --locked tutor
 
 Those tests also exercise freezing and expected compiler failures. The redaction
 tests compile the book's combined Redactable example. Keep snippet markers with
-their code when moving content. The receipt tutorial compares the marked JSON
+their code when moving content. The `ReceiptCreated` tutorial compares the marked JSON
 examples with generated ledger entries and serialized values, and checks the
 documented compiler error. `mdbook test` alone cannot initialize these
 consumer packages or reproduce their history across successive builds.

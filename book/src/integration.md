@@ -137,7 +137,7 @@ To use it:
 1. Enable the `redactable` feature on `type-history`, `type-history-build`, and the CLI.
 2. Select each history with `redacted` and declare its field policies.
 
-For example, this separate receipt history hides the customer in redacted output:
+This example uses a `ReceiptRecorded` event and hides the customer in redacted output:
 
 <!-- reference:redacted-history.rs -->
 ```rust

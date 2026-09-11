@@ -27,7 +27,8 @@ field update that converts it to the new type.
 
 ### What conversion tests must check
 
-The shop example in the [quick start](quick-start.md) requires older receipts to use US dollars.
+In the [quick start's shop example](quick-start.md), V1 `ReceiptCreated` events
+need `"USD"` because the shop accepted only US dollars then.
 Both of these values pass the same type check:
 
 <!-- reference:business-values.rs -->
@@ -37,8 +38,8 @@ let eur: String = "EUR".to_owned();
 assert_ne!(usd, eur);
 ```
 
-Only `"USD"` matches the shop's earlier receipts. The compiler checks types;
-the [receipt assertions](quick-start.md#6-read-and-write-through-the-current-type) check that business rule.
+Only `"USD"` matches the currency used by those V1 events. The compiler checks types;
+the [conversion assertions](quick-start.md#6-read-and-write-through-the-current-type) check that business rule.
 A conversion can return the wrong value while preserving the expected type.
 
 Schemas describe serialized structure, so some source edits leave them unchanged:

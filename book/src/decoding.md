@@ -1,9 +1,9 @@
 # Decode stored records and handle failures
 
-The receipt snippets use the [V2 `ReceiptCreated` declaration](quick-start.md#3-add-a-field-in-v2), before the quick start adds V3.
+These examples use the shop's [V2 `ReceiptCreated` event](quick-start.md#3-add-a-field-in-v2), before the quick start adds V3.
 Place snippets containing `?` in a function that returns a compatible `Result`.
 
-Wrap a current receipt before serializing it. After deserializing, convert the
+Wrap a current event before serializing it. After deserializing, convert the
 versioned value back to the current type:
 
 <!-- decoding:json.rs -->
@@ -55,7 +55,8 @@ let bytes = to_vec_named(&receipt.into_versioned())?;
 let receipt = ReceiptCreated::from_versioned(from_slice(&bytes)?)?;
 ```
 
-This fragment assumes an existing `receipt`, an `rmp-serde` dependency, and a function that propagates errors.
+This fragment assumes a `ReceiptCreated` event named `receipt`, an `rmp-serde`
+dependency, and a function that propagates errors.
 Use `serde_json::to_vec` and `serde_json::from_slice` for the equivalent JSON path.
 
 Not every Serde format supports the required maps and named payload fields.

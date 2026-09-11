@@ -36,12 +36,13 @@ to connect the build hook and initialize the schema ledger.
 
 ## How to Use
 
-A shop initially accepts only US dollars. Its `ReceiptCreated` event starts with
-an amount in cents.
+This example follows a shop's `ReceiptCreated` event type as its fields change.
+The shop initially accepts only US dollars, so the event starts with an amount
+in cents.
 
 Later, the shop adds other currencies and supports refunds.
 
-To run this example, first [set up a `receipt-history` library](https://github.com/sformisano/type-history/blob/main/book/src/setup.md).
+To run it, first [set up the example project, `my-shop-demo-project`](https://github.com/sformisano/type-history/blob/main/book/src/setup.md).
 
 <!-- ANCHOR: journey -->
 ### 1. Declare V1
@@ -81,13 +82,15 @@ The important thing to keep in mind is:
 - Development builds allow drafts with a warning.
 - Release builds **reject** drafts and require every version to be frozen.
 
-Changes to a draft can make even previously written types unreadable.
+Changes to a draft can make even previously written events unreadable.
 
-So we need to freeze V1 before storing receipts that the application will need to read later:
+So we need to freeze V1 before storing events that the application will need to read later:
 
 ```sh
-cargo type-history freeze --package receipt-history
+cargo type-history freeze --package my-shop-demo-project
 ```
+
+`--package` selects the project's Cargo package by its name in `Cargo.toml`.
 
 The command checks the package and saves V1's **schema** in
 `type-history/schemas.json`, called the **ledger**. A schema describes the
@@ -135,7 +138,7 @@ type or move it to another module.
 ### 3. Add a field in V2
 
 The shop now accepts other currencies. Add a `currency` field and supply `"USD"`
-for receipts written before the field existed:
+for events written before the field existed:
 
 <!-- quick-example:v2.rs -->
 ```rust
@@ -152,8 +155,8 @@ pub struct ReceiptCreated {
 
 - `#[history(...)]` describes the change to this field.
 - `added_in = v2` introduces `currency` in V2.
-- `backfill_value` supplies `"USD"` when converting V1 receipts, because the shop
-  accepted only US dollars then. New receipts supply their currency explicitly.
+- `backfill_value` supplies `"USD"` when converting V1 events, because the shop
+  accepted only US dollars then. New events supply their currency explicitly.
 
 Type History preserves V1 and generates V2 with the new field. With trait
 implementations omitted, the generated structs look like this:
@@ -188,10 +191,10 @@ pub type ReceiptCreated = ReceiptCreatedV2;
 ```
 
 V2 starts as a draft. You can revise it while V1's saved schema continues to
-protect earlier receipts. Test the conversion before freezing V2:
+protect earlier events. Test the conversion before freezing V2:
 
 ```sh
-cargo type-history freeze --package receipt-history
+cargo type-history freeze --package my-shop-demo-project
 ```
 
 Freezing adds a `2` entry to `type-history/schemas.json` and leaves the `1` entry
@@ -291,7 +294,7 @@ Rust reports the type mismatch:
 expected `String`, found `u32`
 ```
 
-The compiler cannot tell whether `"USD"` is the right currency for old receipts.
+The compiler cannot tell whether `"USD"` is the right currency for older events.
 Test conversions with representative earlier data; step 6 checks that value.
 Also check the conversion's limits. Here, `signed_amount` converts `1200`
 successfully and rejects `u64::MAX`:
@@ -305,7 +308,7 @@ assert!(signed_amount(u64::MAX).is_err());
 Once those tests pass, freeze V3 and build for release:
 
 ```sh
-cargo type-history freeze --package receipt-history
+cargo type-history freeze --package my-shop-demo-project
 cargo build --release --locked
 ```
 
@@ -330,8 +333,8 @@ Application code uses two types:
 - `Versioned<ReceiptCreated>` can hold any supported version. It keeps the
   `stable_name`, version number, and matching payload together.
 
-Suppose the application retrieves a receipt written as V1. Deserialize its bytes
-into `Versioned<ReceiptCreated>`:
+Suppose the application retrieves a `ReceiptCreated` event written as V1.
+Deserialize its bytes into `Versioned<ReceiptCreated>`:
 
 <!-- overview:deserialize.rs -->
 ```rust
@@ -375,7 +378,7 @@ Reading V2 runs only the V2-to-V3 conversion. Reading V3 needs no conversion.
 If a conversion fails, `from_versioned` returns an error with the original version
 and the failing step.
 
-To write a new receipt, construct the current type and wrap it before serialization:
+To write a new event, construct the current type and wrap it before serialization:
 
 <!-- overview:write-current.rs -->
 ```rust
@@ -391,7 +394,7 @@ let bytes = to_vec(&receipt.into_versioned())?;
 - `into_versioned` supplies the stable name and current version automatically.
 - `to_vec` serializes the wrapper and its payload together.
 
-The resulting JSON contains V3's version number and the refund's fields
+The resulting JSON contains V3's version number and the event's fields
 (formatted here for readability):
 
 <!-- overview:written.json -->

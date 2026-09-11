@@ -14,7 +14,7 @@ This example covers:
 Create a fresh package called `invoice-history`. It needs its own ledger so you
 can declare and freeze V1 before adding V2.
 
-Create it alongside `receipt-history`, in a separate directory.
+Create it alongside `my-shop-demo-project`, in a separate directory.
 
 ```sh
 cargo new --lib invoice-history --edition 2024

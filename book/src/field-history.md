@@ -58,7 +58,7 @@ For redacted histories, it must implement `ToRedacted`; see the
 [callback error contract](redactable.md#callback-errors-and-causes).
 Return `Ok(value)` when a conversion cannot fail.
 
-The receipt fragments on this page are separate changes to the [V2 declaration](quick-start.md#3-add-a-field-in-v2).
+The `ReceiptCreated` event examples on this page are separate changes to the [V2 declaration](quick-start.md#3-add-a-field-in-v2).
 Each demonstrates a possible V3. The invoice fragments use the [invoice guide](guide.md).
 
 An optional field still needs an explicit value for older data. Adding a reference in V3 could use `None`:
@@ -138,7 +138,7 @@ Clone a value when the new field needs ownership.
 
 A field can change meaning while keeping its Rust type. Record that change with
 `updated_at`, the same type as `previous_type`, and a conversion function. For
-example, V3 could require uppercase currency codes in the receipt:
+example, V3 of `ReceiptCreated` could require uppercase currency codes:
 
 <!-- reference:same-type-field.rs -->
 ```rust
@@ -158,7 +158,7 @@ fn uppercase(value: String) -> Result<String, Infallible> {
 }
 ```
 
-A V2 receipt with `"eur"` now loads as a current receipt with `"EUR"`.
+A V2 event with `"eur"` now loads as a current `ReceiptCreated` event with `"EUR"`.
 New values must already follow the application's currency rules; historical
 conversions do not validate current constructors. Fields without a change at V3
 carry their values forward.

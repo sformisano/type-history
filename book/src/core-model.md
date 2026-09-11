@@ -9,7 +9,7 @@ payload. Its generic parameter selects the history, not the payload's version.
 
 ## One current type, several possible payloads
 
-Consider the receipt after V2 introduces `currency`. The following is a
+Consider `ReceiptCreated` after V2 introduces `currency`. The following is a
 **conceptual generated-code sketch**. The enum name illustrates the design;
 it is not a public API to import or match on.
 

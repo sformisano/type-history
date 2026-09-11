@@ -1,7 +1,7 @@
 # Set up a package
 
 Set up the Cargo dependencies and schema checks before declaring your first versioned type.
-The commands below use a new library named `receipt-history`.
+The example project is `my-shop-demo-project`, a Cargo library package.
 
 ## 1. Create the package
 
@@ -23,15 +23,15 @@ Rust imports use `type_history`. Three packages have different jobs:
 Create a library package:
 
 ```sh
-cargo new --lib receipt-history --edition 2024
-cd receipt-history
+cargo new --lib my-shop-demo-project --edition 2024
+cd my-shop-demo-project
 ```
 
 Replace `Cargo.toml` with this manifest:
 
 ```toml
 [package]
-name = "receipt-history"
+name = "my-shop-demo-project"
 version = "0.1.0"
 edition = "2024"
 
@@ -79,8 +79,11 @@ Empty `src/lib.rs` before initialization.
 ```sh
 cargo generate-lockfile
 cargo fetch --locked
-cargo type-history init --package receipt-history
+cargo type-history init --package my-shop-demo-project
 ```
+
+`--package` selects the Cargo package by its `[package].name` in `Cargo.toml`.
+Use your own package's name when running these commands in an existing project.
 
 `init` creates an empty ledger at `type-history/schemas.json`. Run it before adding
 the first history declaration. It refuses to replace an existing ledger.
