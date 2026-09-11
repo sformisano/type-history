@@ -37,7 +37,9 @@ to connect the build hook and initialize the schema ledger.
 ## How to Use
 
 A shop initially accepts only US dollars. Its `ReceiptCreated` event starts with
-an amount in cents. Later, the shop adds other currencies and supports refunds.
+an amount in cents.
+
+Later, the shop adds other currencies and supports refunds.
 
 To run this example, first [set up a `receipt-history` library](https://github.com/sformisano/type-history/blob/main/book/src/setup.md).
 
