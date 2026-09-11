@@ -1,9 +1,10 @@
-//! Compile the README and book's exact Rust blocks in external consumers.
+//! Compile tutorial Rust blocks and compare documented artifacts with real output.
 
 #[path = "tutorial/snippets.rs"]
 mod snippets;
 
 use super::support::{failure, success, Fixture, LEDGER};
+use serde_json::{from_str, json, Value as JsonValue};
 use toml::Value;
 
 const DOCUMENTATION: &[&str] = &[
@@ -17,7 +18,15 @@ const DOCUMENTATION: &[&str] = &[
 const PACKAGE: &str = "standalone-history-consumer";
 
 fn documented(marker: &str) -> &str {
-    let marker = format!("<!-- {marker} -->\n```rust\n");
+    documented_block(marker, "rust")
+}
+
+fn documented_json(marker: &str) -> JsonValue {
+    from_str(documented_block(marker, "json")).expect("documented JSON")
+}
+
+fn documented_block(marker: &str, language: &str) -> &'static str {
+    let marker = format!("<!-- {marker} -->\n```{language}\n");
     assert_eq!(
         DOCUMENTATION
             .iter()
@@ -32,7 +41,7 @@ fn documented(marker: &str) -> &str {
         .expect("documented source")
         .1
         .split_once("```\n")
-        .expect("closed Rust block")
+        .expect("closed code block")
         .0
 }
 
@@ -54,6 +63,7 @@ fn configured_fixture(redacted: bool) -> Fixture {
 #[test]
 fn receipt_tutorial_reads_old_bytes_and_writes_current_payloads() {
     let fixture = fixture();
+    assert_eq!(fixture.ledger(), json!({}));
     let mut manifest: Value = toml::from_str(&fixture.read("Cargo.toml")).unwrap();
     manifest["dependencies"]
         .as_table_mut()
@@ -65,6 +75,7 @@ fn receipt_tutorial_reads_old_bytes_and_writes_current_payloads() {
     success(&fixture.cargo(&["build", "--locked", "--offline"]));
     success(&fixture.cli(&["freeze", "--package", PACKAGE]));
     let frozen_v1 = fixture.read(LEDGER);
+    assert_eq!(fixture.ledger(), documented_json("journey:ledger-v1.json"));
     let v2 = documented("quick-example:v2.rs");
     let currency_history = "#[history(added_in = v2, backfill_value = \"USD\".to_owned())]";
     assert_eq!(v2.matches(currency_history).count(), 1);
@@ -72,6 +83,17 @@ fn receipt_tutorial_reads_old_bytes_and_writes_current_payloads() {
     failure(
         &fixture.cargo(&["build", "--locked", "--offline"]),
         "field `currency` did not exist in frozen history",
+    );
+    assert_eq!(fixture.read(LEDGER), frozen_v1);
+    let currency_field = format!("{currency_history}\n    pub currency: String,");
+    assert_eq!(v2.matches(&currency_field).count(), 1);
+    fixture.write(
+        "src/lib.rs",
+        &v2.replacen(&currency_field, documented("journey:wrong-backfill.rs"), 1),
+    );
+    failure(
+        &fixture.cargo(&["build", "--locked", "--offline"]),
+        documented_block("journey:backfill-error.txt", "text").trim(),
     );
     assert_eq!(fixture.read(LEDGER), frozen_v1);
     fixture.write(
@@ -92,6 +114,21 @@ fn receipt_tutorial_reads_old_bytes_and_writes_current_payloads() {
         "--version",
         "2",
     ]));
+    let frozen_v2 = fixture.ledger();
+    let history = &frozen_v2["shop.receipt.created"];
+    assert_eq!(history.as_object().unwrap().len(), 2);
+    assert_eq!(
+        history["1"],
+        documented_json("journey:ledger-v1.json")["shop.receipt.created"]["1"]
+    );
+    assert_eq!(
+        history["2"]["schema"]["properties"],
+        documented_json("journey:v2-properties.json")
+    );
+    assert_eq!(
+        history["2"]["schema"]["required"],
+        json!(["amount_cents", "currency"])
+    );
     success(&fixture.cargo(&["build", "--release", "--locked", "--offline"]));
     success(&fixture.cli(&["check", "--package", PACKAGE]));
     fixture.write("src/lib.rs", &snippets::receipt_v3());
@@ -108,7 +145,18 @@ fn receipt_tutorial_reads_old_bytes_and_writes_current_payloads() {
         ),
     );
     success(&fixture.cargo(&["test", "--lib", "--locked", "--offline"]));
+    assert_eq!(fixture.ledger(), frozen_v2, "V3 is still a draft");
     success(&fixture.cli(&["freeze", "--package", PACKAGE]));
+    let frozen_v3 = fixture.ledger();
+    let history = &frozen_v3["shop.receipt.created"];
+    assert_eq!(history.as_object().unwrap().len(), 3);
+    for version in ["1", "2"] {
+        assert_eq!(history[version], frozen_v2["shop.receipt.created"][version]);
+    }
+    assert_eq!(
+        history["3"]["schema"]["properties"],
+        documented_json("journey:v3-properties.json")
+    );
     success(&fixture.cargo(&["build", "--release", "--locked", "--offline"]));
     success(&fixture.cli(&["check", "--package", PACKAGE]));
 }

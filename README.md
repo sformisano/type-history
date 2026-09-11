@@ -73,28 +73,66 @@ version, so callers do not need to choose a numbered type.
 
 ### 2. Freeze V1
 
-V1 starts as a **draft**. You can revise its fields while developing and testing;
-ordinary development builds allow drafts with a warning.
+V1 starts as a **draft**. You can add, change, or remove fields while developing
+and testing without introducing V2.
 
-When V1 is ready, freeze it:
+- Development builds allow drafts with a warning.
+- Release builds require every version to be frozen.
+
+Changes to a draft can make previously written receipts unreadable. Freeze V1
+before storing receipts that the application will need to read later:
 
 ```sh
 cargo type-history freeze --package receipt-history
 ```
 
-Freezing records two things in `type-history/schemas.json`, a file called the **ledger**:
+The command checks the package and saves V1's **schema** in
+`type-history/schemas.json`, called the **ledger**. A schema describes the
+serialized field names, types, and nested structure.
 
-- The history's `stable_name`.
-- V1's **schema**: its serialized field names, types, and nested structure.
+Setup created an empty ledger, `{}`. Freezing V1 adds this entry, written in
+JSON Schema format:
 
-Commit the ledger with your code. Later builds use it to check that earlier
-versions remain intact. Changing the frozen `stable_name` also fails the build,
-even if you rename the Rust type or move it to another module.
+<!-- journey:ledger-v1.json -->
+```json
+{
+  "shop.receipt.created": {
+    "1": {
+      "metadata": {},
+      "schema": {
+        "$id": "urn:typehistory:schema:shop.receipt.created",
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "amount_cents": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": ["amount_cents"],
+        "type": "object"
+      }
+    }
+  }
+}
+```
+
+- `shop.receipt.created` is the history's `stable_name`.
+- `1` is the version being frozen. Freezing preserves V1 rather than creating V2.
+- `schema` records that V1 requires an `amount_cents` field containing a `u64`.
+
+Commit the ledger with your code. Later builds compare V1 against its saved schema
+and reject changes to its serialized structure. Further changes must be declared
+in V2.
+
+The frozen `stable_name` must also stay unchanged. You can still rename the Rust
+type or move it to another module.
 
 ### 3. Add a field in V2
 
-The shop now accepts other currencies. Add `currency` and describe how earlier
-receipts should supply its value:
+The shop now accepts other currencies. Add a `currency` field and supply `"USD"`
+for receipts written before the field existed:
 
 <!-- quick-example:v2.rs -->
 ```rust
@@ -114,8 +152,8 @@ pub struct ReceiptCreated {
 - `backfill_value` supplies `"USD"` when converting V1 receipts, because the shop
   accepted only US dollars then. New receipts supply their currency explicitly.
 
-Type History retains V1 and generates V2. With trait implementations omitted,
-the generated structs have these fields:
+Type History preserves V1 and generates V2 with the new field. With trait
+implementations omitted, the generated structs look like this:
 
 ```rust
 pub struct ReceiptCreatedV1 {
@@ -146,16 +184,31 @@ backfill value. The alias now points to V2:
 pub type ReceiptCreated = ReceiptCreatedV2;
 ```
 
-V2 is the new draft. Test its conversion, then freeze it before introducing V3:
+V2 starts as a draft. You can revise it while V1's saved schema continues to
+protect earlier receipts. Test the conversion before freezing V2:
 
 ```sh
 cargo type-history freeze --package receipt-history
 ```
 
+Freezing adds a `2` entry to `type-history/schemas.json` and leaves the `1` entry
+unchanged. The `properties` in V2's schema describe both fields:
+
+<!-- journey:v2-properties.json -->
+```json
+{
+  "amount_cents": { "format": "uint64", "minimum": 0, "type": "integer" },
+  "currency": { "type": "string" }
+}
+```
+
+Both fields are listed in V2's `required` array. Commit the updated ledger with
+the V2 declaration before introducing V3.
+
 ### 4. Change a field's type in V3
 
-Refunds need negative amounts. Change `amount_cents` from `u64` to `i64`, keeping
-its previous type and supplying a conversion:
+Refunds need negative amounts, so V3 changes `amount_cents` from `u64` to `i64`.
+Keep the earlier type in the field's history and provide a conversion:
 
 <!-- overview:v3.rs -->
 ```rust
@@ -176,21 +229,40 @@ fn signed_amount(previous: u64) -> Result<i64, TryFromIntError> {
 }
 ```
 
-- `updated_at = v3` records when the field changed type.
-- `previous_type = u64` keeps the earlier versions' field type intact.
-- `cast_from_previous_value` calls `signed_amount` when converting V2 to V3.
-  An amount outside the `i64` range returns a conversion error.
+- `updated_at = v3` records which version changes the field's type.
+- `previous_type = u64` preserves the field's type in V1 and V2.
+- `cast_from_previous_value` uses `signed_amount` to convert the field from V2 to V3.
+- `signed_amount` returns an error if the earlier amount exceeds the `i64` range.
 
-Type History now generates `ReceiptCreatedV1`, `ReceiptCreatedV2`, and
-`ReceiptCreatedV3`. The original name follows the latest version:
+Type History keeps V1 and V2 and generates `ReceiptCreatedV3`. This simplified
+sketch shows the new struct and the V2-to-V3 conversion:
+
+```rust
+pub struct ReceiptCreatedV3 {
+    pub amount_cents: i64,
+    pub currency: String,
+}
+
+fn convert_v2_to_v3(previous: ReceiptCreatedV2) -> Result<ReceiptCreatedV3, TryFromIntError> {
+    Ok(ReceiptCreatedV3 {
+        amount_cents: signed_amount(previous.amount_cents)?,
+        currency: previous.currency,
+    })
+}
+```
+
+The conversion changes the amount's type and carries over the currency. The
+original name now points to V3:
 
 ```rust
 pub type ReceiptCreated = ReceiptCreatedV3;
 ```
 
+V3 is the new draft. The ledger still contains only the frozen V1 and V2 schemas.
+
 ### 5. Catch mistakes at compile time
 
-The saved schemas and Rust's type checks protect different parts of this history:
+Builds check the declaration against the ledger and type-check its conversion rules:
 
 - **Missing history attributes:** Adding `currency` without its `#[history(...)]`
   attribute would change frozen V1's fields. The build rejects it.
@@ -201,15 +273,51 @@ The saved schemas and Rust's type checks protect different parts of this history
   types while the version is a draft, too.
 - **Unfinished versions:** Release builds reject drafts.
 
-Freeze V3 once its conversion has been tested:
+For example, changing the `currency` backfill to an integer fails compilation:
+
+<!-- journey:wrong-backfill.rs -->
+```rust
+#[history(added_in = v2, backfill_value = 0_u32)]
+pub currency: String,
+```
+
+Rust reports the type mismatch:
+
+<!-- journey:backfill-error.txt -->
+```text
+expected `String`, found `u32`
+```
+
+The compiler cannot tell whether `"USD"` is the right currency for old receipts.
+Test conversions with representative earlier data; step 6 checks that value.
+Also check the conversion's limits. Here, `signed_amount` converts `1200`
+successfully and rejects `u64::MAX`:
+
+<!-- journey:conversion-tests.rs -->
+```rust
+assert_eq!(signed_amount(1200)?, 1200);
+assert!(signed_amount(u64::MAX).is_err());
+```
+
+Once those tests pass, freeze V3 and build for release:
 
 ```sh
 cargo type-history freeze --package receipt-history
 cargo build --release --locked
 ```
 
-The compiler cannot tell whether `"USD"` is the right currency for old receipts.
-Test conversions with representative earlier data; the next example checks that value.
+The ledger now contains three frozen versions. V1 and V2 stay unchanged. The
+`properties` in V3's schema record the signed amount and existing currency:
+
+<!-- journey:v3-properties.json -->
+```json
+{
+  "amount_cents": { "format": "int64", "type": "integer" },
+  "currency": { "type": "string" }
+}
+```
+
+Commit the updated ledger with the V3 declaration.
 
 ### 6. Read and write through the current type
 
@@ -219,16 +327,22 @@ Application code uses two types:
 - `Versioned<ReceiptCreated>` can hold any supported version. It keeps the
   `stable_name`, version number, and matching payload together.
 
-First, deserialize an earlier receipt into the wrapper:
+Suppose the application retrieves a receipt written as V1. Deserialize its bytes
+into `Versioned<ReceiptCreated>`:
 
 <!-- overview:deserialize.rs -->
 ```rust
 use serde_json::from_slice;
 use type_history::Versioned;
 
-let stored: Versioned<ReceiptCreated> = from_slice(
-    br#"{"stable_name":"shop.receipt.created","version":1,"payload":{"amount_cents":1200}}"#,
-)?;
+let bytes = br#"{
+    "stable_name": "shop.receipt.created",
+    "version": 1,
+    "payload": { "amount_cents": 1200 }
+}"#;
+let stored: Versioned<ReceiptCreated> = from_slice(bytes)?;
+
+assert_eq!(stored.source_version().get(), 1);
 ```
 
 Deserializing the wrapper:
@@ -237,7 +351,8 @@ Deserializing the wrapper:
 - Reads the payload as `ReceiptCreatedV1`, because the stored version is `1`.
 - Keeps that V1 value without running any conversions.
 
-Next, convert the wrapper into the current type:
+The wrapper still holds V1. Pass it to `from_versioned` to obtain the current
+`ReceiptCreated`:
 
 <!-- overview:read-old.rs -->
 ```rust
@@ -271,10 +386,25 @@ let bytes = to_vec(&receipt.into_versioned())?;
 ```
 
 - `into_versioned` supplies the stable name and current version automatically.
-- The wrapper keeps that metadata with the matching fields, so you do not assemble it yourself.
-- The application chooses how to save and retrieve the bytes.
+- `to_vec` serializes the wrapper and its payload together.
 
-These examples use JSON. The same API works with other
+The resulting JSON contains V3's version number and the refund's fields
+(formatted here for readability):
+
+<!-- overview:written.json -->
+```json
+{
+  "stable_name": "shop.receipt.created",
+  "version": 3,
+  "payload": {
+    "amount_cents": -400,
+    "currency": "EUR"
+  }
+}
+```
+
+The application chooses how to save and retrieve these bytes. This example uses
+JSON; the same API works with other
 [supported Serde formats][formats].
 <!-- ANCHOR_END: journey -->
 

@@ -58,7 +58,9 @@ cargo test -p cargo-type-history --test standalone --all-features --locked tutor
 
 Those tests also exercise freezing and expected compiler failures. The redaction
 tests compile the book's combined Redactable example. Keep snippet markers with
-their code when moving content. `mdbook test` alone cannot initialize these
+their code when moving content. The receipt tutorial compares the marked JSON
+examples with generated ledger entries and serialized values, and checks the
+documented compiler error. `mdbook test` alone cannot initialize these
 consumer packages or reproduce their history across successive builds.
 
 ## Book deployment

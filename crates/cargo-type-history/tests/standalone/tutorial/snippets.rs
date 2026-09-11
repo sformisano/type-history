@@ -1,6 +1,6 @@
 //! Compile marked documentation fragments in the tutorial's existing consumers.
 
-use super::documented;
+use super::{documented, documented_block};
 
 pub(super) fn test_module(cases: &[(&str, String)]) -> String {
     let mut source = String::from(
@@ -48,6 +48,10 @@ pub(super) fn receipt_tests() -> String {
 pub(super) fn receipt_journey_tests() -> String {
     test_module(&[
         (
+            "signed_amount_limits",
+            documented("journey:conversion-tests.rs").to_owned(),
+        ),
+        (
             "read_v1_through_both_conversions",
             format!(
                 "{}\n{}\nassert_eq!(receipt.into_versioned().source_version().get(), 3);",
@@ -58,11 +62,13 @@ pub(super) fn receipt_journey_tests() -> String {
         (
             "write_and_read_a_current_refund",
             format!(
-                "{}\n{}",
+                "{}\nlet expected_json = {:?};\n{}",
                 documented("overview:write-current.rs"),
+                documented_block("overview:written.json", "json"),
                 r#"
-use serde_json::from_slice;
+use serde_json::{from_slice, from_str, Value as JsonValue};
 use type_history::Versioned;
+assert_eq!(from_slice::<JsonValue>(&bytes)?, from_str::<JsonValue>(expected_json)?);
 let stored: Versioned<ReceiptCreated> = from_slice(&bytes)?;
 assert_eq!(stored.source_version().get(), 3);
 assert_eq!(stored.stable_name().as_str(), "shop.receipt.created");

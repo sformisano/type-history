@@ -34,9 +34,11 @@
 - Support custom frontend error projection through `GenerationPaths.error`,
   exercised by a standalone consumer with structured errors.
 - Follow a receipt from creation through freezing, changes, and decoding in the
-  README. Provide an mdBook for concepts, tasks, and reference, plus a GitHub Pages
+  README, with generated types, ledger entries, compiler errors, and serialized
+  values. Provide an mdBook for concepts, tasks, and reference, plus a GitHub Pages
   artifact build. Rust documentation exposes the current generated type's fields,
   methods, and traits; docs.rs builds include the optional redaction API.
-- Validate README and book examples through Cargo integration tests. Include a
+- Validate README and book examples through Cargo integration tests, including
+  their generated ledger entries, compiler errors, and serialized values. Include a
   runnable invoice example with a frozen ledger, and check external consumers,
   doctests, and release builds with and without optional redaction support.
