@@ -7,11 +7,13 @@ attributes before they cause runtime failures in production.
 
 ## Use Cases
 
-Persisted data often outlives the code that wrote it. A production application
-may need to read *years* of records, with Rust structs having changed over time.
+Persisted data often outlives the code that wrote it. As a production
+application evolves, it may accumulate years of records written using different
+versions of its Rust structs. Type History converts those records into the
+current types, so application code can use them without handling each
+historical version separately.
 
-Type History helps when those records need to become the types your application
-uses today. Common examples include:
+Common examples include:
 
 - **Stored events:** Read events written before a field was added or changed.
 - **Saved snapshots:** Restore a record written by an earlier application version.
