@@ -59,7 +59,7 @@ pub struct ReceiptCreated {
 ```
 
 - `#[versioned(...)]` creates the type's history.
-- `stable_name` names that history. Every receipt shares this name across all versions.
+- `stable_name` names that history. Every `ReceiptCreated` version will share this name.
 - Fields without `#[history(...)]` attributes belong to V1.
 
 Type History generates `ReceiptCreatedV1` and makes the original name an alias:
