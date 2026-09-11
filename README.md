@@ -76,11 +76,14 @@ version, so callers do not need to choose a numbered type.
 V1 starts as a **draft**. You can add, change, or remove fields while developing
 and testing without introducing V2.
 
-- Development builds allow drafts with a warning.
-- Release builds require every version to be frozen.
+The important thing to keep in mind is:
 
-Changes to a draft can make previously written receipts unreadable. Freeze V1
-before storing receipts that the application will need to read later:
+- Development builds allow drafts with a warning.
+- Release builds **reject** drafts and require every version to be frozen.
+
+Changes to a draft can make even previously written types unreadable.
+
+So we need to freeze V1 before storing receipts that the application will need to read later:
 
 ```sh
 cargo type-history freeze --package receipt-history
