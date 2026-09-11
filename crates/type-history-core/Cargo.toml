@@ -5,6 +5,9 @@ edition.workspace = true
 rust-version.workspace = true
 description = "Shared structural wire and runtime history contracts"
 repository.workspace = true
+readme.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/type-history-core"
 license.workspace = true
 publish = false
 

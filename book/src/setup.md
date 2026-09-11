@@ -101,4 +101,4 @@ Commit `Cargo.toml`, `Cargo.lock`, `type-history.toml`, `build.rs`, your source,
 `type-history/schemas.json` with your project. The `.schemas.lock` file prevents
 concurrent commands from changing the ledger at the same time. It can be recreated.
 
-Continue with [declaring V1](../README.md#1-declare-v1).
+Continue with [declaring V1](quick-start.md#1-declare-v1).

@@ -1,6 +1,6 @@
 # What the macro generates
 
-The [README example](../README.md#3-add-a-field-in-v2) declares `ReceiptCreated` through V2.
+The [quick start example](quick-start.md#3-add-a-field-in-v2) declares `ReceiptCreated` through V2.
 This reference uses that declaration to describe the generated API.
 
 The macro replaces your declaration with numbered structs and an alias under

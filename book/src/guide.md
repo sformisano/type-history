@@ -1,6 +1,6 @@
 # Evolve an invoice through V1, V2, and V3
 
-This example extends the [README walkthrough](../README.md#how-it-works) with a field rename and a conversion that can fail.
+This example extends the [quick start](quick-start.md) with a field rename and a conversion that can fail.
 It follows an invoice through three versions in a separate package.
 
 This example covers:
@@ -259,4 +259,4 @@ cargo type-history freeze --package invoice-history \
 cargo build --release --locked
 ```
 
-The [invoice reference application](../examples/invoice/README.md) contains the completed history, ledger, and tests.
+The [invoice reference application](https://github.com/sformisano/type-history/blob/main/examples/invoice/README.md) contains the completed history, ledger, and tests.

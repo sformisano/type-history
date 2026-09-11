@@ -27,7 +27,7 @@ field update that converts it to the new type.
 
 ### What conversion tests must check
 
-The [README's shop example](../README.md#how-it-works) requires older receipts to use US dollars.
+The shop example in the [quick start](quick-start.md) requires older receipts to use US dollars.
 Both of these values pass the same type check:
 
 <!-- reference:business-values.rs -->
@@ -38,7 +38,7 @@ assert_ne!(usd, eur);
 ```
 
 Only `"USD"` matches the shop's earlier receipts. The compiler checks types;
-the [receipt assertions](../README.md#6-read-and-write-through-the-current-type) check that business rule.
+the [receipt assertions](quick-start.md#6-read-and-write-through-the-current-type) check that business rule.
 A conversion can return the wrong value while preserving the expected type.
 
 Schemas describe serialized structure, so some source edits leave them unchanged:
@@ -67,7 +67,7 @@ from your application's workspace.
   Custom target files are unsupported.
 
 The [setup guide](setup.md#2-initialize-the-schema-file) explains `init`, and the
-[README walkthrough](../README.md#2-freeze-v1) shows `freeze`.
+[quick start](quick-start.md#2-freeze-v1) shows `freeze`.
 Use `check` to validate existing histories.
 The command examples below use the [invoice package](guide.md).
 The remaining commands handle experimental resets or imported histories.

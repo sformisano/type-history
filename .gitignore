@@ -2,3 +2,4 @@
 **/target/
 **/type-history/.schemas.lock
 .DS_Store
+/book/html/

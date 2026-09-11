@@ -1,7 +1,7 @@
 # Field history reference
 
 This reference covers the `#[versioned(...)]` struct arguments and `#[history(...)]` field attributes.
-The [README walkthrough](../README.md#how-it-works) introduces them through a complete history.
+The [quick start](quick-start.md) introduces them through a complete history.
 
 Compile-time checks cover:
 
@@ -58,7 +58,7 @@ For redacted histories, it must implement `ToRedacted`; see the
 [callback error contract](redactable.md#callback-errors-and-causes).
 Return `Ok(value)` when a conversion cannot fail.
 
-The receipt fragments on this page are separate changes to the [V2 declaration](../README.md#3-add-a-field-in-v2).
+The receipt fragments on this page are separate changes to the [V2 declaration](quick-start.md#3-add-a-field-in-v2).
 Each demonstrates a possible V3. The invoice fragments use the [invoice guide](guide.md).
 
 An optional field still needs an explicit value for older data. Adding a reference in V3 could use `None`:

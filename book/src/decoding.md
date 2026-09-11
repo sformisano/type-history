@@ -1,6 +1,6 @@
 # Decode stored records and handle failures
 
-The receipt snippets use the [V2 `ReceiptCreated` declaration](../README.md#3-add-a-field-in-v2), before the README adds V3.
+The receipt snippets use the [V2 `ReceiptCreated` declaration](quick-start.md#3-add-a-field-in-v2), before the quick start adds V3.
 Place snippets containing `?` in a function that returns a compatible `Result`.
 
 Wrap a current receipt before serializing it. After deserializing, convert the

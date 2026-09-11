@@ -18,13 +18,28 @@ uses today. Common examples include:
 - **Versioned documents:** Read records with different stored versions through
   one current Rust type.
 
+## Installation
+
+Add the runtime and build hook to your package, then install the CLI:
+
+```sh
+cargo add type-history@0.1
+cargo add --build type-history-build@0.1
+cargo install cargo-type-history --version 0.1 --locked
+```
+
+Type History requires Rust 1.97 or later. Follow the
+[package setup](https://github.com/sformisano/type-history/blob/main/book/src/setup.md)
+to connect the build hook and initialize the schema ledger.
+
 ## How it works
 
 A shop initially accepts only US dollars. Its `ReceiptCreated` event starts with
 an amount in cents. Later, the shop adds other currencies and supports refunds.
 
-To run this example, first [set up a `receipt-history` library](docs/setup.md).
+To run this example, first [set up a `receipt-history` library](https://github.com/sformisano/type-history/blob/main/book/src/setup.md).
 
+<!-- ANCHOR: journey -->
 ### 1. Declare V1
 
 Describe the first version with `#[versioned(...)]`:
@@ -256,21 +271,19 @@ let bytes = to_vec(&receipt.into_versioned())?;
 - The application chooses how to save and retrieve the bytes.
 
 These examples use JSON. The same API works with other
-[supported Serde formats](docs/decoding.md#choose-a-serde-format).
+[supported Serde formats][formats].
+<!-- ANCHOR_END: journey -->
 
 ## Documentation
 
-| Topic | Where to go next |
-| --- | --- |
-| Installation and build hook | [Set up your project](docs/setup.md) |
-| Renames, removals, and other field changes | [Field history reference](docs/field-history.md) |
-| Conversions that read several earlier fields | [Invoice walkthrough](docs/guide.md) |
-| Formats, validation, and conversion errors | [Reading and writing versioned values](docs/decoding.md) |
-| Freezing, checking, resetting, and importing histories | [History lifecycle](docs/lifecycle.md) |
-| Modules, dependency aliases, and supported types | [Integration reference](docs/integration.md) |
-| Optional redaction | [Redactable integration](docs/redactable.md) |
+- [The book](https://github.com/sformisano/type-history/blob/main/book/README.md)
+  covers the generated types, field changes, conversions, freezing, and integrations.
+- [API reference](https://docs.rs/type-history/latest/type_history/)
+  documents public types, methods, and traits.
+- [The invoice example](https://github.com/sformisano/type-history/blob/main/examples/invoice/README.md)
+  is a complete runnable package.
 
-The [invoice example](examples/invoice/README.md) is a complete runnable package.
-The [documentation index](docs/README.md) describes the crates and further references.
+[formats]: https://github.com/sformisano/type-history/blob/main/book/src/decoding.md#choose-a-serde-format
 
-Licensed under [MIT](LICENSE-MIT) or [Apache 2.0](LICENSE-APACHE), at your option.
+Licensed under [MIT](https://github.com/sformisano/type-history/blob/main/LICENSE-MIT)
+or [Apache 2.0](https://github.com/sformisano/type-history/blob/main/LICENSE-APACHE), at your option.

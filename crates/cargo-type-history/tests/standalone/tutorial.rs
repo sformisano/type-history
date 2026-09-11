@@ -1,4 +1,4 @@
-//! Compile the README and reference docs' exact Rust blocks in external consumers.
+//! Compile the README and book's exact Rust blocks in external consumers.
 
 #[path = "tutorial/snippets.rs"]
 mod snippets;
@@ -8,11 +8,11 @@ use toml::Value;
 
 const DOCUMENTATION: &[&str] = &[
     include_str!("../../../../README.md"),
-    include_str!("../../../../docs/guide.md"),
-    include_str!("../../../../docs/field-history.md"),
-    include_str!("../../../../docs/decoding.md"),
-    include_str!("../../../../docs/lifecycle.md"),
-    include_str!("../../../../docs/integration.md"),
+    include_str!("../../../../book/src/guide.md"),
+    include_str!("../../../../book/src/field-history.md"),
+    include_str!("../../../../book/src/decoding.md"),
+    include_str!("../../../../book/src/lifecycle.md"),
+    include_str!("../../../../book/src/integration.md"),
 ];
 const PACKAGE: &str = "standalone-history-consumer";
 

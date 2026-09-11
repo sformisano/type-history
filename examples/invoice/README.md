@@ -21,7 +21,7 @@ historical conversion, metadata validation, and preserved callback errors.
 The [raw JSON tests](tests/history.rs) cover the existing low-level API for
 applications that already keep metadata separately.
 
-The [invoice walkthrough](../../docs/guide.md)
+The [invoice walkthrough](../../book/src/guide.md)
 explains how to author and freeze each version. Those intermediate edits,
 expected compiler failures, and lifecycle operations belong to the
 [Rust integration tests](../../crates/cargo-type-history/tests/standalone/tutorial.rs):

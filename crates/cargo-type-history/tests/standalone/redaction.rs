@@ -183,7 +183,7 @@ history_build = {{ package = "type-history-build", path = {build:?} }}
         success(&fixture.cli(&["freeze", "--package", "plain-history-library"]));
     }
     fixture.write("plain/src/lib.rs", V3);
-    let guide = include_str!("../../../../docs/redactable.md");
+    let guide = include_str!("../../../../book/src/redactable.md");
     let example = guide
         .split("```rust\n")
         .nth(1)

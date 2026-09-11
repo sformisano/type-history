@@ -1,0 +1,20 @@
+[book]
+title = "Type History"
+description = "Evolve Rust records while preserving support for earlier data."
+language = "en"
+src = "src"
+
+[build]
+build-dir = "html"
+create-missing = false
+
+[rust]
+edition = "2021"
+
+[output.html]
+git-repository-url = "https://github.com/sformisano/type-history"
+edit-url-template = "https://github.com/sformisano/type-history/edit/main/book/{path}"
+site-url = "/type-history/"
+
+[output.html.playground]
+runnable = false

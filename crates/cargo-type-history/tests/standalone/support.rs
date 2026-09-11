@@ -287,7 +287,7 @@ opt-level = 2
 fn copy_family(vendor: &Path) {
     let repository = repository();
     copy_tree(&repository.join("crates"), &vendor.join("crates"));
-    copy_tree(&repository.join("docs"), &vendor.join("docs"));
+    copy_tree(&repository.join("book/src"), &vendor.join("book/src"));
     fs::copy(repository.join("README.md"), vendor.join("README.md"))
         .expect("preserve compiled tutorial source");
     let manifest: TomlValue = toml::from_str(

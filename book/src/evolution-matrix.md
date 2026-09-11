@@ -1,9 +1,6 @@
 # Field-history evolution matrix
 
 This matrix summarizes the [field history rules](field-history.md) and [lifecycle checks](lifecycle.md).
-Type History originated in Axis's event field-history implementation.
-The [Axis matrix at the extraction revision](https://github.com/sformisano/axis/blob/af7b96c3f0744cdfd170c50bb321d5dfd02be8ea/docs/design/event-evolution/evolution-matrix.md)
-documents that revision's aggregate-specific cases.
 S means supported, R means rejected, and U means outside the API.
 A compound class carries two of those outcomes for one case; the rule column says which letter covers which half.
 S/R means the case splits: the rule column names the supported half and the rejected half.
@@ -17,7 +14,7 @@ Case IDs identify behavior families; this document is not a test-run report.
 | M01 | Unannotated V1 field | S | Present from default floor V1, declared type copied across unchanged versions |
 | M02 | Unannotated imported-floor field | S | Present from explicit authorized retained_from; no fabricated lower type |
 | M03 | Added ordinary field | S | added_in plus exactly one backfill expression or payload callback |
-| M04 | Added Option<T> | S | Explicit backfill_value=None or callback; omission is an error |
+| M04 | Added `Option<T>` | S | Explicit backfill_value=None or callback; omission is an error |
 | M05 | Added Default type | S | Explicit backfill_value=Type::default(); trait presence changes no macro rule |
 | M06 | Added field with default omitted | R | Missing initializer fails even for Option/Default |
 | M07 | Backfill required by current producer | R | Latest struct construction still requires every field; historical expression supplies no current producer default |
@@ -36,7 +33,7 @@ Case IDs identify behavior families; this document is not a test-run report.
 | M20 | Several dependent-looking outputs | S | Every callback reads old payload only; no callback reads partially produced destination |
 | M21 | Value cast plus payload casts reading that same field | S | All shared reads finish before owned value cast/move |
 | M22 | Fallible contextual addition | S | cast_from_previous_payload returns Result; first failure stops this conversion chain |
-| M23 | Fallible value update | S | cast_from_previous_value consumes exact previous type and returns Result<destination,E> |
+| M23 | Fallible value update | S | cast_from_previous_value consumes exact previous type and returns `Result<destination, E>` |
 | M24 | Infallible contextual update | S | Function returns Ok(value) using supported error type |
 | M25 | Fallible backfill expression | R | backfill_value is destination value, not Result; use payload callback for failure |
 | M85 | Backfill expression uses return or ? | S/R | Typed zero-argument closure contains return; invalid Result propagation fails inside birth-value context and cannot escape transition |
@@ -142,11 +139,11 @@ Case IDs identify behavior families; this document is not a test-run report.
 
 ## Verification and limits
 
-Parser tests live in [codegen](../crates/type-history-codegen/src/history/tests.rs).
+Parser tests live in [codegen](https://github.com/sformisano/type-history/blob/main/crates/type-history-codegen/src/history/tests.rs).
 Real standalone compiler and lifecycle cases live in
-[cargo-type-history](../crates/cargo-type-history/tests/standalone.rs). Its
-[tutorial tests](../crates/cargo-type-history/tests/standalone/tutorial.rs) execute
-the README progression and reference examples. The [invoice reference application](../examples/invoice/README.md)
+[cargo-type-history](https://github.com/sformisano/type-history/blob/main/crates/cargo-type-history/tests/standalone.rs). Its
+[tutorial tests](https://github.com/sformisano/type-history/blob/main/crates/cargo-type-history/tests/standalone/tutorial.rs) execute
+the quick start progression and reference examples. The [invoice reference application](https://github.com/sformisano/type-history/blob/main/examples/invoice/README.md)
 demonstrates a current consumer with its frozen ledger.
 
 Ordinary generated records require `Clone`, `PartialEq`, and `Debug` for their fields.

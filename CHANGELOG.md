@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Move the user guides and reference into an mdBook, with a chapter explaining
+  how the current alias reads historical payloads. Share the README journey with
+  the book, retain executable example checks, and add a Pages artifact build.
+
 - Follow one receipt history from V1 through drafts, freezing, field changes,
   compile-time checks, and reading older data in the README. Move setup and
   detailed reference material into focused documentation pages.
@@ -48,8 +52,8 @@
   the README examples. Add a runnable invoice reference crate with a committed
   frozen ledger, and run Cargo checks directly in CI.
 
-- Place each crate directly under `crates/`, using its package name. Move shared
-  documentation and examples to root-level `docs/` and `examples/` directories.
+- Place each crate directly under `crates/`, using its package name. Keep runnable
+  examples in the root-level `examples/` directory.
 
 - Add a default-disabled `redactable` feature across all six Type History crates,
   using Redactable 0.12.0. Each history selects its contract with `redacted`.
