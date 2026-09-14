@@ -6,13 +6,15 @@ use serde::{de::DeserializeOwned, Serialize};
 use sha2::{Digest, Sha256};
 #[cfg(test)]
 use std::cell::Cell;
-use std::fs::{self, File, OpenOptions, TryLockError};
+use std::fs::{self, File, TryLockError};
 #[cfg(test)]
 use std::io::Error as IoError;
 use std::io::{ErrorKind, Result as IoResult, Write};
 use std::path::{Path, PathBuf};
 use tempfile::Builder as TempBuilder;
 use type_history_codegen::ledger::{HistoryLedger, SchemaIdentity};
+
+mod lock;
 
 pub(crate) struct Transaction {
     _lock: File,
@@ -27,12 +29,7 @@ impl Transaction {
             return Err("history authority directory must not be a symlink; keep it inside its owning package".into());
         }
         fs::create_dir_all(directory)?;
-        let lock = OpenOptions::new()
-            .read(true)
-            .write(true)
-            .create(true)
-            .truncate(false)
-            .open(package_root.join(contract.lock_path))?;
+        let lock = lock::open(&package_root.join(contract.lock_path))?;
         match lock.try_lock() {
             Ok(()) => {}
             Err(TryLockError::WouldBlock) => {
@@ -55,6 +52,18 @@ impl Transaction {
     }
     pub fn original(&self) -> Option<&[u8]> {
         self.original.as_deref()
+    }
+    pub fn ensure_original(&self) -> Result<()> {
+        if read_optional(&self.path)? != self.original {
+            return Err("InputsChanged: live history ledger changed before completion".into());
+        }
+        Ok(())
+    }
+    pub fn verify_capture(&self, snapshot: &Snapshot) -> Result<()> {
+        if read_optional(&snapshot.mapped(&self.path)?)? != self.original {
+            return Err("InputsChanged: captured history ledger differs from the transaction's original authority".into());
+        }
+        Ok(())
     }
     pub fn baseline<M: Clone + Eq + Serialize + DeserializeOwned>(
         &self,
@@ -92,9 +101,7 @@ impl Transaction {
         io_boundary(CommitOperation::Flush)?;
         staged.as_file().sync_all()?;
         freshness(staged.path())?;
-        if read_optional(&self.path)? != self.original {
-            return Err("InputsChanged: live history ledger changed before commit".into());
-        }
+        self.ensure_original()?;
         // This rename is the commit point. No compiler work follows it.
         io_boundary(CommitOperation::Rename)?;
         if self.original.is_none() {

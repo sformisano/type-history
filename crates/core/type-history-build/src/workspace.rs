@@ -1,6 +1,7 @@
 //! Cargo's resolved workspace and local source graph.
 use crate::contract::ToolContract;
 use crate::options::{FeatureSelection, LifecycleOptions};
+use crate::snapshot::Snapshot;
 use crate::Result;
 use serde::Deserialize;
 use std::collections::BTreeSet;
@@ -69,7 +70,25 @@ fn metadata_with_selection(selection: FeatureSelection<'_>) -> Result<CargoMetad
     command.args(["metadata", "--format-version", "1", "--locked", "--offline"]);
     selection.apply_to(&mut command);
     let mut metadata = read_metadata(&mut command)?;
-    include_local_manifests(&mut metadata)?;
+    include_local_manifests(&mut metadata, |command, manifest| {
+        command.arg("--manifest-path").arg(manifest);
+        Ok(())
+    })?;
+    Ok(metadata)
+}
+
+pub(crate) fn captured_metadata(
+    snapshot: &Snapshot,
+    options: &LifecycleOptions,
+) -> Result<CargoMetadata> {
+    let mut command = Command::new("cargo");
+    command.args(["metadata", "--format-version", "1", "--locked", "--offline"]);
+    FeatureSelection::from_options(options).apply_to(&mut command);
+    snapshot.configure_cargo(&mut command)?;
+    let mut metadata = read_metadata(&mut command)?;
+    include_local_manifests(&mut metadata, |command, manifest| {
+        snapshot.configure_cargo_at(command, manifest)
+    })?;
     Ok(metadata)
 }
 
@@ -85,7 +104,10 @@ fn read_metadata(command: &mut Command) -> Result<CargoMetadata> {
     Ok(serde_json::from_slice(&output.stdout)?)
 }
 
-fn include_local_manifests(metadata: &mut CargoMetadata) -> Result<()> {
+fn include_local_manifests(
+    metadata: &mut CargoMetadata,
+    configure: impl Fn(&mut Command, &Path) -> Result<()>,
+) -> Result<()> {
     let mut known = metadata
         .packages
         .iter()
@@ -111,17 +133,15 @@ fn include_local_manifests(metadata: &mut CargoMetadata) -> Result<()> {
             // Ask Cargo for their declared paths without enabling their features
             // or resolving/fetching their inactive registry dependencies.
             let mut command = Command::new("cargo");
-            command
-                .args([
-                    "metadata",
-                    "--format-version",
-                    "1",
-                    "--no-deps",
-                    "--locked",
-                    "--offline",
-                    "--manifest-path",
-                ])
-                .arg(&manifest);
+            command.args([
+                "metadata",
+                "--format-version",
+                "1",
+                "--no-deps",
+                "--locked",
+                "--offline",
+            ]);
+            configure(&mut command, &manifest)?;
             let local = read_metadata(&mut command)?;
             for package in local.packages {
                 if known.insert(package.manifest_path.canonicalize()?) {
@@ -145,12 +165,35 @@ pub fn select<'a>(
     requested: Option<&str>,
     contract: &ToolContract,
 ) -> Result<Vec<&'a Package>> {
+    select_with(metadata, requested, contract, |package| {
+        Ok(package.root().join(contract.ledger_path).is_file())
+    })
+}
+
+pub(crate) fn select_captured<'a>(
+    metadata: &'a CargoMetadata,
+    requested: Option<&str>,
+    contract: &ToolContract,
+    snapshot: &Snapshot,
+) -> Result<Vec<&'a Package>> {
+    select_with(metadata, requested, contract, |package| {
+        Ok(snapshot
+            .mapped(&package.root().join(contract.ledger_path))?
+            .is_file())
+    })
+}
+
+fn select_with<'a>(
+    metadata: &'a CargoMetadata,
+    requested: Option<&str>,
+    contract: &ToolContract,
+    initialized: impl Fn(&Package) -> Result<bool>,
+) -> Result<Vec<&'a Package>> {
     let libraries: Vec<_> = metadata
         .packages
         .iter()
         .filter(|package| {
             metadata.workspace_members.contains(&package.id)
-                && (requested.is_some() || package.root().join(contract.ledger_path).is_file())
                 && package.targets.iter().any(|target| {
                     target.kind.iter().any(|kind| {
                         matches!(
@@ -160,6 +203,10 @@ pub fn select<'a>(
                     })
                 })
         })
+        .map(|package| Ok((requested.is_some() || initialized(package)?).then_some(package)))
+        .collect::<Result<Vec<_>>>()?
+        .into_iter()
+        .flatten()
         .collect();
     match requested {
         Some(name) => {

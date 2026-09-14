@@ -29,7 +29,7 @@ fn fixture() -> Snapshot {
         extra: Vec::new(),
         excluded_target: owner.path().join("target"),
         excluded_caches: BTreeSet::new(),
-        excluded_lock: ".schemas.lock".into(),
+        excluded_paths: BTreeSet::new(),
         before: BTreeMap::new(),
         environment: Vec::new(),
         compiler: Vec::new(),

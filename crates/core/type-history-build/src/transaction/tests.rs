@@ -27,6 +27,39 @@ fn authority_directory_cannot_redirect_a_transaction_to_another_package() {
 
 #[cfg(unix)]
 #[test]
+fn lock_symlinks_cannot_create_or_open_another_filesystem_authority() {
+    use std::os::unix::fs::symlink;
+
+    let root = tempfile::tempdir().unwrap();
+    let authority = root.path().join("type-history");
+    fs::create_dir(&authority).unwrap();
+    let lock = authority.join(".schemas.lock");
+    let target = root.path().join("unowned");
+    symlink(&target, &lock).unwrap();
+    for exists in [false, true] {
+        if exists {
+            fs::write(&target, b"unowned bytes").unwrap();
+        }
+        let Err(error) = Transaction::acquire(root.path(), "lock-symlink", &STANDALONE) else {
+            panic!("symlinked lock must be rejected");
+        };
+        assert!(error.to_string().contains("without following symlinks"));
+        assert_eq!(target.exists(), exists);
+        if exists {
+            assert_eq!(fs::read(&target).unwrap(), b"unowned bytes");
+        }
+        assert_eq!(fs::read_link(&lock).unwrap(), target);
+        assert!(!authority.join("schemas.json").exists());
+    }
+    fs::remove_file(&lock).unwrap();
+    let first = Transaction::acquire(root.path(), "lock-control", &STANDALONE).unwrap();
+    assert!(Transaction::acquire(root.path(), "busy-control", &STANDALONE).is_err());
+    drop(first);
+    Transaction::acquire(root.path(), "retry-control", &STANDALONE).unwrap();
+}
+
+#[cfg(unix)]
+#[test]
 fn committing_a_candidate_preserves_existing_ledger_permissions() {
     use std::os::unix::fs::PermissionsExt;
     let root = tempfile::tempdir().unwrap();

@@ -33,6 +33,7 @@ dependencies = [
 name = "cargo-type-history"
 version = "0.1.0"
 dependencies = [
+ "rustix",
  "serde_json",
  "tempfile",
  "thiserror",
@@ -560,6 +561,7 @@ dependencies = [
 name = "type-history-build"
 version = "0.1.0"
 dependencies = [
+ "rustix",
  "serde",
  "serde_json",
  "sha2",

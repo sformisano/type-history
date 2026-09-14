@@ -114,7 +114,19 @@ ledger. It rejects missing released histories or versions, changed metadata or
 schemas, and reset reservations for released versions. The released file itself
 must contain only frozen versions. New histories and later versions are allowed.
 
-The check takes a copy of both ledgers and the source, then compares the release ledger before compiling. Editing the source and working ledger together therefore cannot hide a change to a released schema. If those inputs change while the check runs, the command fails. It does not rewrite either ledger or the source, on success or failure.
+The check takes a copy of both ledgers and the source, then compares the release ledger before compiling. Editing the source and working ledger together therefore cannot hide a change to a released schema. It does not rewrite either ledger or the source, on success or failure.
+
+Workspace checks select initialized packages from one shared source copy. The
+command verifies Cargo's package graph against that copy before validation and
+checks the original inputs again after all selected packages have been checked.
+A changed package graph or input fails the command. Source files remain included
+even inside directories named `node_modules`, `.next`, `.git`, or `.schemas.lock`;
+only identified Cargo caches, Git metadata, and package lock paths are excluded.
+
+These checks detect changes by comparing inputs at specific points. They do not
+lock source files against editors, and an edit after the final comparison cannot
+be detected. Avoid editing inputs during a command; use an immutable source
+checkout when another process could change them.
 
 Your CI job chooses the trusted release file. Type History does not fetch or
 authenticate it. Ordinary builds and running applications need no release
@@ -213,6 +225,11 @@ cargo type-history import --package invoice-history \
 ### Failed commands and recovery
 
 Before `freeze`, `reset`, or `import` replaces a ledger, it validates the proposed contents against a captured copy of the package. A package lock prevents another command from writing the same ledger at the same time. The command also checks that its inputs have not changed, then reads back the result before releasing the lock.
+
+The lock must be a regular file; a symlink is rejected without opening its target.
+The captured ledger must match the ledger read under that lock. Commands that
+leave the ledger unchanged also verify that this original authority is still
+current before reporting success.
 
 Recovery depends on whether the replacement happened:
 

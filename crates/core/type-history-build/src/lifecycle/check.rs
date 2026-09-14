@@ -62,7 +62,27 @@ pub fn run_with_check<M: Clone + Eq + Serialize + DeserializeOwned>(
             return emit(report, json);
         }
     };
-    let mut packages = match workspace::select(&metadata, options.package.as_deref(), contract) {
+    let extra = check
+        .released_baseline
+        .iter()
+        .filter_map(|path| path.canonicalize().ok())
+        .collect::<Vec<_>>();
+    let snapshot = match Snapshot::create(&metadata, &extra, contract).and_then(|snapshot| {
+        snapshot.verify_graph(&metadata, &options)?;
+        Ok(snapshot)
+    }) {
+        Ok(snapshot) => snapshot,
+        Err(error) => {
+            report.errors.push(operation_error(error));
+            return emit(report, json);
+        }
+    };
+    let mut packages = match workspace::select_captured(
+        &metadata,
+        options.package.as_deref(),
+        contract,
+        &snapshot,
+    ) {
         Ok(packages) => packages,
         Err(error) => {
             report.errors.push(Diagnostic::operational(
@@ -75,9 +95,19 @@ pub fn run_with_check<M: Clone + Eq + Serialize + DeserializeOwned>(
     };
     packages.sort_by(|a, b| a.name.cmp(&b.name));
     for package in packages {
-        report.packages.push(execute_check(
-            &metadata, package, &options, &check, contract, ops,
+        report.packages.push(execute_check_in(
+            &metadata,
+            package,
+            &options,
+            &check,
+            contract,
+            ops,
+            Some(&snapshot),
         ));
+    }
+    // Earlier package results remain bound to this capture until the whole check ends.
+    if let Err(error) = snapshot.ensure_fresh() {
+        report.errors.push(operation_error(error));
     }
     emit(report, check.format == OutputFormat::Json)
 }
@@ -98,6 +128,18 @@ pub fn execute_check<M: Clone + Eq + Serialize + DeserializeOwned>(
     check: &CheckOptions,
     contract: &ToolContract,
     ops: &LifecycleOps<M>,
+) -> PackageReport {
+    execute_check_in(metadata, package, options, check, contract, ops, None)
+}
+
+fn execute_check_in<M: Clone + Eq + Serialize + DeserializeOwned>(
+    metadata: &CargoMetadata,
+    package: &Package,
+    options: &LifecycleOptions,
+    check: &CheckOptions,
+    contract: &ToolContract,
+    ops: &LifecycleOps<M>,
+    shared: Option<&Snapshot>,
 ) -> PackageReport {
     let mut result = PackageReport {
         package: package.name.clone(),
@@ -144,17 +186,27 @@ pub fn execute_check<M: Clone + Eq + Serialize + DeserializeOwned>(
     if let Some(path) = &released_path {
         extra.push(path.clone());
     }
-    let snapshot = match Snapshot::create(metadata, &extra, contract) {
-        Ok(snapshot) => snapshot,
-        Err(error) => {
-            result.diagnostics.push(operation_error(error));
-            return result;
+    let owned;
+    let snapshot = match shared {
+        Some(snapshot) => snapshot,
+        None => {
+            owned = match Snapshot::create(metadata, &extra, contract).and_then(|snapshot| {
+                snapshot.verify_graph(metadata, options)?;
+                Ok(snapshot)
+            }) {
+                Ok(snapshot) => snapshot,
+                Err(error) => {
+                    result.diagnostics.push(operation_error(error));
+                    return result;
+                }
+            };
+            &owned
         }
     };
     let attempt = (|| -> Result<()> {
         let copied_root = snapshot.mapped(package.root())?;
         let identity = SchemaIdentity::new(contract.schema_id_prefix);
-        let current = match read_captured(&snapshot, &current_path, identity.clone()) {
+        let current = match read_captured(snapshot, &current_path, identity.clone()) {
             Ok(ledger) => ledger,
             Err(error) => {
                 result.diagnostics.push(input_error(
@@ -166,7 +218,7 @@ pub fn execute_check<M: Clone + Eq + Serialize + DeserializeOwned>(
             }
         };
         if let Some(path) = &released_path {
-            let released = match read_captured(&snapshot, path, identity) {
+            let released = match read_captured(snapshot, path, identity) {
                 Ok(ledger) => ledger,
                 Err(error) => {
                     result.diagnostics.push(input_error(
@@ -187,7 +239,7 @@ pub fn execute_check<M: Clone + Eq + Serialize + DeserializeOwned>(
         }
         // Baseline findings do not suppress independent compiler observations.
         let observed = export::export(
-            &snapshot,
+            snapshot,
             &copied_root,
             &package.name,
             options,
@@ -197,7 +249,7 @@ pub fn execute_check<M: Clone + Eq + Serialize + DeserializeOwned>(
         result
             .diagnostics
             .extend(compare_ledgers(&current, &observed, false, None, None)?);
-        export::validate(&snapshot, &package.name, &copied_root, options, contract)?;
+        export::validate(snapshot, &package.name, &copied_root, options, contract)?;
         Ok(())
     })();
     if let Err(error) = attempt {

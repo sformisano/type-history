@@ -3,10 +3,10 @@ use crate::check_report::CheckReport;
 use crate::contract::ToolContract;
 use crate::export;
 use crate::inventory::{Admission, PackageInventory};
-use crate::options::{self, Action, CheckOptions, LifecycleOptions};
+use crate::options::{Action, CheckOptions, LifecycleOptions};
 use crate::snapshot::Snapshot;
 use crate::transaction::{encoded, Transaction};
-use crate::workspace::{self, CargoMetadata, Package};
+use crate::workspace::{CargoMetadata, Package};
 use crate::Result;
 use serde::{de::DeserializeOwned, Serialize};
 use std::ffi::OsString;
@@ -35,14 +35,7 @@ pub fn run<M: Clone + Eq + Serialize + DeserializeOwned>(
     contract: &ToolContract,
     ops: &LifecycleOps<M>,
 ) -> Result<()> {
-    let Some(options) = options::parse(arguments, contract)? else {
-        return Ok(());
-    };
-    let metadata = workspace::metadata_for(&options)?;
-    for package in workspace::select(&metadata, options.package.as_deref(), contract)? {
-        execute(&metadata, package, &options, contract, ops)?;
-    }
-    Ok(())
+    run_with_check(arguments, contract, ops)
 }
 
 /// Execute one package operation with shared source capture and commit ordering.
@@ -79,6 +72,8 @@ pub fn execute<M: Clone + Eq + Serialize + DeserializeOwned>(
         extra.push(path.clone());
     }
     let snapshot = Snapshot::create(metadata, &extra, contract)?;
+    transaction.verify_capture(&snapshot)?;
+    snapshot.verify_graph(metadata, options)?;
     let copied_root = snapshot.mapped(package.root())?;
     // Admission and compilation must inspect the same captured source.
     if options.action == Action::Init
@@ -134,6 +129,7 @@ pub fn execute<M: Clone + Eq + Serialize + DeserializeOwned>(
     if candidate == before {
         export::validate(&snapshot, &package.name, &copied_root, options, contract)?;
         snapshot.ensure_fresh()?;
+        transaction.ensure_original()?;
         println!(
             "{}: selected authority is already frozen and unchanged; no-op",
             package.name

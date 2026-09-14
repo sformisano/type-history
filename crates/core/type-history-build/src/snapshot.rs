@@ -16,6 +16,8 @@ use tempfile::TempDir;
 use toml::{Table, Value};
 
 mod cargo_config;
+mod exclusions;
+mod graph;
 mod manifest;
 #[cfg(test)]
 mod tests;
@@ -37,7 +39,7 @@ pub struct Snapshot {
     extra: Vec<PathBuf>,
     excluded_target: PathBuf,
     excluded_caches: BTreeSet<PathBuf>,
-    excluded_lock: OsString,
+    excluded_paths: BTreeSet<PathBuf>,
     before: BTreeMap<PathBuf, Vec<u8>>,
     environment: Vec<(OsString, OsString)>,
     compiler: Vec<u8>,
@@ -82,6 +84,7 @@ impl Snapshot {
         roots.dedup();
         // Capture caches before folding nested workspace roots into their parent.
         let excluded_caches = cargo_cache_roots(&roots);
+        let excluded_paths = exclusions::owned_paths(metadata, contract, &roots);
         let all = roots.clone();
         roots.retain(|path| {
             !all.iter()
@@ -131,10 +134,7 @@ impl Snapshot {
             extra,
             excluded_target: metadata.target_directory.clone(),
             excluded_caches,
-            excluded_lock: Path::new(contract.lock_path)
-                .file_name()
-                .ok_or("history lock filename")?
-                .to_owned(),
+            excluded_paths,
             before: BTreeMap::new(),
             environment: environment(),
             compiler: compiler()?,
@@ -182,12 +182,15 @@ impl Snapshot {
     }
     /// Append checked Cargo inputs after the subcommand and before test arguments.
     pub fn configure_cargo(&self, command: &mut Command) -> Result<()> {
+        self.configure_cargo_at(command, &self.manifest)
+    }
+    pub(crate) fn configure_cargo_at(&self, command: &mut Command, manifest: &Path) -> Result<()> {
         cargo_config::check_root()?;
         command
             .current_dir("/")
             .env("CARGO_HOME", &self.cargo_home)
             .arg("--manifest-path")
-            .arg(&self.manifest);
+            .arg(manifest);
         if let Some(toolchain) = &self.toolchain {
             command.env("RUSTUP_TOOLCHAIN", toolchain);
         }
@@ -270,12 +273,7 @@ impl Snapshot {
         path == self._owner.path()
             || path.starts_with(&self.excluded_target)
             || self.excluded_caches.contains(path)
-            || path
-                .file_name()
-                .is_some_and(|name| name == self.excluded_lock)
-            || path.file_name().is_some_and(|name| {
-                matches!(name.to_str(), Some(".git" | "node_modules" | ".next"))
-            })
+            || self.excluded_paths.contains(path)
     }
     fn copy_tree(&self, path: &Path) -> Result<()> {
         if self.excluded(path) {

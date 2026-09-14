@@ -23,3 +23,6 @@ thiserror.workspace = true
 tempfile = "3.23.0"
 serde_json.workspace = true
 toml = "0.9.8"
+
+[target.'cfg(unix)'.dev-dependencies]
+rustix = { version = "1.1", features = ["process"] }
