@@ -10,6 +10,8 @@ mod authoring;
 mod authority;
 #[path = "standalone/backfills.rs"]
 mod backfills;
+#[path = "standalone/cargo_regressions.rs"]
+mod cargo_regressions;
 #[path = "standalone/diagnostics.rs"]
 mod diagnostics;
 #[path = "standalone/discovery_regressions.rs"]
@@ -52,3 +54,5 @@ mod validation_regressions;
 mod versioned;
 #[path = "standalone/wire_names.rs"]
 mod wire_names;
+#[path = "standalone/workspace_boundaries.rs"]
+mod workspace_boundaries;

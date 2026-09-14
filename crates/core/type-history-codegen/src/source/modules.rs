@@ -68,14 +68,14 @@ impl ModuleDirectory {
     ) -> Result<PathBuf, SourceDiagnostic> {
         let candidates = self.candidates(module)?;
         if let [literal] = candidates.as_slice() {
-            return canonical_inside(root, literal);
+            return Ok(literal.clone());
         }
         let [flat, nested] = candidates.as_slice() else {
             unreachable!("two conventional candidates")
         };
         match (flat.is_file(), nested.is_file()) {
-            (true, false) => canonical_inside(root, flat),
-            (false, true) => canonical_inside(root, nested),
+            (true, false) => Ok(flat.clone()),
+            (false, true) => Ok(nested.clone()),
             (true, true) => Err(SourceDiagnostic::AmbiguousModule {
                 module: module.ident.to_string(),
                 first: relative(root, flat),

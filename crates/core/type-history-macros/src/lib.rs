@@ -6,6 +6,7 @@
 
 mod input;
 mod schema;
+mod scope;
 
 use input::Arguments;
 use proc_macro::TokenStream;
@@ -33,6 +34,8 @@ use type_history_codegen::{
 /// Undiscovered macro-generated, included, and function-local declarations fail
 /// explicitly in every build profile. Each matching expansion still receives
 /// the current ledger, frozen-shape, and strict checks.
+/// Matching includes the discovered library module and record type; copying a
+/// declaration's source position does not authorize a second expansion.
 ///
 /// ```rust,ignore
 /// use type_history::versioned;
@@ -133,7 +136,16 @@ fn expand(arguments: Arguments, item: ItemStruct) -> Result<Tokens> {
         Ok((Admission::read(&path, &invocation)?, path))
     })()
     .map_err(|error| Error::new_spanned(&input.name, format!("history admission: {error}")))?;
-    let (admission, admission_path) = checked;
+    let ((strict, declaration), admission_path) = checked;
+    if std::env::var_os("CARGO_BIN_NAME").is_some()
+        || std::env::var("CARGO_CRATE_NAME").ok().as_deref()
+            != declaration.module_path.first().map(String::as_str)
+    {
+        return Err(Error::new_spanned(
+            &input.name,
+            "unsupported history declaration: declare histories in the package library",
+        ));
+    }
     let ledger = HistoryLedger::<RecordMetadata>::read_file(
         &ledger_path,
         SchemaIdentity::new("urn:typehistory:schema:"),
@@ -146,7 +158,7 @@ fn expand(arguments: Arguments, item: ItemStruct) -> Result<Tokens> {
         &ledger,
         &RecordMetadata {},
     )?;
-    if admission.strict && !history.frozen_shapes().contains_key(&history.head()) {
+    if strict && !history.frozen_shapes().contains_key(&history.head()) {
         return Err(Error::new_spanned(
             &input.name,
             "history is a draft; freeze it before a strict or release build",
@@ -165,6 +177,7 @@ fn expand(arguments: Arguments, item: ItemStruct) -> Result<Tokens> {
     let stored_record = generate_versioned(&input, &stable_name, &history, &paths)?;
     let items = generated.items;
     let current = generated.latest;
+    let scope = scope::check(&declaration.module_path, &declaration.rust_name, &current)?;
     let decoder = generated.decoder;
     let head = history.head();
     let retained = generated
@@ -189,6 +202,7 @@ fn expand(arguments: Arguments, item: ItemStruct) -> Result<Tokens> {
     Ok(quote! {
         const _: &::core::primitive::str = ::core::include_str!(#ledger_path);
         const _: &::core::primitive::str = ::core::include_str!(#admission_path);
+        #scope
         #items
         #stored_record
         impl #history_trait for #current {

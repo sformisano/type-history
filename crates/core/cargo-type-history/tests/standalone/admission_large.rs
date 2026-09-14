@@ -29,7 +29,7 @@ fn complete_large_file_reaches_rustc() {
     success(&fixture.cargo(&["test", "--locked", "--offline", "last_metadata"]));
     let bytes = fixture.read("admission-observed.json");
     let actual: Value = serde_json::from_str(&bytes).unwrap();
-    let entries = actual["invocations"].as_array().unwrap();
+    let entries = actual["declarations"].as_array().unwrap();
     assert!(bytes.len() > 132000);
     assert_eq!(entries.len(), count);
     let path = fixture.read("admission-observed-path");
@@ -37,7 +37,7 @@ fn complete_large_file_reaches_rustc() {
     for index in [0, count / 2, count - 1] {
         assert!(entries
             .iter()
-            .any(|entry| entry["stable_name"] == stable(index)));
+            .any(|entry| entry["invocation"]["stable_name"] == stable(index)));
     }
     println!(
         "large admission: bytes={}, identities={}, path bytes={}",

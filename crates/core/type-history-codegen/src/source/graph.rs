@@ -17,7 +17,7 @@ pub struct SourceGraph {
     pub package_root: PathBuf,
     /// Source units in traversal order.
     pub units: Vec<SourceUnit>,
-    /// Authored files and all conventional module candidates.
+    /// Existing authored files and directories covering absent module candidates.
     pub tracked_paths: Vec<PathBuf>,
     /// Finite explicit import/re-export resolution.
     pub imports: ImportIndex,
@@ -36,7 +36,6 @@ impl SourceGraph {
                 path: package_root.to_path_buf(),
                 source,
             })?;
-        let library_path = canonical_inside(&package_root, library_path)?;
         let mut resolver = Resolver {
             package_root,
             visited: BTreeSet::new(),
@@ -45,10 +44,10 @@ impl SourceGraph {
             tracked: BTreeSet::new(),
         };
         resolver.visit_file(
-            &library_path,
+            library_path,
             Vec::new(),
             false,
-            ModuleDirectory::root(&library_path),
+            ModuleDirectory::root(library_path),
         )?;
         for unit in &resolver.units {
             for item in &unit.items {
@@ -95,6 +94,11 @@ impl Resolver {
         conditional: bool,
         module_dir: ModuleDirectory,
     ) -> Result<(), SourceDiagnostic> {
+        // Rust resolves child modules beside the authored path, even when that
+        // path is a symlink. Canonical paths identify files, not module directories.
+        let canonical = canonical_inside(&self.package_root, path)?;
+        self.tracked.insert(path.to_path_buf());
+        let path = canonical.as_path();
         if self.active.contains(path) {
             return Err(SourceDiagnostic::ModuleCycle {
                 path: relative(&self.package_root, path),
@@ -158,7 +162,13 @@ impl Resolver {
                 continue;
             }
             let candidates = module_dir.candidates(module)?;
-            self.tracked.extend(candidates.iter().cloned());
+            for candidate in &candidates {
+                // Cargo treats a missing watched file as changed on every build.
+                // An existing ancestor also notices creation of either candidate.
+                if let Some(existing) = candidate.ancestors().find(|path| path.exists()) {
+                    self.tracked.insert(existing.to_path_buf());
+                }
+            }
             if child_conditional && !candidates.iter().any(|candidate| candidate.is_file()) {
                 continue;
             }

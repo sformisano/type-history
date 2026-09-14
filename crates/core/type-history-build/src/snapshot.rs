@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use tempfile::Builder as TempBuilder;
 use tempfile::TempDir;
-use toml::Value;
+use toml::{Table, Value};
 
 mod cargo_config;
 mod manifest;
@@ -33,6 +33,7 @@ pub struct Snapshot {
     mirror: PathBuf,
     roots: Vec<PathBuf>,
     manifests: BTreeSet<PathBuf>,
+    workspaces: BTreeSet<PathBuf>,
     extra: Vec<PathBuf>,
     excluded_target: PathBuf,
     excluded_caches: BTreeSet<PathBuf>,
@@ -54,6 +55,7 @@ impl Snapshot {
         let mirror = owner.path().join("tree");
         let mut roots = vec![metadata.workspace_root.canonicalize()?];
         let mut manifests = BTreeSet::from([metadata.workspace_root.join("Cargo.toml")]);
+        let mut workspaces = manifests.clone();
         for package in metadata
             .packages
             .iter()
@@ -69,7 +71,10 @@ impl Snapshot {
                         .ok_or("workspace manifest parent")?
                         .to_owned(),
                 );
+                workspaces.insert(workspace.clone());
                 manifests.insert(workspace);
+            } else {
+                workspaces.insert(package.manifest_path.clone());
             }
             roots.push(root);
         }
@@ -88,12 +93,16 @@ impl Snapshot {
         }
         let mut extra = extra.to_vec();
         for ancestor in invocation.ancestors() {
+            extra.push(ancestor.join("Cargo.toml"));
             for name in ["config", "config.toml"] {
                 extra.push(ancestor.join(".cargo").join(name));
             }
         }
         for root in &roots {
             for ancestor in root.ancestors() {
+                // Excluded packages still depend on ancestor membership rules.
+                // Track absent manifests too, so a new workspace is detected.
+                extra.push(ancestor.join("Cargo.toml"));
                 for name in ["config", "config.toml"] {
                     extra.push(ancestor.join(".cargo").join(name));
                 }
@@ -114,10 +123,11 @@ impl Snapshot {
             cargo_home: owner.path().join("cargo-home"),
             manifest: mirrored(&mirror, &metadata.workspace_root.join("Cargo.toml"))?,
             configs: Vec::new(),
-            toolchain: toolchain()?,
+            toolchain: crate::toolchain::active()?,
             mirror,
             roots,
             manifests,
+            workspaces,
             extra,
             excluded_target: metadata.target_directory.clone(),
             excluded_caches,
@@ -379,7 +389,16 @@ impl Snapshot {
             }
             let text = fs::read_to_string(&copied)?;
             let mut document: Value = toml::from_str(&text)?;
-            if manifest::remap_paths(&mut document, &self.mirror, &self.roots)? {
+            // Cargo can otherwise walk out of the mirror into a live workspace
+            // above TMPDIR. Make every resolved standalone boundary explicit.
+            let standalone = self.workspaces.contains(path) && document.get("workspace").is_none();
+            if standalone {
+                document
+                    .as_table_mut()
+                    .ok_or("manifest must be a TOML table")?
+                    .insert("workspace".into(), Value::Table(Table::new()));
+            }
+            if manifest::remap_paths(&mut document, &self.mirror, &self.roots)? || standalone {
                 let staged = copied.with_extension("toml.type-history-stage");
                 fs::write(&staged, toml::to_string(&document)?)?;
                 fs::rename(staged, copied)?;
@@ -427,31 +446,4 @@ fn compiler() -> Result<Vec<u8>> {
         return Err("cannot identify rustc for snapshot freshness".into());
     }
     Ok(output.stdout)
-}
-
-fn toolchain() -> Result<Option<OsString>> {
-    if let Some(selected) = env::var_os("RUSTUP_TOOLCHAIN") {
-        return Ok(Some(selected));
-    }
-    let output = match Command::new("rustup")
-        .args(["show", "active-toolchain"])
-        .output()
-    {
-        Ok(output) => output,
-        Err(error) if error.kind() == ErrorKind::NotFound => return Ok(None),
-        Err(error) => return Err(error.into()),
-    };
-    if !output.status.success() {
-        return Err(
-            "cannot identify the active Rust toolchain for isolated Cargo validation".into(),
-        );
-    }
-    let output = String::from_utf8(output.stdout)?;
-    Ok(Some(
-        output
-            .split_whitespace()
-            .next()
-            .ok_or("rustup reported no active toolchain")?
-            .into(),
-    ))
 }

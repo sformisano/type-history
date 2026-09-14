@@ -9,10 +9,11 @@ Start with [package setup](setup.md) if the build hook and ledger are not config
 Put histories in ordinary Rust modules and import the macro explicitly.
 Types, conversion functions, and expressions resolve where the declaration
 appears, including supported `self`, `super`, and `crate` paths.
-Each expansion must match a module-level declaration discovered by the build hook.
-Undiscovered macro-generated, included, or function-local histories are rejected
-in every build profile. Matching expansions still receive the current ledger,
-frozen-shape, and strict checks.
+Each expansion must match the source position, library module, and record type
+discovered by the build hook. Copying a discovered declaration through `include!`
+or another macro does not authorize a second history. Undiscovered or copied
+histories are rejected in every build profile. Each admitted declaration also
+receives the current ledger, frozen-shape, and strict checks.
 
 Suppose the application calls its Type History dependency `history_api`. Cargo uses that key as the Rust crate name. With the sibling checkout from [package setup](setup.md), the dependency is:
 
@@ -39,11 +40,34 @@ The following rules also apply:
 
 - **Dependency tables:** Runtime dependencies can be target-specific or inherited
   from the workspace. History declarations themselves must be unconditional.
+- **Multiple dependency versions:** Use one Type History version, or the same
+  dependency name across target tables. The macro's dependency-name resolver can
+  choose an inactive alias when different versions use different names, causing
+  compilation to fail. See the resolver's [documented edge cases](https://docs.rs/proc-macro-crate/3.5.0/proc_macro_crate/#edge-cases).
 - **Generated names:** Avoid collisions with names such as `InvoiceV1` and
   `InvoiceV2`. Raw identifiers keep their Rust spelling; `r#type` is stored as `type`.
   Duplicate serialized field names are rejected.
 - **Source directories:** A source directory can be named `target`. Lifecycle
   snapshots exclude Cargo's actual build output directory.
+- **Source symlinks:** Package-local source symlinks keep Rust's module lookup
+  relative to the authored path. Cargo uses modification times for change
+  detection, so retargeting a symlink can require a forced rebuild. After
+  retargeting source links, clean the package for the profile you will build,
+  for example `cargo clean --package YOUR_PACKAGE --profile release`.
+
+Discovery watches existing source files and directories that can gain a
+competing module file. Unchanged file modules reuse Cargo's previous build when
+build output stays outside those directories. Changes elsewhere in a watched
+directory can also rerun the hook. If source modules sit beside `Cargo.toml`, use
+a separate target directory to avoid watching build output. Custom generators
+must report their own input files through Cargo's build-script directives.
+
+Lifecycle snapshots preserve Cargo's resolved workspace boundaries, including
+standalone packages excluded from an ancestor workspace. Temporary output can
+live beneath that ancestor without making the copied package join it.
+Changes to ancestor workspace manifests during validation invalidate the
+snapshot. Workspace lookup ignores unrelated Cargo settings above temporary
+output while preserving the caller's selected toolchain.
 
 ## Nested records
 

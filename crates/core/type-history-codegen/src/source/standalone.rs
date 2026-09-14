@@ -29,7 +29,7 @@ pub struct RecordDeclaration {
 pub struct RecordSource {
     /// Every authored standalone history.
     pub declarations: Vec<RecordDeclaration>,
-    /// Authored files and all module candidates watched by Cargo.
+    /// Existing files and directories covering module candidates watched by Cargo.
     pub tracked_paths: Vec<PathBuf>,
 }
 

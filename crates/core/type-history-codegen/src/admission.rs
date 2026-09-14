@@ -24,24 +24,41 @@ pub struct Invocation {
     pub stable_name: String,
 }
 
+/// One discovered invocation and its full library module path.
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Declaration {
+    /// Exact source position and history identity.
+    pub invocation: Invocation,
+    /// Library crate name followed by normalized module names.
+    pub module_path: Vec<String>,
+    /// Authored current-record alias, resolved by rustc within that module.
+    pub rust_name: String,
+}
+
 /// Disposable declaration inventory for one successful Cargo build hook.
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Admission {
     /// Effective policy selected by the build hook.
     pub strict: bool,
-    /// Complete sorted invocation set.
-    pub invocations: Vec<Invocation>,
+    /// Complete sorted declaration set.
+    pub declarations: Vec<Declaration>,
 }
 
 impl Admission {
     /// Read the build output and require this actual declaration to be accounted for.
-    pub fn read(path: &Path, invocation: &Invocation) -> Result<Self, Box<dyn Error>> {
+    /// Return effective strictness and the declaration for compiler checking.
+    pub fn read(
+        path: &Path,
+        invocation: &Invocation,
+    ) -> Result<(bool, Declaration), Box<dyn Error>> {
         let admission: Self = serde_json::from_slice(&fs::read(path)?)?;
-        if !admission.invocations.contains(invocation) {
-            return Err("unsupported history declaration: use a directly declared module-level record discovered by the build hook".into());
-        }
-        Ok(admission)
+        let declaration = admission.declarations.into_iter()
+            .find(|declaration| declaration.invocation == *invocation)
+            .filter(|declaration| !declaration.module_path.is_empty())
+            .ok_or("unsupported history declaration: use a directly declared module-level record discovered by the build hook")?;
+        Ok((admission.strict, declaration))
     }
 }
 

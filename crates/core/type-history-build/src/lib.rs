@@ -42,4 +42,5 @@ pub mod workspace;
 mod admission;
 mod compiler_diagnostics;
 mod export;
+mod toolchain;
 mod transaction;

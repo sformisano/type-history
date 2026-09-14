@@ -1,4 +1,4 @@
-use super::{Admission, Invocation};
+use super::{Admission, Declaration, Invocation};
 use std::fs;
 
 #[test]
@@ -16,10 +16,17 @@ fn missing_malformed_and_unmatched_declarations_reject() {
     assert!(Admission::read(&path, &invocation).is_err());
     let admission = Admission {
         strict: true,
-        invocations: vec![invocation.clone()],
+        declarations: vec![Declaration {
+            invocation: invocation.clone(),
+            module_path: vec!["consumer".into(), "records".into()],
+            rust_name: "Record".into(),
+        }],
     };
     fs::write(&path, serde_json::to_vec(&admission).unwrap()).unwrap();
-    assert!(Admission::read(&path, &invocation).unwrap().strict);
+    let (strict, declaration) = Admission::read(&path, &invocation).unwrap();
+    assert!(strict);
+    assert_eq!(declaration.module_path, ["consumer", "records"]);
+    assert_eq!(declaration.rust_name, "Record");
     let hidden = Invocation {
         line: 2,
         ..invocation.clone()

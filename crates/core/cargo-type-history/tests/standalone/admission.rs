@@ -91,7 +91,7 @@ fn source_positions_and_reused_target_recover_without_false_rejection() {
     success(&fixture.cli(&["init", "--package", "standalone-history-consumer"]));
     for hook in ["fn main() { history_build::compile(); }", CUSTOM] {
         fixture.write("build.rs", hook);
-        fixture.write("src/lib.rs", "// café 語\nmod nested { /* é語 */ #[history_api::versioned(stable_name=\"admission.unicode\")] pub struct Cafe\u{301} {} #[history_api::versioned(stable_name=\"admission.raw\")] pub struct r#type {} }");
+        fixture.write("src/lib.rs", "// café 語\nmod Cafe\u{301} { /* é語 */ #[history_api::versioned(stable_name=\"admission.unicode\")] pub struct Cafe\u{301} {} #[history_api::versioned(stable_name=\"admission.raw\")] pub struct r#type {} }");
         success(&fixture.cargo(&["build", "--locked", "--offline"]));
         fixture.write("src/moved.rs", DIRECT);
         fixture.write("src/lib.rs", "mod moved;");

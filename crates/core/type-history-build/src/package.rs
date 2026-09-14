@@ -3,8 +3,9 @@
 use crate::Result;
 use std::{
     collections::BTreeSet,
-    fs,
+    env, fs,
     path::{Path, PathBuf},
+    process::Command,
 };
 use toml::{Table, Value};
 
@@ -22,6 +23,17 @@ pub struct PackageSource {
     pub facades: Vec<String>,
     /// Package and workspace manifests used during resolution.
     pub tracked_paths: Vec<PathBuf>,
+}
+
+impl PackageSource {
+    pub(crate) fn library_name(&self) -> String {
+        self.manifest
+            .get("lib")
+            .and_then(|value| value.get("name"))
+            .and_then(Value::as_str)
+            .unwrap_or(&self.package)
+            .replace('-', "_")
+    }
 }
 
 /// Resolve a package library and renamed/inherited facade dependencies.
@@ -69,28 +81,42 @@ pub fn read(root: &Path, facade_packages: &[&str]) -> Result<PackageSource> {
 
 /// Resolve the manifest that owns a local package's workspace inheritance.
 pub(crate) fn workspace_manifest(root: &Path, manifest: &Value) -> Result<Option<PathBuf>> {
-    if let Some(workspace) = manifest
-        .get("package")
-        .and_then(|package| package.get("workspace"))
-    {
-        let path = workspace
-            .as_str()
-            .ok_or("package.workspace must be a path string")?;
-        return Ok(Some(root.join(path).join("Cargo.toml").canonicalize()?));
+    // This reads workspace ownership without resolving dependencies or acquiring
+    // the build lock. Ancestor search alone ignores Cargo's membership/exclusions.
+    let cargo = env::var_os("CARGO");
+    // Cargo supplies its exact executable to build scripts. Direct CLI callers
+    // also retain their selected rustup toolchain when leaving the caller cwd.
+    let toolchain = if cargo.is_none() {
+        crate::toolchain::active()?
+    } else {
+        None
+    };
+    let mut command = Command::new(cargo.unwrap_or_else(|| "cargo".into()));
+    command
+        .current_dir("/")
+        .args([
+            "locate-project",
+            "--workspace",
+            "--message-format",
+            "plain",
+            "--locked",
+            "--offline",
+            "--manifest-path",
+        ])
+        .arg(root.join("Cargo.toml"));
+    if let Some(toolchain) = toolchain {
+        command.env("RUSTUP_TOOLCHAIN", toolchain);
     }
-    if manifest.get("workspace").is_some() {
-        return Ok(Some(root.join("Cargo.toml")));
+    let output = command.output()?;
+    if !output.status.success() {
+        return Err(format!(
+            "Cargo workspace resolution failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        )
+        .into());
     }
-    for ancestor in root.ancestors().skip(1) {
-        let path = ancestor.join("Cargo.toml");
-        if path.is_file() {
-            let parent: Value = toml::from_slice(&fs::read(&path)?)?;
-            if parent.get("workspace").is_some() {
-                return Ok(Some(path));
-            }
-        }
-    }
-    Ok(None)
+    let path = PathBuf::from(String::from_utf8(output.stdout)?.trim()).canonicalize()?;
+    Ok((path != root.join("Cargo.toml") || manifest.get("workspace").is_some()).then_some(path))
 }
 
 fn facade_names(manifest: &Value, workspace: &Table, facade_packages: &[&str]) -> Vec<String> {
@@ -135,12 +161,14 @@ mod tests {
         let root = owner.path().join("parent/member");
         let workspace = owner.path().join("workspace");
         fs::create_dir_all(&root).unwrap();
+        fs::create_dir(root.join("src")).unwrap();
+        fs::write(root.join("src/lib.rs"), "").unwrap();
         fs::create_dir(&workspace).unwrap();
         let unrelated = owner.path().join("parent/Cargo.toml");
         fs::write(&unrelated, "[workspace]\n").unwrap();
         fs::write(root.join("Cargo.toml"), "[package]\nname = 'member'\nworkspace = '../../workspace'\n[dependencies]\nhistory_api.workspace = true\n").unwrap();
         let selected = workspace.join("Cargo.toml");
-        fs::write(&selected, "[workspace]\n[workspace.dependencies]\nhistory_api = { package = 'type-history', version = '0.1.0' }\n").unwrap();
+        fs::write(&selected, "[workspace]\nmembers = ['../parent/member']\n[workspace.dependencies]\nhistory_api = { package = 'type-history', version = '0.1.0' }\n").unwrap();
         let package = read(&root, &["type-history"]).unwrap();
         assert_eq!(package.facades, ["history_api"]);
         assert!(package.tracked_paths.contains(&selected));

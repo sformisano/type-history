@@ -7,7 +7,7 @@ use std::{
     path::{Path, PathBuf},
 };
 use type_history_codegen::{
-    admission::Invocation,
+    admission::Declaration,
     ledger::{HistoryLedger, HistoryReadiness, SchemaIdentity},
 };
 
@@ -28,6 +28,8 @@ use crate::{
 /// Every expansion must match a discovered module-level declaration. Undiscovered
 /// macro-generated, included, or function-local histories are rejected. Matching
 /// expansions still receive the current ledger, frozen-shape, and strict checks.
+/// Admission also checks the discovered library module and record type, so a
+/// copied source position cannot authorize a second expansion.
 ///
 /// # Panics
 ///
@@ -59,7 +61,7 @@ fn compile_with_admission<M: Clone + Eq + Serialize + DeserializeOwned>(
     root: &Path,
     source: &PackageInventory<M>,
     contract: &ToolContract,
-    invocations: Option<Vec<Invocation>>,
+    invocations: Option<Vec<Declaration>>,
 ) -> Result<()> {
     let root = root.canonicalize()?;
     if source.root != root {

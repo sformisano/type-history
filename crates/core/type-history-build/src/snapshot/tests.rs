@@ -25,6 +25,7 @@ fn fixture() -> Snapshot {
         mirror: owner.path().join("mirror"),
         roots: vec![root],
         manifests: BTreeSet::new(),
+        workspaces: BTreeSet::new(),
         extra: Vec::new(),
         excluded_target: owner.path().join("target"),
         excluded_caches: BTreeSet::new(),

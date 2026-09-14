@@ -2,7 +2,7 @@
 
 use std::path::Path;
 use type_history_codegen::{
-    admission::Invocation,
+    admission::Declaration as AdmittedDeclaration,
     history::HistoryPlan,
     ledger::{HistoryLedger, RecordMetadata, SchemaIdentity},
     source::standalone,
@@ -22,7 +22,7 @@ pub fn read(root: &Path, admission: Admission) -> Result<PackageInventory<Record
 pub(crate) fn read_with_admission(
     root: &Path,
     admission: Admission,
-) -> Result<(PackageInventory<RecordMetadata>, Vec<Invocation>)> {
+) -> Result<(PackageInventory<RecordMetadata>, Vec<AdmittedDeclaration>)> {
     let package = package::read(root, &["type-history"])?;
     let source = standalone::discover(&package.root, &package.library, &package.facades)?;
     let ledger_path = package.root.join(STANDALONE.ledger_path);
@@ -37,7 +37,7 @@ pub(crate) fn read_with_admission(
     let invocations = source
         .declarations
         .iter()
-        .map(|declaration| crate::admission::invocation(&package.root, declaration))
+        .map(|declaration| crate::admission::invocation(&package, declaration))
         .collect::<Result<Vec<_>>>()?;
     let mut declarations = Vec::new();
     for declaration in source.declarations {
