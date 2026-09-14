@@ -22,8 +22,24 @@ Type History works through three components:
 
 ### Install the Components
 
-Install the CLI and add the library and build dependencies from crates.io. The
-[package setup guide](book/src/setup.md) shows the complete configuration.
+Type History requires Rust 1.97 or later. Install the CLI:
+
+```sh
+cargo install cargo-type-history --version 0.1.0 --locked
+```
+
+Add the library and build hook to your package:
+
+```toml
+[dependencies]
+type-history = "0.1.0"
+
+[build-dependencies]
+type-history-build = "0.1.0"
+```
+
+The [package setup guide](https://github.com/sformisano/type-history/blob/main/book/src/setup.md)
+shows the complete configuration and a source checkout alternative.
 
 ### Connect Type History to Cargo
 
@@ -561,7 +577,7 @@ If reporting calculates sales totals after subtracting refunds, it must support 
 ## Documentation
 
 - [The book](https://github.com/sformisano/type-history/blob/main/book/README.md) covers the generated types, field changes, conversions, freezing, and integrations.
-- [The API reference guide](https://github.com/sformisano/type-history/blob/main/book/src/crates.md) explains how to generate documentation for public types, methods, and traits locally.
+- [The API reference](https://docs.rs/type-history/0.1.0/type_history/) documents public types, methods, and traits.
 - [The invoice example](https://github.com/sformisano/type-history/blob/main/crates/examples/invoice-history/README.md) is a complete runnable package.
 
 Licensed under [MIT

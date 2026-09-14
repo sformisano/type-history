@@ -39,7 +39,7 @@
 //! coordinate which versions they publish and accept; see the
 //! [distributed-system walkthrough](https://github.com/sformisano/type-history/blob/main/README.md#using-type-history-in-a-distributed-system).
 //!
-//! Install the crates from crates.io. The [source setup guide](https://github.com/sformisano/type-history/blob/main/book/src/setup.md)
+//! Install the crates from crates.io. The [package setup guide](https://github.com/sformisano/type-history/blob/main/book/src/setup.md)
 //! shows the matching runtime, build hook, and CLI configuration.
 //! The guide configures schema checks and initializes the ledger before any history declaration.
 //! The current setup requires Rust 1.97 or later. Linux is the tested lifecycle host.

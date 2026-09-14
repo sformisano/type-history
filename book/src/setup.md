@@ -50,14 +50,18 @@ type-history-build = "0.1.0"
 
 `serde_json` reads and writes the receipt examples; Serde's derives support the [nested records](integration.md#nested-records) used later.
 
+Continue with [initializing the schema file](#3-initialize-the-schema-file).
+
 ## 2. Source checkout alternative
 
-For development against an unreleased checkout, clone Type History beside the
-application and install the CLI from that checkout:
+Use this alternative only when developing against a source checkout.
+Clone Type History beside the application:
 
 ```sh
 git clone https://github.com/sformisano/type-history.git type-history
 ```
+
+Install the CLI from that checkout:
 
 <!-- setup:install.sh -->
 ```sh
