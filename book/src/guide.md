@@ -20,9 +20,9 @@ cargo new --lib invoice-history --edition 2024
 cd invoice-history
 ```
 
-1. Copy the [setup manifest](setup.md#1-create-the-package).
+1. Copy the [setup manifest](setup.md#1-install-the-released-components).
 2. Set `name = "invoice-history"` in its `[package]` section.
-3. Create `build.rs` with the same build hook from the [initialization instructions](setup.md#2-initialize-the-schema-file).
+3. Create `build.rs` with the same build hook from the [initialization instructions](setup.md#3-initialize-the-schema-file).
 4. Empty `src/lib.rs`.
 
 Initialize this package using its own name, `invoice-history`:

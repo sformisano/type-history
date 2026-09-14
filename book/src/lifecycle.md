@@ -83,7 +83,7 @@ consumer features for metadata, schema export, and compilation.
 
 If you call the build library directly, `LifecycleOptions::no_default_features` controls the same choice. Set it to `false` to keep package defaults or `true` to disable them. `workspace::metadata(features)` keeps package defaults; `options::parse` reads the command-line selection.
 
-The [setup guide](setup.md#2-initialize-the-schema-file) explains `init`, and the
+The [setup guide](setup.md#3-initialize-the-schema-file) explains `init`, and the
 [quick start](quick-start.md#2-generate-and-freeze-v1s-schema) shows `freeze`.
 Use `check` to validate existing histories.
 The command examples below use the [invoice package](guide.md).
