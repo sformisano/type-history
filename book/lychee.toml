@@ -1,0 +1,9 @@
+offline = true
+include_fragments = "anchor-only"
+index_files = ["index.html"]
+extensions = ["html"]
+# Check generated pages even though book/html is ignored by Git.
+no_ignore = true
+root_dir = "book/html"
+# Resolve the site-url from book.toml against the local build, including /type-history/ itself.
+remap = ['^file://(.*)/book/html/type-history(?:/(.*))?$ file://$1/book/html/$2']

@@ -1,0 +1,25 @@
+[package]
+name = "cargo-type-history"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+readme.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/cargo-type-history"
+license.workspace = true
+publish = false
+description = "Cargo subcommand for standalone type history lifecycle operations"
+
+[[bin]]
+name = "cargo-type-history"
+path = "src/main.rs"
+
+[dependencies]
+type-history-build = { path = "../type-history-build", version = "0.1.0" }
+thiserror.workspace = true
+
+[dev-dependencies]
+tempfile = "3.23.0"
+serde_json.workspace = true
+toml = "0.9.8"

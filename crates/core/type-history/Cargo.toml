@@ -1,0 +1,16 @@
+[package]
+name = "type-history"
+version = "0.1.0"
+description = "Evolve Rust records with generated versioned types and compile-time schema checks"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/type-history"
+publish = false
+
+[dependencies]
+type-history-core = { path = "../type-history-core", version = "0.1.0" }
+type-history-macros = { path = "../type-history-macros", version = "0.1.0" }

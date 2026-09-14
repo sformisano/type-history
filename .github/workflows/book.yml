@@ -1,0 +1,59 @@
+name: Book
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build book
+    runs-on: ubuntu-latest
+    env:
+      # Keep the versions in sync with book/README.md.
+      MDBOOK_VERSION: "0.5.4"
+      MDBOOK_SHA256: "3f28de05dafca9d0f2eab99c662116b0e37b89b1d96a08f8f430b9eeae958cd7"
+      LYCHEE_VERSION: "0.24.2"
+      LYCHEE_SHA256: "1f4e0ef7f6554a6ed33dd7ac144fb2e1bbed98598e7af973042fc5cd43951c9a"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install mdBook
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/mdbook"
+          curl --fail --location --retry 3 \
+            "https://github.com/rust-lang/mdBook/releases/download/v${MDBOOK_VERSION}/mdbook-v${MDBOOK_VERSION}-x86_64-unknown-linux-gnu.tar.gz" \
+            --output "$RUNNER_TEMP/mdbook/archive.tar.gz"
+          echo "${MDBOOK_SHA256}  $RUNNER_TEMP/mdbook/archive.tar.gz" | sha256sum --check
+          tar --extract --gzip --file "$RUNNER_TEMP/mdbook/archive.tar.gz" --directory "$RUNNER_TEMP/mdbook" mdbook
+          echo "$RUNNER_TEMP/mdbook" >> "$GITHUB_PATH"
+
+      - name: Install Lychee
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/lychee"
+          curl --fail --location --retry 3 \
+            "https://github.com/lycheeverse/lychee/releases/download/lychee-v${LYCHEE_VERSION}/lychee-x86_64-unknown-linux-gnu.tar.gz" \
+            --output "$RUNNER_TEMP/lychee/archive.tar.gz"
+          echo "${LYCHEE_SHA256}  $RUNNER_TEMP/lychee/archive.tar.gz" | sha256sum --check
+          tar --extract --gzip --file "$RUNNER_TEMP/lychee/archive.tar.gz" \
+            --directory "$RUNNER_TEMP/lychee" --strip-components=1 lychee-x86_64-unknown-linux-gnu/lychee
+          echo "$RUNNER_TEMP/lychee" >> "$GITHUB_PATH"
+
+      - name: Build HTML
+        run: mdbook build book
+
+      - name: Check book links
+        run: lychee --config book/lychee.toml book/html
+
+      # Build the deployable artifact without enabling or deploying Pages.
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: book/html

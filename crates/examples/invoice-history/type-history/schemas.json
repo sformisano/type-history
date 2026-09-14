@@ -1,0 +1,184 @@
+{
+  "billing.invoice.issued": {
+    "1": {
+      "metadata": {},
+      "schema": {
+        "$id": "urn:typehistory:schema:billing.invoice.issued",
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "count": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "legacy": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "count",
+          "legacy"
+        ],
+        "type": "object"
+      }
+    },
+    "2": {
+      "metadata": {},
+      "schema": {
+        "$id": "urn:typehistory:schema:billing.invoice.issued",
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "count": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "label": {
+            "type": "string"
+          },
+          "revision": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "count",
+          "label",
+          "revision"
+        ],
+        "type": "object"
+      }
+    },
+    "3": {
+      "metadata": {},
+      "schema": {
+        "$id": "urn:typehistory:schema:billing.invoice.issued",
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "count": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "revision": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "count",
+          "label",
+          "revision"
+        ],
+        "type": "object"
+      }
+    }
+  },
+  "billing.payment.recorded": {
+    "1": {
+      "metadata": {},
+      "schema": {
+        "$id": "urn:typehistory:schema:billing.payment.recorded",
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "currency_code": {
+            "type": "string"
+          },
+          "reference": {
+            "type": "string"
+          },
+          "status": {
+            "oneOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "Paid": {
+                    "format": "uint64",
+                    "minimum": 0,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "Paid"
+                ],
+                "type": "object"
+              },
+              {
+                "const": "Pending"
+              }
+            ]
+          }
+        },
+        "required": [
+          "currency_code",
+          "reference",
+          "status"
+        ],
+        "type": "object"
+      }
+    },
+    "2": {
+      "metadata": {},
+      "schema": {
+        "$id": "urn:typehistory:schema:billing.payment.recorded",
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "reference": {
+            "type": "string"
+          },
+          "status": {
+            "oneOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "Paid": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "amount_minor": {
+                        "format": "uint64",
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      "currency": {
+                        "enum": [
+                          "Eur",
+                          "Usd"
+                        ],
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "amount_minor",
+                      "currency"
+                    ],
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "Paid"
+                ],
+                "type": "object"
+              },
+              {
+                "const": "Pending"
+              }
+            ]
+          }
+        },
+        "required": [
+          "reference",
+          "status"
+        ],
+        "type": "object"
+      }
+    }
+  }
+}

@@ -1,0 +1,100 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  rust:
+    name: Rust
+    runs-on: ubuntu-latest
+    env:
+      CARGO_TERM_COLOR: always
+      CARGO_INCREMENTAL: "0"
+      CARGO_PROFILE_DEV_DEBUG: line-tables-only
+      CARGO_PROFILE_TEST_DEBUG: line-tables-only
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        run: rustup toolchain install 1.97.1 --profile minimal --component clippy --component rustfmt
+
+      - name: Fetch dependencies
+        run: cargo fetch --locked
+
+      - name: Check formatting
+        run: cargo fmt --all --check
+
+      - name: Clippy
+        env:
+          CARGO_TARGET_DIR: ${{ github.workspace }}/target/clippy
+        run: cargo clippy --workspace --all-targets --locked -- -Dwarnings
+
+      - name: Unit and integration tests
+        env:
+          TMPDIR: ${{ runner.temp }}
+        run: cargo test --workspace --all-targets --locked
+
+      - name: Documentation tests
+        env:
+          TMPDIR: ${{ runner.temp }}
+        run: cargo test --workspace --doc --locked
+
+      - name: Public documentation
+        env:
+          RUSTDOCFLAGS: -Dwarnings
+        run: cargo doc --workspace --no-deps --locked
+
+      - name: Release build
+        run: cargo build --workspace --release --locked
+
+      - name: Reference application
+        run: cargo run -p invoice-history --release --locked
+
+      - name: Check reference schemas
+        env:
+          TMPDIR: ${{ runner.temp }}
+        run: cargo run -p cargo-type-history --locked -- check --package invoice-history
+
+  fuzz:
+    name: Codec fuzz smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CARGO_TARGET_DIR: ${{ github.workspace }}/target
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install fuzzing tools
+        run: |
+          rustup toolchain install nightly-2026-09-12 --profile minimal --component rust-src
+          cargo install cargo-fuzz --version 0.13.2 --locked
+
+      - name: Check deterministic codec oracles
+        run: |
+          cargo fmt --manifest-path crates/tools/type-history-fuzz/Cargo.toml --check
+          cargo test --manifest-path crates/tools/type-history-fuzz/Cargo.toml --lib --locked
+
+      - name: Exercise codec inputs with address sanitizer
+        run: |
+          for target in invoice_json invoice_msgpack invoice_values schema_json; do
+            mkdir -p "crates/tools/type-history-fuzz/corpus/$target"
+            cargo +nightly-2026-09-12 fuzz run "$target" --fuzz-dir crates/tools/type-history-fuzz --target-dir target \
+              "crates/tools/type-history-fuzz/corpus/$target" "crates/tools/type-history-fuzz/seeds/$target" -- \
+              -max_total_time=20 -max_len=65536 -timeout=5 -rss_limit_mb=1024 \
+              -seed=1 -print_final_stats=1 || exit "$?"
+          done
+
+      - name: Retain failing inputs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: codec-fuzz-failures
+          path: crates/tools/type-history-fuzz/artifacts/
+          if-no-files-found: ignore

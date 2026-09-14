@@ -1,0 +1,48 @@
+[package]
+name = "type-history-fuzz"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[workspace]
+members = ["."]
+
+[dependencies]
+invoice-history = { path = "../../examples/invoice-history" }
+type-history = { path = "../../core/type-history" }
+type-history-core = { path = "../../core/type-history-core" }
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = { version = "1.0.149", features = ["arbitrary_precision"] }
+rmp-serde = "1.3.1"
+libfuzzer-sys = "0.4"
+
+[[bin]]
+name = "invoice_json"
+path = "fuzz_targets/invoice_json.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "invoice_msgpack"
+path = "fuzz_targets/invoice_msgpack.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "invoice_values"
+path = "fuzz_targets/invoice_values.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "schema_json"
+path = "fuzz_targets/schema_json.rs"
+test = false
+doc = false
+bench = false

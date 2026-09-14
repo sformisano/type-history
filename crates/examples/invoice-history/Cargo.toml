@@ -1,0 +1,19 @@
+[package]
+name = "invoice-history"
+version = "0.0.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+description = "Reference application for reading and writing versioned invoices"
+
+[dependencies]
+type-history = { path = "../../core/type-history" }
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+rmp-serde = "1.3.1"
+
+[build-dependencies]
+type-history-build = { path = "../../core/type-history-build" }
