@@ -6,7 +6,7 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use syn::{Attribute, Data, DeriveInput, Error, Fields, FieldsNamed, Ident, Result};
 use type_history_codegen::{
-    lint_attributes::{lint_attributes, scoped_field_type, with_lints},
+    lint_attributes::{scoped_field_type, with_lints},
     NamedField,
 };
 
@@ -29,7 +29,7 @@ pub(super) fn expand(input: DeriveInput) -> Result<TokenStream> {
                     "Schema supports named records and enums",
                 ));
             };
-            record(fields, name, &helper, &support)?
+            record(fields, name, &support)?
         }
         Data::Enum(data) => enumeration::expand(data, name, &helper, &support)?,
         Data::Union(_) => {
@@ -53,12 +53,6 @@ pub(super) fn expand(input: DeriveInput) -> Result<TokenStream> {
             }
             impl #support::NonOptionalNode for #marker {}
             impl #support::ResolvedSchema for #name { type Wire = #marker; }
-            impl #support::schemars::JsonSchema for #name {
-                fn schema_name() -> ::std::borrow::Cow<'static, str> { ::core::stringify!(#name).into() }
-                fn json_schema(generator: &mut #support::schemars::SchemaGenerator) -> #support::schemars::Schema {
-                    <#helper as #support::schemars::JsonSchema>::json_schema(generator)
-                }
-            }
             #field_contract
         },
     )
@@ -67,7 +61,6 @@ pub(super) fn expand(input: DeriveInput) -> Result<TokenStream> {
 fn record(
     fields: &FieldsNamed,
     name: &Ident,
-    helper: &Ident,
     support: &TokenStream,
 ) -> Result<(TokenStream, TokenStream)> {
     for attribute in fields.named.iter().flat_map(|field| &field.attrs) {
@@ -92,21 +85,12 @@ fn record(
         schema_fields.iter().map(|field| (&field.name, &field.ty)),
         support,
     )?;
-    let schema_derive = type_history_codegen::json_schema_derive::container_attributes(support);
-    let declarations = schema_fields.iter().map(|field| {
-        let name = &field.name;
-        let ty = &field.ty;
-        let lints = lint_attributes(&field.attributes);
-        let schema = type_history_codegen::json_schema_derive::field_attribute(support, ty);
-        quote!(#(#lints)* #schema #name: #ty)
-    });
+    let schema = type_history_codegen::json_schema_derive::record(name, &schema_fields, support);
     Ok((
         wire,
         quote! {
             #(#field_aliases)*
-            #[allow(dead_code)]
-            #schema_derive
-            struct #helper { #(#declarations),* }
+            #schema
         },
     ))
 }

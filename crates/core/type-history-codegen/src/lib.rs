@@ -12,6 +12,7 @@
 //! how to construct conversion errors.
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
+pub mod admission;
 pub mod canonical;
 pub mod diagnostics;
 pub mod generate;

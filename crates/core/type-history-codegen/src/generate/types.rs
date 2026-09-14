@@ -15,7 +15,6 @@ use super::{Context, GeneratedVersion};
 pub(super) fn generate(context: &Context<'_>) -> Result<(TokenStream, Vec<GeneratedVersion>)> {
     let support_path = &context.paths.support;
     let support = quote!(#support_path);
-    let schema_derive = crate::json_schema_derive::container_attributes(&support);
     let mut declarations = Vec::new();
     let mut versions = Vec::new();
     let visibility = &context.input.visibility;
@@ -52,10 +51,21 @@ pub(super) fn generate(context: &Context<'_>) -> Result<(TokenStream, Vec<Genera
                 .iter()
                 .filter(|attribute| attribute.path().is_ident("doc"));
             let lints = lint_attributes(&field.attributes);
-            let schema = crate::json_schema_derive::field_attribute(&support, ty);
-            quote!(#(#docs)* #(#lints)* #schema #field_visibility #name: #ty)
+            quote!(#(#docs)* #(#lints)* #field_visibility #name: #ty)
         });
         let codecs = crate::record::record(&name, &fields, &support);
+        let schema_docs = if version.version == context.history.head() {
+            context.input.attributes.as_slice()
+        } else {
+            &[]
+        };
+        let schema_impl = crate::json_schema_derive::record_with_docs(
+            &name,
+            &fields,
+            &support,
+            schema_docs,
+            true,
+        );
         let wire_type = crate::resolved_schema::record_wire_type(
             fields.iter().map(|field| (&field.name, &field.ty)),
             &support,
@@ -76,8 +86,8 @@ pub(super) fn generate(context: &Context<'_>) -> Result<(TokenStream, Vec<Genera
             #(#field_aliases)*
             #docs
             #[derive(::core::clone::Clone, ::core::cmp::PartialEq, ::core::fmt::Debug)]
-            #schema_derive
             #visibility struct #name { #(#field_declarations),* }
+            #schema_impl
             #codecs
             #[doc(hidden)]
             #visibility struct #wire_marker;

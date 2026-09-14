@@ -90,10 +90,15 @@ fn type_reference(ty: &Type, resolved: &TokenStream) -> TokenStream {
 }
 
 fn name_type(name: &str, resolved: &TokenStream) -> TokenStream {
-    name.as_bytes().iter().rev().fold(
+    let chunks = name.as_bytes().chunks_exact(8);
+    let tail = chunks.remainder().iter().rev().fold(
         quote!(#resolved::NameEnd),
         |tail, byte| quote!(#resolved::NameByte<#byte, #tail>),
-    )
+    );
+    chunks.rev().fold(tail, |tail, chunk| {
+        let packed = u64::from_be_bytes(chunk.try_into().expect("eight-byte chunk"));
+        quote!(#resolved::NameChunk<#packed, #tail>)
+    })
 }
 
 fn list_type(items: Vec<TokenStream>, resolved: &TokenStream) -> TokenStream {

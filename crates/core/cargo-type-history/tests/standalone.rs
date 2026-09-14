@@ -1,5 +1,9 @@
 //! Real consumers built from a copy containing only the Type History crate family.
 
+#[path = "standalone/admission.rs"]
+mod admission;
+#[path = "standalone/admission_large.rs"]
+mod admission_large;
 #[path = "standalone/authoring.rs"]
 mod authoring;
 #[path = "standalone/authority.rs"]
@@ -16,6 +20,8 @@ mod distributed;
 mod enums;
 #[path = "standalone/feature_selection.rs"]
 mod feature_selection;
+#[path = "standalone/generated_hygiene.rs"]
+mod generated_hygiene;
 #[path = "standalone/hygiene.rs"]
 mod hygiene;
 #[path = "standalone/lifecycle.rs"]
@@ -26,6 +32,8 @@ mod macro_regressions;
 mod nested;
 #[path = "standalone/released_baseline.rs"]
 mod released_baseline;
+#[path = "standalone/schema_identity.rs"]
+mod schema_identity;
 #[path = "standalone/snapshot_regressions.rs"]
 mod snapshot_regressions;
 #[path = "standalone/source_discovery.rs"]
@@ -42,3 +50,5 @@ mod tutorial;
 mod validation_regressions;
 #[path = "standalone/versioned.rs"]
 mod versioned;
+#[path = "standalone/wire_names.rs"]
+mod wire_names;

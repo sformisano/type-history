@@ -24,6 +24,9 @@ fn custom_contract_probe() {
         return;
     };
     let root = PathBuf::from(root).canonicalize().unwrap();
+    if let Ok(source) = env::var("TYPE_HISTORY_TEST_SOURCE") {
+        fs::write(root.join("src/lib.rs"), source).unwrap();
+    }
     let inventory = PackageInventory {
         package: "custom-history-fixture".to_owned(),
         root: root.clone(),
@@ -52,10 +55,15 @@ fn probe(profile: &str, settings: &[(&str, &str)]) -> Output {
     let ledger = owner.path().join(CUSTOM.ledger_path);
     fs::create_dir_all(ledger.parent().unwrap()).unwrap();
     fs::write(&ledger, b"{}\n").unwrap();
+    fs::create_dir(owner.path().join("src")).unwrap();
+    fs::create_dir(owner.path().join("out")).unwrap();
+    fs::write(owner.path().join("Cargo.toml"), "[package]\nname='custom-history-fixture'\nversion='0.1.0'\n[workspace]\n[dependencies]\nhistory_api={package='type-history',version='0.1.0'}\n").unwrap();
+    fs::write(owner.path().join("src/lib.rs"), "#[history_api::versioned(stable_name=\"shop.receipt.created\")] pub struct ReceiptCreated {}\n").unwrap();
     let mut command = Command::new(env::current_exe().unwrap());
     command
         .args(["--exact", "custom_contract_probe", "--nocapture"])
         .env(PROBE_ROOT, owner.path())
+        .env("OUT_DIR", owner.path().join("out"))
         .env("PROFILE", profile);
     for name in [
         STANDALONE.strict_env,
@@ -82,6 +90,16 @@ fn text(output: &Output) -> String {
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     )
+}
+
+#[test]
+fn standalone_contract_requires_matching_real_source_inventory() {
+    for source in ["", "#[history_api::versioned(stable_name=\"different.record\")] pub struct ReceiptCreated {}", "#[history_api::versioned(stable_name=\"shop.receipt.created\")] pub struct ReceiptCreated { #[history(added_in=v2, backfill_value=0)] pub added: u32 }"] {
+        let output = probe("debug", &[("TYPE_HISTORY_TEST_SOURCE", source)]);
+        assert_eq!(output.status.code(), Some(2), "{}", text(&output));
+        assert!(text(&output).contains("source differs from supplied inventory"));
+        assert!(!text(&output).contains("cargo::rustc-env=TYPE_HISTORY_ADMISSION="));
+    }
 }
 
 #[test]

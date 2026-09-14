@@ -4,7 +4,7 @@ use proc_macro2::TokenStream;
 use quote::quote;
 use syn::{DataEnum, Error, Fields, Ident, Result};
 use type_history_codegen::{
-    json_schema_derive::field_attribute,
+    json_schema_derive::{isolated, isolated_field_attribute, parameter},
     lint_attributes::{lint_attributes, scoped_field_type},
     resolved_schema::enum_wire_type,
 };
@@ -27,6 +27,8 @@ pub(super) fn expand(
     let mut aliases = Vec::new();
     let mut declarations = Vec::new();
     let mut index = 0;
+    let mut types = Vec::new();
+    let mut params = Vec::new();
     for variant in &mut variants {
         for attribute in &variant.attrs {
             validate_attribute(attribute, false)?;
@@ -50,17 +52,18 @@ pub(super) fn expand(
                 .collect::<Vec<_>>();
             attributes.extend(field.attrs.clone());
             let (ty, alias) = scoped_field_type(name, index, &field.ty, &attributes);
+            let param = parameter(index);
+            params.push(param.clone());
             index += 1;
             aliases.push(alias);
             field.ty = ty;
-            let ty = &field.ty;
-            let schema = field_attribute(support, ty);
-            let lints = lint_attributes(&field.attrs);
+            types.push(field.ty.clone());
+            let schema = isolated_field_attribute(&param);
             let declaration = match &field.ident {
-                Some(name) => quote!(#name: #ty),
-                None => quote!(#ty),
+                Some(name) => quote!(#name: #param),
+                None => quote!(#param),
             };
-            fields.push(quote!(#(#lints)* #schema #declaration));
+            fields.push(quote!(#schema #declaration));
         }
         let payload = match &variant.fields {
             Fields::Unit => quote!(),
@@ -70,14 +73,18 @@ pub(super) fn expand(
         declarations.push(quote!(#(#variant_lints)* #variant_name #payload));
     }
     let wire = enum_wire_type(&variants, support)?;
-    let derive = type_history_codegen::json_schema_derive::container_attributes(support);
+    let schema = isolated(
+        name,
+        helper,
+        &types,
+        &quote!(pub(super) enum #helper<#(#params),*> { #(#declarations),* }),
+        support,
+    );
     Ok((
         wire,
         quote! {
             #(#aliases)*
-            #[allow(dead_code)]
-            #derive
-            enum #helper { #(#declarations),* }
+            #schema
         },
     ))
 }

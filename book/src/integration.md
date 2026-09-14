@@ -9,6 +9,10 @@ Start with [package setup](setup.md) if the build hook and ledger are not config
 Put histories in ordinary Rust modules and import the macro explicitly.
 Types, conversion functions, and expressions resolve where the declaration
 appears, including supported `self`, `super`, and `crate` paths.
+Each expansion must match a module-level declaration discovered by the build hook.
+Undiscovered macro-generated, included, or function-local histories are rejected
+in every build profile. Matching expansions still receive the current ledger,
+frozen-shape, and strict checks.
 
 Suppose the application calls its Type History dependency `history_api`. Cargo uses that key as the Rust crate name. With the sibling checkout from [package setup](setup.md), the dependency is:
 

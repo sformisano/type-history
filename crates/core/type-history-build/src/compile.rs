@@ -6,7 +6,10 @@ use std::{
     ffi::OsStr,
     path::{Path, PathBuf},
 };
-use type_history_codegen::ledger::{HistoryLedger, HistoryReadiness, SchemaIdentity};
+use type_history_codegen::{
+    admission::Invocation,
+    ledger::{HistoryLedger, HistoryReadiness, SchemaIdentity},
+};
 
 use crate::{
     contract::{ToolContract, STANDALONE},
@@ -22,26 +25,41 @@ use crate::{
 /// files to watch. The generated code then checks compiler-resolved field schemas.
 /// Drafts warn in development and fail in release-derived profiles; setting
 /// `TYPE_HISTORY_REQUIRE_FROZEN=1` also rejects drafts in development.
+/// Every expansion must match a discovered module-level declaration. Undiscovered
+/// macro-generated, included, or function-local histories are rejected. Matching
+/// expansions still receive the current ledger, frozen-shape, and strict checks.
 ///
 /// # Panics
 ///
 /// Panics when discovery or validation fails, causing Cargo to stop the build.
 pub fn compile() {
     let root = PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").expect("Cargo package root"));
-    let inventory = discover::read(&root, Admission::Ordinary)
+    let (inventory, invocations) = discover::read_with_admission(&root, Admission::Ordinary)
         .unwrap_or_else(|error| panic!("Type History declarations: {error}"));
-    compile_package(&root, &inventory, &STANDALONE)
+    compile_with_admission(&root, &inventory, &STANDALONE, Some(invocations))
         .unwrap_or_else(|error| panic!("Type History build: {error}"));
 }
 
 /// Check a discovered package against its ledger and configure compiler checks.
 ///
 /// Custom integrations supply the complete source inventory and command settings.
-/// Applications using the public macro should call [`compile()`] instead.
+/// Applications normally call [`compile()`]. A custom contract whose authority
+/// kind is `standalone` also uses checked standalone source discovery and requires
+/// a matching complete inventory. Both routes publish mandatory compiler admission
+/// in Cargo's `OUT_DIR`; other authority kinds retain their own macro frontend.
 pub fn compile_package<M: Clone + Eq + Serialize + DeserializeOwned>(
     root: &Path,
     source: &PackageInventory<M>,
     contract: &ToolContract,
+) -> Result<()> {
+    compile_with_admission(root, source, contract, None)
+}
+
+fn compile_with_admission<M: Clone + Eq + Serialize + DeserializeOwned>(
+    root: &Path,
+    source: &PackageInventory<M>,
+    contract: &ToolContract,
+    invocations: Option<Vec<Invocation>>,
 ) -> Result<()> {
     let root = root.canonicalize()?;
     if source.root != root {
@@ -77,6 +95,13 @@ pub fn compile_package<M: Clone + Eq + Serialize + DeserializeOwned>(
             return Err(message.into());
         }
         println!("cargo::warning={message}");
+    }
+    if contract.authority_kind == "standalone" {
+        let invocations = match invocations {
+            Some(invocations) => invocations,
+            None => crate::admission::discover(&root, source)?,
+        };
+        crate::admission::publish(strict, invocations)?;
     }
     println!(
         "cargo::rustc-env=TYPE_HISTORY_AUTHORITY_KIND={}",

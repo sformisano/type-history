@@ -18,7 +18,7 @@ serde_json = "1.0.149"
 thiserror.workspace = true
 syn = { version = "2", features = ["full", "extra-traits", "visit", "visit-mut"] }
 quote = "1"
-proc-macro2 = "1"
+proc-macro2 = { version = "1", features = ["span-locations"] }
 
 [dev-dependencies]
 tempfile = "3.23.0"

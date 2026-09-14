@@ -113,10 +113,17 @@ impl ConstantShape {
 }
 impl ConstantName {
     const fn same(&self, other: &Self) -> bool {
-        match (self, other) {
-            (Self::End, Self::End) => true,
-            (Self::Byte(a, at), Self::Byte(b, bt)) => *a == *b && at.same(bt),
-            _ => false,
+        let mut left = self;
+        let mut right = other;
+        loop {
+            match (left, right) {
+                (Self::End, Self::End) => return true,
+                (Self::Byte(a, at), Self::Byte(b, bt)) if *a == *b => {
+                    left = at;
+                    right = bt;
+                }
+                _ => return false,
+            }
         }
     }
     fn name(&self) -> String {

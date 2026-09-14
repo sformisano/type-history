@@ -2,6 +2,7 @@
 
 use std::path::Path;
 use type_history_codegen::{
+    admission::Invocation,
     history::HistoryPlan,
     ledger::{HistoryLedger, RecordMetadata, SchemaIdentity},
     source::standalone,
@@ -15,6 +16,13 @@ use crate::{
 
 /// Read a standalone package through the same parser, graph, and ledger authority as its macro.
 pub fn read(root: &Path, admission: Admission) -> Result<PackageInventory<RecordMetadata>> {
+    read_with_admission(root, admission).map(|(inventory, _)| inventory)
+}
+
+pub(crate) fn read_with_admission(
+    root: &Path,
+    admission: Admission,
+) -> Result<(PackageInventory<RecordMetadata>, Vec<Invocation>)> {
     let package = package::read(root, &["type-history"])?;
     let source = standalone::discover(&package.root, &package.library, &package.facades)?;
     let ledger_path = package.root.join(STANDALONE.ledger_path);
@@ -26,6 +34,11 @@ pub fn read(root: &Path, admission: Admission) -> Result<PackageInventory<Record
         Admission::ExplicitSetup => None,
     };
     let declaration_count = source.declarations.len();
+    let invocations = source
+        .declarations
+        .iter()
+        .map(|declaration| crate::admission::invocation(&package.root, declaration))
+        .collect::<Result<Vec<_>>>()?;
     let mut declarations = Vec::new();
     for declaration in source.declarations {
         let input = declaration.input;
@@ -56,7 +69,7 @@ pub fn read(root: &Path, admission: Admission) -> Result<PackageInventory<Record
     if let Some(ledger) = &ledger {
         inventory::validate(&inventory, ledger)?;
     }
-    Ok(inventory)
+    Ok((inventory, invocations))
 }
 
 #[cfg(test)]

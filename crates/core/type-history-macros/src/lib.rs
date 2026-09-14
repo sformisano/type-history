@@ -12,9 +12,10 @@ use proc_macro::TokenStream;
 use proc_macro2::{Span, TokenStream as Tokens};
 use proc_macro_crate::{crate_name, FoundCrate};
 use quote::{format_ident, quote};
-use std::path::PathBuf;
+use std::{error::Error as StandardError, path::PathBuf, result::Result as StandardResult};
 use syn::{parse_macro_input, DeriveInput, Error, Ident, ItemStruct, Path, Result};
 use type_history_codegen::{
+    admission::{self, Admission, Invocation},
     generate::{generate_history, generate_versioned, GenerationPaths},
     history::HistoryPlan,
     ledger::{HistoryLedger, RecordMetadata, SchemaIdentity},
@@ -28,6 +29,10 @@ use type_history_codegen::{
 ///
 /// Initialize the package's ledger and call `type_history_build::compile()` from
 /// `build.rs` before declaring a history. Then give the type a stable name:
+/// Declare histories directly at module scope, including ordinary nested modules.
+/// Undiscovered macro-generated, included, and function-local declarations fail
+/// explicitly in every build profile. Each matching expansion still receives
+/// the current ledger, frozen-shape, and strict checks.
 ///
 /// ```rust,ignore
 /// use type_history::versioned;
@@ -106,6 +111,29 @@ fn expand(arguments: Arguments, item: ItemStruct) -> Result<Tokens> {
             "history authority path must be absolute",
         ));
     }
+    let native = input.name.span().unwrap();
+    let source_path = native.local_file().ok_or_else(|| {
+        Error::new_spanned(
+            &input.name,
+            "unsupported history declaration: native source position is required",
+        )
+    })?;
+    let invocation = Invocation {
+        path: source_path
+            .canonicalize()
+            .map_err(|error| Error::new_spanned(&input.name, error))?,
+        line: native.line(),
+        column: native.column() - 1,
+        stable_name: stable_name.clone(),
+    };
+    let checked = (|| -> StandardResult<_, Box<dyn StandardError>> {
+        let path = std::env::var_os(admission::ENV)
+            .ok_or("missing history admission; call type_history_build::compile() from build.rs")?;
+        let path = PathBuf::from(path);
+        Ok((Admission::read(&path, &invocation)?, path))
+    })()
+    .map_err(|error| Error::new_spanned(&input.name, format!("history admission: {error}")))?;
+    let (admission, admission_path) = checked;
     let ledger = HistoryLedger::<RecordMetadata>::read_file(
         &ledger_path,
         SchemaIdentity::new("urn:typehistory:schema:"),
@@ -118,6 +146,12 @@ fn expand(arguments: Arguments, item: ItemStruct) -> Result<Tokens> {
         &ledger,
         &RecordMetadata {},
     )?;
+    if admission.strict && !history.frozen_shapes().contains_key(&history.head()) {
+        return Err(Error::new_spanned(
+            &input.name,
+            "history is a draft; freeze it before a strict or release build",
+        ));
+    }
     let facade = facade();
     let support: Path = syn::parse_quote!(#facade::__private);
     let error = quote!(#facade::DecodeError);
@@ -147,19 +181,25 @@ fn expand(arguments: Arguments, item: ItemStruct) -> Result<Tokens> {
     let ledger_path = ledger_path
         .to_str()
         .ok_or_else(|| Error::new_spanned(&input.name, "history authority path must be UTF-8"))?;
+    let admission_path = admission_path
+        .to_str()
+        .ok_or_else(|| Error::new_spanned(&input.name, "history admission path must be UTF-8"))?;
+    let version_binding = format_ident!("__type_history_version", span = Span::mixed_site());
+    let schema_binding = format_ident!("__type_history_schema", span = Span::mixed_site());
     Ok(quote! {
-        const _: &str = ::core::include_str!(#ledger_path);
+        const _: &::core::primitive::str = ::core::include_str!(#ledger_path);
+        const _: &::core::primitive::str = ::core::include_str!(#admission_path);
         #items
         #stored_record
         impl #history_trait for #current {
             const STABLE_NAME: #facade::StableName = #facade::StableName::new(#stable_name);
             const VERSION: #facade::PayloadVersion = match #facade::PayloadVersion::try_from_raw(#head) {
-                ::core::result::Result::Ok(version) => version,
+                ::core::result::Result::Ok(#version_binding) => #version_binding,
                 ::core::result::Result::Err(_) => ::core::panic!("non-positive history version"),
             };
             fn history() -> #facade::History<Self, #error> {
                 const RETAINED: &[#facade::PayloadVersion] = &[#(match #facade::PayloadVersion::try_from_raw(#retained) {
-                    ::core::result::Result::Ok(version) => version,
+                    ::core::result::Result::Ok(#version_binding) => #version_binding,
                     ::core::result::Result::Err(_) => ::core::panic!("non-positive history version"),
                 }),*];
                 #facade::History::new(RETAINED, #decoder)
@@ -169,8 +209,8 @@ fn expand(arguments: Arguments, item: ItemStruct) -> Result<Tokens> {
         #[cfg(all(test, type_history_schema_export))]
         #[test]
         fn #export() {
-            let schema = #facade::__private::serde_json::json!({"stable_name": #stable_name, "versions": [#(#schemas),*]});
-            ::std::println!("TYPE_HISTORY_SCHEMA_EXPORT_V1\t{}", schema);
+            let #schema_binding = #facade::__private::serde_json::json!({"stable_name": #stable_name, "versions": [#(#schemas),*]});
+            ::std::println!("TYPE_HISTORY_SCHEMA_EXPORT_V1\t{}", #schema_binding);
         }
     })
 }

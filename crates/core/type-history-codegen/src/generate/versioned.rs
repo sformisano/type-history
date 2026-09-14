@@ -123,9 +123,9 @@ pub(super) fn generate(context: &Context<'_>) -> TokenStream {
             ///
             /// Failures retain the stored version, failing step, and concrete callback source.
             pub fn from_versioned(
-                record: #support::Versioned<Self>,
+                #value: #support::Versioned<Self>,
             ) -> ::core::result::Result<Self, #error_type> {
-                <Self as #support::VersionedHistory>::from_versioned(record)
+                <Self as #support::VersionedHistory>::from_versioned(#value)
             }
         }
     }

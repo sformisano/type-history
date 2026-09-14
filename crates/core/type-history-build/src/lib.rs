@@ -39,6 +39,7 @@ pub mod snapshot;
 pub mod standalone_export;
 pub mod workspace;
 
+mod admission;
 mod compiler_diagnostics;
 mod export;
 mod transaction;

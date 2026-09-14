@@ -203,6 +203,39 @@ impl<Head: WireNode, Tail: WireItems> WireItems for Item<Head, Tail> {
 pub struct NameEnd;
 pub struct NameByte<const VALUE: u8, Tail>(PhantomData<Tail>);
 
+/// Eight exact wire-name bytes, most significant byte first, followed by `Tail`.
+/// This compact marker has the same constant representation as eight [`NameByte`] nodes.
+pub struct NameChunk<const BYTES: u64, Tail>(PhantomData<Tail>);
+
+impl<const BYTES: u64, Tail: WireName> WireName for NameChunk<BYTES, Tail> {
+    const NAME: ConstantName = ConstantName::Byte(
+        (BYTES >> 56) as u8,
+        &ConstantName::Byte(
+            (BYTES >> 48) as u8,
+            &ConstantName::Byte(
+                (BYTES >> 40) as u8,
+                &ConstantName::Byte(
+                    (BYTES >> 32) as u8,
+                    &ConstantName::Byte(
+                        (BYTES >> 24) as u8,
+                        &ConstantName::Byte(
+                            (BYTES >> 16) as u8,
+                            &ConstantName::Byte(
+                                (BYTES >> 8) as u8,
+                                &ConstantName::Byte(BYTES as u8, &Tail::NAME),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        ),
+    );
+    fn append(bytes: &mut Vec<u8>) {
+        bytes.extend_from_slice(&BYTES.to_be_bytes());
+        Tail::append(bytes);
+    }
+}
+
 pub trait WireName {
     const NAME: ConstantName;
     fn append(bytes: &mut Vec<u8>);

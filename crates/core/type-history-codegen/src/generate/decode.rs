@@ -17,7 +17,7 @@ pub(super) fn generate(context: &Context<'_>) -> TokenStream {
     if context.history.head() == 1 {
         let current = context.history.head();
         return quote! {
-            fn #function(#version: #support::PayloadVersion, #bytes: &[u8])
+            fn #function(#version: #support::PayloadVersion, #bytes: &[::core::primitive::u8])
                 -> ::core::result::Result<#latest, #error_type>
             {
                 if #version.get() != #current {
@@ -55,7 +55,7 @@ pub(super) fn generate(context: &Context<'_>) -> TokenStream {
     });
     let final_variant = format_ident!("V{}", context.history.head());
     quote! {
-        fn #function(#version: #support::PayloadVersion, #bytes: &[u8])
+        fn #function(#version: #support::PayloadVersion, #bytes: &[::core::primitive::u8])
             -> ::core::result::Result<#latest, #error_type>
         {
             // Keep historical values owned without adding per-transition heap allocations.

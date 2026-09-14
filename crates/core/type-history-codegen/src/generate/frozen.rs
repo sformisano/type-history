@@ -1,7 +1,7 @@
 //! Unconditional compiler-resolved comparisons with committed wire shapes.
 
-use proc_macro2::TokenStream;
-use quote::{quote, quote_spanned};
+use proc_macro2::{Span, TokenStream};
+use quote::{format_ident, quote, quote_spanned};
 use type_history_core::resolved::{SchemaField, SchemaShape, SchemaVariantShape};
 
 use super::Context;
@@ -9,6 +9,7 @@ use super::Context;
 pub(super) fn generate(context: &Context<'_>) -> TokenStream {
     let support = &context.paths.support;
     let resolved = quote!(#support);
+    let value = format_ident!("__type_history_value", span = Span::mixed_site());
     let mut assertions = Vec::new();
     for retained in context.history.versions() {
         let Some(shape) = context.history.frozen_shapes().get(&retained.version) else {
@@ -45,14 +46,14 @@ pub(super) fn generate(context: &Context<'_>) -> TokenStream {
                 const EXPECTED: #resolved::ConstantShape = #expected;
                 const ACTUAL: #resolved::ConstantShape =
                     <<#payload as #resolved::ResolvedSchema>::Wire as #resolved::WireNode>::SHAPE;
-                const LENGTH: usize = #resolved::schema_diagnostic::encoded_len(
+                const LENGTH: ::core::primitive::usize = #resolved::schema_diagnostic::encoded_len(
                     #stable_name, #version, &EXPECTED, &ACTUAL,
                 );
-                const BYTES: [u8; LENGTH] = #resolved::schema_diagnostic::encode(
+                const BYTES: [::core::primitive::u8; LENGTH] = #resolved::schema_diagnostic::encode(
                     #stable_name, #version, &EXPECTED, &ACTUAL,
                 );
-                const MESSAGE: &str = match ::core::str::from_utf8(&BYTES) {
-                    ::core::result::Result::Ok(value) => value,
+                const MESSAGE: &::core::primitive::str = match ::core::str::from_utf8(&BYTES) {
+                    ::core::result::Result::Ok(#value) => #value,
                     ::core::result::Result::Err(_) =>
                         ::core::panic!("invalid frozen schema diagnostic UTF-8"),
                 };

@@ -1,5 +1,17 @@
 //! Canonical names shared by generated histories and their frontends.
 
+use proc_macro2::Span;
+use syn::Ident;
+
+/// Unique lowercase helper name that preserves case and Unicode distinctions.
+pub(crate) fn helper_name(purpose: &str, name: &Ident) -> Ident {
+    let mut encoded = format!("__type_history_{purpose}_");
+    for byte in name.to_string().trim_start_matches("r#").bytes() {
+        encoded.push_str(&format!("{byte:02x}"));
+    }
+    Ident::new(&encoded, Span::mixed_site())
+}
+
 /// Normalize one supported Rust identifier to the durable ASCII snake-case form.
 pub fn normalize_rust_identifier(value: &str) -> Result<String, IdentifierError> {
     let value = value.strip_prefix("r#").unwrap_or(value);

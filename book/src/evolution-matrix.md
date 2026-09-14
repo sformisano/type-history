@@ -77,6 +77,7 @@ whether a test has run.
 | M50 | Unsupported history key or duplicate key | R | The macro reports the invalid key; only documented keys are accepted |
 | M52 | Serde rename/default/flatten/skip/alias/with | R | Historical decoders use the declared field names and generated serialization rules |
 | M53 | Conditional history or field declaration | R | Histories and their fields must remain visible to source discovery |
+| M138 | Undiscovered macro-generated, included, or function-local history | R | Each expansion must match a directly discovered module-level declaration, including in development builds |
 | M54 | Supported alias selected by a feature | S | The compiler-resolved schema for the selected features must match the frozen ledger |
 | M55 | self/super type, callback, expression, array length | S | Original invocation module and spans retained |
 | M56 | Author field names that resemble helpers (`previous`, `value`, `json`, or `__type_history_*`) | S | Generated identifiers hygienic; field names cannot shadow transition input/local bindings |
