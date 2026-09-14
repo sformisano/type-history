@@ -598,6 +598,7 @@ dependencies = [
 name = "type-history-build"
 version = "0.1.0"
 dependencies = [
+ "rustix",
  "serde",
  "serde_json",
  "sha2",
