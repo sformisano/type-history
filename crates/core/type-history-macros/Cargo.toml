@@ -1,0 +1,23 @@
+[package]
+name = "type-history-macros"
+version = "0.1.0"
+description = "Procedural macros for versioned Rust records"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/type-history-macros"
+publish = false
+
+[lib]
+proc-macro = true
+
+[dependencies]
+type-history-codegen = { path = "../type-history-codegen", version = "0.1.0" }
+type-history-core = { path = "../type-history-core", version = "0.1.0" }
+syn = { version = "2", features = ["full", "extra-traits"] }
+quote = "1"
+proc-macro2 = "1"
+proc-macro-crate = "3.5.0"

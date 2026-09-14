@@ -1,0 +1,1 @@
+{"kind":"record","fields":[{"name":"nested","presence":"required","schema":{"kind":"option","value":{"kind":"array","length":3,"value":{"kind":"i128"}}}}]}

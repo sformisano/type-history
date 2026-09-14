@@ -1,0 +1,1 @@
+{"stable_name":"billing.payment.recorded","version":2,"payload":{"reference":"PAY-42","status":{"Paid":{"amount_minor":4200,"currency":"Usd"}}}}

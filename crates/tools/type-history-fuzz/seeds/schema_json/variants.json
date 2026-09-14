@@ -1,0 +1,1 @@
+{"kind":"enum","variants":[{"name":"unit","kind":"unit"},{"name":"newtype","kind":"newtype","schema":{"kind":"u128"}},{"name":"tuple","kind":"tuple","items":[{"kind":"string"},{"kind":"bool"}]},{"name":"record","kind":"record","fields":[{"name":"value","presence":"required","schema":{"kind":"sequence","value":{"kind":"u8"}}}]}]}

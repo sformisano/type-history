@@ -1,0 +1,113 @@
+# Set up a package
+
+Before the shop can declare `ReceiptCreated`, its package needs the Type History library, a build hook, and a place to save frozen schemas. This guide creates `my-shop-demo-project`, the Cargo library used by the [receipt walkthrough](quick-start.md).
+
+Type History is unreleased. Its crates are not available from crates.io yet.
+The current setup uses a source checkout and requires Rust 1.97 or later.
+Linux is the tested host for lifecycle commands. Windows and macOS have not been validated.
+
+## 1. Create the package
+
+Clone Type History beside the application you will create:
+
+```sh
+git clone https://github.com/sformisano/type-history.git type-history
+```
+
+Install the CLI from that checkout:
+
+<!-- setup:install.sh -->
+```sh
+cargo install --path type-history/crates/core/cargo-type-history --locked
+```
+
+Use the same checkout for the library, build hook, and CLI so they agree on the schema format and supported attributes. Reinstall the CLI after updating the checkout. The Cargo package is `type-history`; Rust imports use `type_history`.
+
+| Package | Why the example needs it |
+| --- | --- |
+| `type-history` | Provides the history declaration, generated types, and versioned values |
+| `type-history-build` | Makes Cargo check that previously frozen versions remain intact |
+| `cargo-type-history` | Creates the schema file and freezes new versions |
+
+Create the sibling application:
+
+<!-- setup:create.sh -->
+```sh
+cargo new --lib my-shop-demo-project --edition 2024
+cd my-shop-demo-project
+```
+
+Replace `Cargo.toml` with this manifest:
+
+<!-- setup:Cargo.toml -->
+```toml
+[package]
+name = "my-shop-demo-project"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+type-history = { path = "../type-history/crates/core/type-history" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+[build-dependencies]
+type-history-build = { path = "../type-history/crates/core/type-history-build" }
+```
+
+The `path` dependencies point to the checkout beside `my-shop-demo-project`. Keep it there while building the application. `serde_json` reads and writes the receipt examples; Serde's derives support the [nested records](integration.md#nested-records) used later.
+
+## 2. Initialize the schema file
+
+A **schema** describes a record's serialized field names, field types, and nested structure.
+**Freezing** saves a version's schema so later builds can reject changes to it.
+Type History keeps those saved schemas in a file called the **ledger**.
+
+The setup uses two files:
+
+- `build.rs` runs the schema checks during Cargo builds.
+- `type-history/schemas.json` stores the ledger. The `init` command creates it.
+
+Create `build.rs`:
+
+<!-- setup:build.rs -->
+```rust
+use type_history_build::compile;
+
+fn main() {
+    compile();
+}
+```
+
+Empty `src/lib.rs` before initialization.
+
+<!-- setup:initialize.sh -->
+```sh
+cargo generate-lockfile
+cargo fetch --locked
+cargo type-history init --package my-shop-demo-project
+```
+
+`--package` selects the Cargo package by its `[package].name` in `Cargo.toml`.
+Use your own package's name when running these commands in an existing project.
+
+`init` creates an empty ledger at `type-history/schemas.json`. Run it before adding
+the first history declaration. It refuses to replace an existing ledger.
+Cargo builds require this file even when the package has no histories yet.
+The ledger also identifies initialized packages for `cargo type-history check`.
+No separate configuration file is needed. Existing `type-history.toml` files are
+ignored and can be removed.
+
+Commands such as `freeze` build a temporary copy of the package to check its schemas. They run Cargo with `--locked --offline`, so the lockfile and downloaded dependencies must already be ready. After changing dependencies, update the lockfile and fetch them before running these commands again.
+
+Add this line to `.gitignore`:
+
+```gitignore
+**/type-history/.schemas.lock
+```
+
+Commit `Cargo.toml`, `Cargo.lock`, `build.rs`, your source, and
+`type-history/schemas.json` with your project. The `.schemas.lock` file prevents
+concurrent commands from changing the ledger at the same time. It can be recreated.
+
+Continue with [declaring V1](quick-start.md#1-declare-v1).

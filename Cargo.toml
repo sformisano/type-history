@@ -1,0 +1,27 @@
+[workspace]
+members = [
+    "crates/core/type-history-core",
+    "crates/core/type-history-codegen",
+    "crates/core/type-history-macros",
+    "crates/core/type-history",
+    "crates/core/type-history-build",
+    "crates/core/cargo-type-history",
+    "crates/examples/invoice-history",
+]
+exclude = ["crates/tools/type-history-fuzz"]
+resolver = "2"
+
+[workspace.package]
+edition = "2021"
+rust-version = "1.97.0"
+repository = "https://github.com/sformisano/type-history"
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+homepage = "https://github.com/sformisano/type-history/tree/main/book"
+
+[workspace.dependencies]
+serde = { "version" = "1.0.228", "features" = ["derive"] }
+serde_json = { version = "1.0.149", features = ["arbitrary_precision"] }
+schemars = { "version" = "=1.2.2" }
+thiserror = "2.0.18"
+sha2 = "0.10.9"
