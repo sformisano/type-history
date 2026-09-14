@@ -6,12 +6,12 @@ The remaining crates support those three components. They are useful when buildi
 
 | Crate | Responsibility |
 | --- | --- |
-| [`type-history`](https://docs.rs/type-history/latest/type_history/) | Public macros, history traits, and decoding API |
-| [`type-history-core`](https://docs.rs/type-history-core/latest/type_history_core/) | Runtime decoding, stable names, and schema descriptions |
-| [`type-history-macros`](https://docs.rs/type-history-macros/latest/type_history_macros/) | Procedural macro entry points |
-| [`type-history-codegen`](https://docs.rs/type-history-codegen/latest/type_history_codegen/) | Parsing, schema checks, and Rust generation |
-| [`type-history-build`](https://docs.rs/type-history-build/latest/type_history_build/) | Build integration and checked ledger operations |
-| [`cargo-type-history`](https://docs.rs/crate/cargo-type-history/latest) | Cargo subcommand for lifecycle operations |
+| `type-history` | Public macros, history traits, and decoding API |
+| `type-history-core` | Runtime decoding, stable names, and schema descriptions |
+| `type-history-macros` | Procedural macro entry points |
+| `type-history-codegen` | Parsing, schema checks, and Rust generation |
+| `type-history-build` | Build integration and checked ledger operations |
+| `cargo-type-history` | Cargo subcommand for lifecycle operations |
 
 Type History is unreleased, so use the source checkout for now. To generate the API reference locally, run `cargo doc --workspace --no-deps --all-features --locked` from that checkout and open `target/doc/type_history/index.html`.
 

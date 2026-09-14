@@ -561,7 +561,7 @@ If reporting calculates sales totals after subtracting refunds, it must support 
 ## Documentation
 
 - [The book](https://github.com/sformisano/type-history/blob/main/book/README.md) covers the generated types, field changes, conversions, freezing, and integrations.
-- [API reference](https://docs.rs/type-history/latest/type_history/) documents public types, methods, and traits.
+- [The API reference guide](https://github.com/sformisano/type-history/blob/main/book/src/crates.md) explains how to generate documentation for public types, methods, and traits locally.
 - [The invoice example](https://github.com/sformisano/type-history/blob/main/crates/examples/invoice-history/README.md) is a complete runnable package.
 
 Licensed under [MIT
