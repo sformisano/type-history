@@ -188,7 +188,7 @@ Supported field types include:
 | Kind | Supported types |
 | --- | --- |
 | Scalars | `bool`, `String`, and signed or unsigned integers from 8 to 128 bits |
-| Containers | Vectors, fixed arrays, and optional values with supported element types |
+| Containers | Vectors, fixed arrays of lengths 0–32, and optional values with supported element types |
 | Nested records | Named records with schema support, including generated history versions |
 | Enums | Concrete supporting enums with externally tagged variants and schema support |
 
