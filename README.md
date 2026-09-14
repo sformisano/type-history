@@ -22,8 +22,8 @@ Type History works through three components:
 
 ### Install the Components
 
-Type History is unreleased. Follow the [source checkout setup](book/src/setup.md)
-to install the CLI and add the library and build dependencies from the same checkout.
+Install the CLI and add the library and build dependencies from crates.io. The
+[package setup guide](book/src/setup.md) shows the complete configuration.
 
 ### Connect Type History to Cargo
 

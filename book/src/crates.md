@@ -13,7 +13,7 @@ The remaining crates support those three components. They are useful when buildi
 | `type-history-build` | Build integration and checked ledger operations |
 | `cargo-type-history` | Cargo subcommand for lifecycle operations |
 
-Type History is unreleased, so use the source checkout for now. To generate the API reference locally, run `cargo doc --workspace --no-deps --all-features --locked` from that checkout and open `target/doc/type_history/index.html`.
+The API reference is published on [docs.rs](https://docs.rs/type-history). To generate it locally, clone the repository, run `cargo doc --workspace --no-deps --all-features --locked`, and open `target/doc/type_history/index.html`.
 
 ## Examples and tests
 

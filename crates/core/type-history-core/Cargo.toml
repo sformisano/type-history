@@ -9,7 +9,6 @@ readme.workspace = true
 homepage.workspace = true
 documentation = "https://docs.rs/type-history-core"
 license.workspace = true
-publish = false
 
 [dependencies]
 schemars = { workspace = true }

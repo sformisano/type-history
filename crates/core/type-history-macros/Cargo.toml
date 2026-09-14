@@ -9,7 +9,6 @@ repository.workspace = true
 readme.workspace = true
 homepage.workspace = true
 documentation = "https://docs.rs/type-history-macros"
-publish = false
 
 [lib]
 proc-macro = true

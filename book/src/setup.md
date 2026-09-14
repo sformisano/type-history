@@ -2,32 +2,67 @@
 
 Before the shop can declare `ReceiptCreated`, its package needs the Type History library, a build hook, and a place to save frozen schemas. This guide creates `my-shop-demo-project`, the Cargo library used by the [receipt walkthrough](quick-start.md).
 
-Type History is unreleased. Its crates are not available from crates.io yet.
-The current setup uses a source checkout and requires Rust 1.97 or later.
+The current setup uses the crates.io releases and requires Rust 1.97 or later.
 Linux is the tested host for lifecycle commands. Windows and macOS have not been validated.
 
-## 1. Create the package
+## 1. Install the released components
 
-Clone Type History beside the application you will create:
+Install the CLI:
 
+<!-- setup:release-install.sh -->
 ```sh
-git clone https://github.com/sformisano/type-history.git type-history
+cargo install cargo-type-history --version 0.1.0 --locked
 ```
 
-Install the CLI from that checkout:
-
-<!-- setup:install.sh -->
-```sh
-cargo install --path type-history/crates/core/cargo-type-history --locked
-```
-
-Use the same checkout for the library, build hook, and CLI so they agree on the schema format and supported attributes. Reinstall the CLI after updating the checkout. The Cargo package is `type-history`; Rust imports use `type_history`.
+Use matching crate versions for the library, build hook, and CLI so they agree on the schema format and supported attributes. The Cargo package is `type-history`; Rust imports use `type_history`.
 
 | Package | Why the example needs it |
 | --- | --- |
 | `type-history` | Provides the history declaration, generated types, and versioned values |
 | `type-history-build` | Makes Cargo check that previously frozen versions remain intact |
 | `cargo-type-history` | Creates the schema file and freezes new versions |
+
+Create a new library package:
+
+<!-- setup:release-create.sh -->
+```sh
+cargo new --lib my-shop-demo-project --edition 2024
+cd my-shop-demo-project
+```
+
+Replace `Cargo.toml` with this manifest:
+
+<!-- setup:release-Cargo.toml -->
+```toml
+[package]
+name = "my-shop-demo-project"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+type-history = "0.1.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+[build-dependencies]
+type-history-build = "0.1.0"
+```
+
+`serde_json` reads and writes the receipt examples; Serde's derives support the [nested records](integration.md#nested-records) used later.
+
+## 2. Source checkout alternative
+
+For development against an unreleased checkout, clone Type History beside the
+application and install the CLI from that checkout:
+
+```sh
+git clone https://github.com/sformisano/type-history.git type-history
+```
+
+<!-- setup:install.sh -->
+```sh
+cargo install --path type-history/crates/core/cargo-type-history --locked
+```
 
 Create the sibling application:
 
@@ -37,7 +72,7 @@ cargo new --lib my-shop-demo-project --edition 2024
 cd my-shop-demo-project
 ```
 
-Replace `Cargo.toml` with this manifest:
+Use this manifest instead:
 
 <!-- setup:Cargo.toml -->
 ```toml
@@ -55,9 +90,9 @@ serde_json = "1.0"
 type-history-build = { path = "../type-history/crates/core/type-history-build" }
 ```
 
-The `path` dependencies point to the checkout beside `my-shop-demo-project`. Keep it there while building the application. `serde_json` reads and writes the receipt examples; Serde's derives support the [nested records](integration.md#nested-records) used later.
+Keep the checkout beside `my-shop-demo-project` while building the application.
 
-## 2. Initialize the schema file
+## 3. Initialize the schema file
 
 A **schema** describes a record's serialized field names, field types, and nested structure.
 **Freezing** saves a version's schema so later builds can reject changes to it.

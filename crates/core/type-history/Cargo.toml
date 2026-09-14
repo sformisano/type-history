@@ -9,7 +9,6 @@ repository.workspace = true
 readme.workspace = true
 homepage.workspace = true
 documentation = "https://docs.rs/type-history"
-publish = false
 
 [dependencies]
 type-history-core = { path = "../type-history-core", version = "0.1.0" }
