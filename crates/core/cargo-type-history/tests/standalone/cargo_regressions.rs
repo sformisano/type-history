@@ -142,6 +142,10 @@ fn ordinary_module_builds_stay_fresh_and_detect_new_alternatives() {
     success(&unchanged);
     let output = text(&unchanged);
     assert!(
+        !output.contains('\u{1b}'),
+        "captured Cargo output must not contain ANSI escapes: {output}"
+    );
+    assert!(
         output.contains("Fresh standalone-history-consumer"),
         "{output}"
     );

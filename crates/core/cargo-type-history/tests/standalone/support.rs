@@ -192,6 +192,8 @@ opt-level = 2
         command
             .current_dir(root)
             .args(arguments)
+            // Keep captured diagnostics stable when CI forces coloured output.
+            .env("CARGO_TERM_COLOR", "never")
             .env("CARGO_TARGET_DIR", repository().join("target"));
         for key in [
             "TYPE_HISTORY_REQUIRE_FROZEN",
