@@ -2,6 +2,7 @@
 
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
+use syn::spanned::Spanned;
 use syn::visit_mut::{self, VisitMut};
 use syn::{Attribute, File, Ident, Path, Result, Type};
 
@@ -33,13 +34,19 @@ pub(crate) fn scoped_field_type_for_owner(
     attributes: &[Attribute],
 ) -> (Type, TokenStream) {
     // Helpers have a different `Self`; preserve the authored field's owner.
+    let authored_span = ty.span();
     let mut ty = ty.clone();
     FieldOwner(owner).visit_type_mut(&mut ty);
     let lints = lint_attributes(attributes).collect::<Vec<_>>();
     if lints.is_empty() {
         return (ty, TokenStream::new());
     }
-    let name = format_ident!("__TypeHistory{}Field{}Type", record, index);
+    let name = format_ident!(
+        "__TypeHistory{}Field{}Type",
+        record,
+        index,
+        span = authored_span
+    );
     (
         syn::parse_quote!(#name),
         quote!(#(#lints)* type #name = #ty;),

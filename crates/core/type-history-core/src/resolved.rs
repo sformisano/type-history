@@ -25,6 +25,12 @@ pub use shape::{FieldPresence, SchemaField, SchemaShape, SchemaVariant, SchemaVa
 use std::marker::PhantomData;
 
 /// Structural schema resolved through Rust trait selection.
+#[diagnostic::on_unimplemented(
+    message = "`{Self}` is not supported as a persisted field",
+    label = "this type has no supported structural wire schema",
+    note = "For a supported named record or enum, derive `type_history::Schema` or use your framework's schema declaration.",
+    note = "For other types, choose a supported serialized representation; wrapping an unsupported field alone is insufficient."
+)]
 pub trait ResolvedSchema {
     /// Type-level form used for compile-time shape comparisons.
     type Wire: WireNode;

@@ -48,6 +48,11 @@ pub fn isolated(
             #[derive(__support::schemars::JsonSchema)]
             #[schemars(crate = "__support::schemars", deny_unknown_fields, rename = #title, bound = #bound)]
             #body
+            // Check authored types at the call site, without exposing the private
+            // derive helper's trait bounds as advice to implement JsonSchema.
+            pub(super) fn __type_history_record_schema<#(#params: __support::JsonSchemaField),*>(generator: &mut __support::schemars::SchemaGenerator) -> __support::schemars::Schema {
+                <#helper<#(#params),*> as __support::schemars::JsonSchema>::json_schema(generator)
+            }
         }
         impl #support::schemars::JsonSchema for #name {
             fn schema_name() -> ::std::borrow::Cow<'static, ::core::primitive::str> { ::std::borrow::Cow::Borrowed(#title) }
@@ -55,7 +60,7 @@ pub fn isolated(
                 ::std::borrow::Cow::Borrowed(::core::concat!(::core::module_path!(), "::", #title))
             }
             fn json_schema(#generator: &mut #support::schemars::SchemaGenerator) -> #support::schemars::Schema {
-                <#module::#helper<#(#types),*> as #support::schemars::JsonSchema>::json_schema(#generator)
+                #module::__type_history_record_schema::<#(#types),*>(#generator)
             }
         }
     }

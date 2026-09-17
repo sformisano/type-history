@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Point unsupported persisted field errors at the field type and explain the missing schema support without suggesting private trait implementations.
+
 ## 0.1.0
 
 - Enable crates.io publication for the six Type History crates and include both license texts in each package.

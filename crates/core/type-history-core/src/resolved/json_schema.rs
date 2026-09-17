@@ -14,6 +14,12 @@ use std::{borrow::Cow, marker::PhantomData};
 pub struct FieldSchema<T: ?Sized>(PhantomData<T>);
 
 /// The `schemars` form of one persisted field type.
+#[diagnostic::on_unimplemented(
+    message = "`{Self}` is not supported as a persisted field",
+    label = "this type has no supported JSON Schema field adapter",
+    note = "For a supported named record or enum, derive `type_history::Schema` or use your framework's schema declaration.",
+    note = "For other types, choose a supported serialized representation; wrapping an unsupported field alone is insufficient."
+)]
 pub trait JsonSchemaField {
     /// Generate the JSON Schema for the wire type of `Self`.
     fn json_schema(generator: &mut SchemaGenerator) -> Schema;

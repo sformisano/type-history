@@ -205,6 +205,13 @@ The authoring API currently rejects:
 - **Serialization overrides:** Serde `rename`, `default`, `flatten`, `skip`, `alias`, and `with`.
   Use history attributes to describe field changes.
 
+When a field type lacks schema support, compilation reports that the type is
+not supported as a persisted field. The error points to the field type and
+identifies missing structural wire schema or JSON Schema field support.
+For a supported named record or enum, derive `Schema` as shown above.
+For other types, choose a supported serialized representation. Wrapping a map
+or float in another record does not make that inner field supported.
+
 Each retained version adds generated code. Before generating those types, Type History checks that the declared version range agrees with the ledger. A mistaken large version number is rejected before the generator tries to create all those versions.
 An existing history can be brought into a package through [import](lifecycle.md#import-a-complete-history).
 Its ledger must include every version starting at V1.

@@ -22,6 +22,8 @@ mod distributed;
 mod enums;
 #[path = "standalone/feature_selection.rs"]
 mod feature_selection;
+#[path = "standalone/field_diagnostics.rs"]
+mod field_diagnostics;
 #[path = "standalone/generated_hygiene.rs"]
 mod generated_hygiene;
 #[path = "standalone/hygiene.rs"]
