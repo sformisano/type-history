@@ -72,8 +72,10 @@ pub trait VersionedHistory: Sized {
 /// into the matching historical type. Supported formats include JSON and
 /// MessagePack with named fields; payload structs must be represented as maps.
 /// This includes supporting records nested in fields and containers.
-/// JSON integers use `serde_json`'s arbitrary-precision representation, which can
-/// also interpret that library's reserved numeric-marker objects as integers.
+/// JSON numbers use `serde_json`'s arbitrary-precision representation, which can
+/// also interpret that library's reserved numeric-marker objects as numbers.
+/// Finite float integrations preserve the written width's bits, including signed
+/// zero and subnormals. Non-finite values are rejected by their field types.
 pub struct Versioned<T: VersionedHistory> {
     historical: T::Historical,
 }

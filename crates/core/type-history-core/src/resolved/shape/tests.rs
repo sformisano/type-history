@@ -1,4 +1,5 @@
 use super::{FieldPresence, SchemaField, SchemaShape, SchemaVariant, SchemaVariantShape};
+use crate::resolved::{ConstantMembership, StorageProfile};
 use serde_json::{from_str, to_string};
 
 fn named_variants() -> Vec<(SchemaVariant, &'static str)> {
@@ -191,4 +192,96 @@ fn newtype_records_normalize_to_the_same_named_variant() {
     };
     assert_ne!(newtype, record);
     assert_eq!(newtype.normalized(), record.normalized());
+}
+
+#[test]
+fn new_contract_nodes_round_trip_and_normalize_their_children() {
+    let record = SchemaShape::Record {
+        fields: vec![
+            SchemaField {
+                name: "z".into(),
+                presence: FieldPresence::Required,
+                schema: SchemaShape::Option {
+                    value: Box::new(SchemaShape::U32),
+                },
+            },
+            SchemaField {
+                name: "a".into(),
+                presence: FieldPresence::Optional,
+                schema: SchemaShape::Option {
+                    value: Box::new(SchemaShape::String),
+                },
+            },
+        ],
+    };
+    let membership = ConstantMembership::custom("example:exact:v1").membership();
+    let normalized = record.clone().normalized();
+    for (shape, expected) in [
+        (
+            SchemaShape::Map {
+                value: Box::new(record.clone()),
+            },
+            SchemaShape::Map {
+                value: Box::new(normalized.clone()),
+            },
+        ),
+        (
+            SchemaShape::Set {
+                value: Box::new(record.clone()),
+                membership: membership.clone(),
+            },
+            SchemaShape::Set {
+                value: Box::new(normalized.clone()),
+                membership,
+            },
+        ),
+        (
+            SchemaShape::Tuple {
+                items: vec![
+                    record,
+                    SchemaShape::Profile {
+                        profile: StorageProfile::Date,
+                    },
+                ],
+            },
+            SchemaShape::Tuple {
+                items: vec![
+                    normalized,
+                    SchemaShape::Profile {
+                        profile: StorageProfile::Date,
+                    },
+                ],
+            },
+        ),
+    ] {
+        assert_eq!(
+            from_str::<SchemaShape>(&to_string(&shape).unwrap()).unwrap(),
+            shape
+        );
+        assert_eq!(shape.normalized(), expected);
+    }
+    assert!(from_str::<SchemaShape>(r#"{"kind":"profile","profile":"unknown"}"#).is_err());
+    assert!(from_str::<SchemaShape>(r#"{"kind":"set","value":{"kind":"u8"}}"#).is_err());
+}
+
+#[test]
+fn newtype_tuple_payloads_normalize_without_erasing_position_order() {
+    let items = vec![SchemaShape::U32, SchemaShape::String];
+    let newtype = SchemaShape::Enum {
+        variants: vec![SchemaVariant {
+            name: "Pair".into(),
+            shape: SchemaVariantShape::Newtype {
+                schema: Box::new(SchemaShape::Tuple {
+                    items: items.clone(),
+                }),
+            },
+        }],
+    };
+    let tuple = SchemaShape::Enum {
+        variants: vec![SchemaVariant {
+            name: "Pair".into(),
+            shape: SchemaVariantShape::Tuple { items },
+        }],
+    };
+    assert_eq!(newtype.normalized(), tuple);
 }

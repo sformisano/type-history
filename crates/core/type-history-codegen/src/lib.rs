@@ -28,7 +28,7 @@ pub mod resolved_schema;
 pub use generate::{generate_history, GeneratedHistory, GeneratedVersion, GenerationPaths};
 pub use history::{AuthorizedHistory, HistoryPlan};
 pub use identifier::normalize_rust_identifier;
-pub use model::{NamedField, RecordInput};
+pub use model::{NamedField, RecordDerives, RecordInput};
 
 pub mod input;
 pub mod source;

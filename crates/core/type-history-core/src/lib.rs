@@ -14,6 +14,7 @@
 #![warn(missing_docs)]
 #![warn(rustdoc::broken_intra_doc_links)]
 
+pub mod adapters;
 pub mod canonical_json;
 mod error;
 mod history;
@@ -25,7 +26,8 @@ pub use error::{decode, DecodeError, HasHistory, ReadError};
 pub use history::{DecodeContext, DecodeFailureKind, History};
 pub use metadata::{InvalidPayloadVersion, InvalidStableName, PayloadVersion, StableName};
 pub use resolved::{
-    ConstantShape, FieldSchema, JsonSchemaField, ResolvedSchema, SchemaShape, WireNode,
+    ConstantMembership, ConstantShape, FieldSchema, JsonSchemaField, ProfileError, ResolvedSchema,
+    SchemaShape, SetMembership, WireNode,
 };
 pub use versioned::Versioned;
 #[doc(hidden)]

@@ -50,8 +50,10 @@ pub fn isolated(
             #body
             // Check authored types at the call site, without exposing the private
             // derive helper's trait bounds as advice to implement JsonSchema.
-            pub(super) fn __type_history_record_schema<#(#params: __support::JsonSchemaField),*>(generator: &mut __support::schemars::SchemaGenerator) -> __support::schemars::Schema {
-                <#helper<#(#params),*> as __support::schemars::JsonSchema>::json_schema(generator)
+            pub(super) fn __type_history_record_schema<#(#params: __support::JsonSchemaField),*>(generator: &mut __support::schemars::SchemaGenerator, shape: &__support::ConstantShape) -> __support::schemars::Schema {
+                let mut schema = <#helper<#(#params),*> as __support::schemars::JsonSchema>::json_schema(generator);
+                __support::apply_named_presence(&mut schema, shape);
+                schema
             }
         }
         impl #support::schemars::JsonSchema for #name {
@@ -60,7 +62,10 @@ pub fn isolated(
                 ::std::borrow::Cow::Borrowed(::core::concat!(::core::module_path!(), "::", #title))
             }
             fn json_schema(#generator: &mut #support::schemars::SchemaGenerator) -> #support::schemars::Schema {
-                #module::__type_history_record_schema::<#(#types),*>(#generator)
+                #module::__type_history_record_schema::<#(#types),*>(
+                    #generator,
+                    &<<#name as #support::ResolvedSchema>::Wire as #support::WireNode>::SHAPE,
+                )
             }
         }
     }
@@ -69,6 +74,22 @@ pub fn isolated(
 /// Isolated schema implementation for a named record.
 pub fn record(name: &Ident, fields: &[NamedField], support: &TokenStream) -> TokenStream {
     record_with_docs(name, fields, support, &[], false)
+}
+
+/// Isolated schema implementation for a supporting tuple struct.
+pub fn tuple(name: &Ident, helper: &Ident, types: &[Type], support: &TokenStream) -> TokenStream {
+    let params = (0..types.len()).map(parameter).collect::<Vec<_>>();
+    let fields = params.iter().map(|param| {
+        let schema = isolated_field_attribute(param);
+        quote!(#schema #param)
+    });
+    isolated(
+        name,
+        helper,
+        types,
+        &quote!(pub(super) struct #helper<#(#params),*>(#(#fields),*);),
+        support,
+    )
 }
 
 /// Isolated payload schema retaining its public container and field descriptions.
@@ -158,5 +179,35 @@ pub fn field_impl_for_derived(name: &Ident, support: &TokenStream) -> TokenStrea
                 <#name as #support::schemars::JsonSchema>::json_schema(#generator)
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{field_impl_delegating_to, tuple};
+    use quote::{format_ident, quote};
+    use syn::{parse_quote, Ident, Type};
+
+    #[test]
+    fn tuple_schema_routes_each_position_through_its_field_contract() {
+        let name: Ident = parse_quote!(Pair);
+        let helper = format_ident!("__TypeHistoryPairSchema");
+        let types = vec![parse_quote!(u32), parse_quote!(String)];
+        let tokens = tuple(&name, &helper, &types, &quote!(support)).to_string();
+
+        assert!(tokens.contains("struct __TypeHistoryPairSchema"));
+        assert!(tokens.contains("__type_history_field_schema :: < __TypeHistoryField0 >"));
+        assert!(tokens.contains("__type_history_field_schema :: < __TypeHistoryField1 >"));
+        assert!(tokens.contains("apply_named_presence"));
+    }
+
+    #[test]
+    fn newtype_field_contract_delegates_to_the_inner_value() {
+        let name: Ident = parse_quote!(Identifier);
+        let inner: Type = parse_quote!(String);
+        let tokens = field_impl_delegating_to(&name, &inner, &quote!(support)).to_string();
+
+        assert!(tokens.contains("impl support :: JsonSchemaField for Identifier"));
+        assert!(tokens.contains("< String as support :: JsonSchemaField > :: json_schema"));
     }
 }

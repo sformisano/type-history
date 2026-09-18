@@ -1,0 +1,40 @@
+{
+  "kind": "record",
+  "fields": [
+    {
+      "name": "profiles",
+      "presence": "required",
+      "schema": {
+        "kind": "map",
+        "value": {
+          "kind": "tuple",
+          "items": [
+            { "kind": "profile", "profile": "type-history:finite32:v1" },
+            { "kind": "profile", "profile": "type-history:finite64:v1" },
+            { "kind": "profile", "profile": "type-history:uuid-text:v1" },
+            { "kind": "profile", "profile": "type-history:decimal96-text:v1" },
+            { "kind": "profile", "profile": "type-history:date:v1" },
+            { "kind": "profile", "profile": "type-history:local-time:v1" },
+            { "kind": "profile", "profile": "type-history:local-datetime:v1" },
+            { "kind": "profile", "profile": "type-history:utc-instant:v1" },
+            { "kind": "profile", "profile": "type-history:offset-datetime:v1" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "set",
+      "presence": "required",
+      "schema": {
+        "kind": "set",
+        "value": { "kind": "string" },
+        "membership": { "id": "type-history:membership:string:v1", "parameters": [] }
+      }
+    },
+    {
+      "name": "nullable",
+      "presence": "required",
+      "schema": { "kind": "option", "value": { "kind": "string" } }
+    }
+  ]
+}

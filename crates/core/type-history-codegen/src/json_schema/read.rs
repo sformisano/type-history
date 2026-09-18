@@ -1,6 +1,6 @@
 //! Strict reading of normalized JSON Schema into structural shapes.
 use super::normalize::optional_inner;
-use super::{presence_of, JsonSchemaError, JsonSchemaErrorReason};
+use super::{collections, profiles, JsonSchemaError, JsonSchemaErrorReason};
 use serde_json::{Map, Value};
 use std::collections::BTreeSet;
 use type_history_core::resolved::{
@@ -18,7 +18,7 @@ pub fn parse(value: &Value) -> Result<SchemaShape, JsonSchemaError> {
     parse_node(&node, "").map(SchemaShape::normalized)
 }
 
-const NODE_KEYWORDS: [&str; 14] = [
+const NODE_KEYWORDS: [&str; 17] = [
     "type",
     "format",
     "minimum",
@@ -33,6 +33,9 @@ const NODE_KEYWORDS: [&str; 14] = [
     "enum",
     "const",
     "oneOf",
+    "uniqueItems",
+    collections::MEMBERSHIP_KEY,
+    profiles::PROFILE_KEY,
 ];
 
 fn parse_node(object: &Map<String, Value>, path: &str) -> Result<SchemaShape, JsonSchemaError> {
@@ -60,6 +63,9 @@ fn parse_node(object: &Map<String, Value>, path: &str) -> Result<SchemaShape, Js
                 keyword.clone(),
             )));
         }
+    }
+    if object.contains_key("uniqueItems") {
+        return Err(error(JsonSchemaErrorReason::UncertifiedSet));
     }
     let keys = |allowed: &[&str]| -> Result<(), JsonSchemaError> {
         object
@@ -97,6 +103,10 @@ fn parse_node(object: &Map<String, Value>, path: &str) -> Result<SchemaShape, Js
             JsonSchemaErrorReason::Enum,
         )?;
         return Ok(SchemaShape::Enum { variants });
+    }
+    if let Some(profile) = profiles::read_profile(object, path)? {
+        keys(&["type", profiles::PROFILE_KEY])?;
+        return Ok(SchemaShape::Profile { profile });
     }
     let type_name = object
         .get("type")
@@ -138,48 +148,113 @@ fn parse_node(object: &Map<String, Value>, path: &str) -> Result<SchemaShape, Js
                 }
             }
         }
+        "number" => Err(error(JsonSchemaErrorReason::Profile)),
         "integer" => {
             keys(&["type", "format", "minimum", "maximum"])?;
             parse_integer(object, path)
         }
-        "array" => {
-            keys(&["type", "items", "minItems", "maxItems"])?;
-            let items = object
-                .get("items")
-                .and_then(Value::as_object)
-                .ok_or_else(|| error(JsonSchemaErrorReason::InvalidKeyword("items".to_owned())))?;
-            let value = parse_node(items, &format!("{path}/items"))?;
-            match (object.get("minItems"), object.get("maxItems")) {
-                (None, None) => Ok(if value == SchemaShape::U8 {
-                    SchemaShape::Bytes
-                } else {
-                    SchemaShape::Sequence {
-                        value: Box::new(value),
-                    }
-                }),
-                (Some(minimum), Some(maximum)) => {
-                    let length = integer(minimum, path)?;
-                    if integer(maximum, path)? != length {
-                        return Err(error(JsonSchemaErrorReason::ArrayLength));
-                    }
-                    let length = usize::try_from(length)
-                        .map_err(|_| error(JsonSchemaErrorReason::ArrayLength))?;
-                    Ok(SchemaShape::Array {
-                        value: Box::new(value),
-                        length,
-                    })
-                }
-                _ => Err(error(JsonSchemaErrorReason::ArrayLength)),
-            }
-        }
-        "object" => {
-            keys(&["type", "properties", "required", "additionalProperties"])?;
-            Ok(SchemaShape::Record {
-                fields: parse_fields(object, path)?,
-            })
-        }
+        "array" => parse_array(object, path, &keys),
+        "object" => parse_object(object, path, &keys),
         _ => Err(error(JsonSchemaErrorReason::Type)),
     }
+}
+
+fn parse_array(
+    object: &Map<String, Value>,
+    path: &str,
+    keys: &impl Fn(&[&str]) -> Result<(), JsonSchemaError>,
+) -> Result<SchemaShape, JsonSchemaError> {
+    let error = |reason| JsonSchemaError::at(path, reason);
+    if let Some(items) = object.get("prefixItems") {
+        keys(&["type", "prefixItems", "minItems", "maxItems"])?;
+        let items = items
+            .as_array()
+            .filter(|items| !items.is_empty())
+            .ok_or_else(|| error(JsonSchemaErrorReason::Tuple))?;
+        let length = u64::try_from(items.len()).expect("tuple length fits");
+        if object
+            .get("minItems")
+            .map(|value| integer(value, path))
+            .transpose()?
+            != Some(length)
+            || object
+                .get("maxItems")
+                .map(|value| integer(value, path))
+                .transpose()?
+                != Some(length)
+        {
+            return Err(error(JsonSchemaErrorReason::Tuple));
+        }
+        let items = items
+            .iter()
+            .enumerate()
+            .map(|(index, item)| {
+                let item_path = format!("{path}/prefixItems/{index}");
+                item.as_object()
+                    .ok_or_else(|| {
+                        JsonSchemaError::at(&item_path, JsonSchemaErrorReason::NotAnObject)
+                    })
+                    .and_then(|item| parse_node(item, &item_path))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        return Ok(SchemaShape::Tuple { items });
+    }
+    let items = object
+        .get("items")
+        .and_then(Value::as_object)
+        .ok_or_else(|| error(JsonSchemaErrorReason::InvalidKeyword("items".to_owned())))?;
+    let value = parse_node(items, &format!("{path}/items"))?;
+    if let Some(membership) = object.get(collections::MEMBERSHIP_KEY) {
+        keys(&["type", "items", collections::MEMBERSHIP_KEY])?;
+        let membership = collections::read_membership(
+            membership,
+            &format!("{path}/{}", collections::MEMBERSHIP_KEY),
+        )?;
+        return Ok(SchemaShape::Set {
+            value: Box::new(value),
+            membership,
+        });
+    }
+    keys(&["type", "items", "minItems", "maxItems"])?;
+    match (object.get("minItems"), object.get("maxItems")) {
+        (None, None) => Ok(if value == SchemaShape::U8 {
+            SchemaShape::Bytes
+        } else {
+            SchemaShape::Sequence {
+                value: Box::new(value),
+            }
+        }),
+        (Some(minimum), Some(maximum)) => {
+            let length = integer(minimum, path)?;
+            if integer(maximum, path)? != length {
+                return Err(error(JsonSchemaErrorReason::ArrayLength));
+            }
+            let length =
+                usize::try_from(length).map_err(|_| error(JsonSchemaErrorReason::ArrayLength))?;
+            Ok(SchemaShape::Array {
+                value: Box::new(value),
+                length,
+            })
+        }
+        _ => Err(error(JsonSchemaErrorReason::ArrayLength)),
+    }
+}
+
+fn parse_object(
+    object: &Map<String, Value>,
+    path: &str,
+    keys: &impl Fn(&[&str]) -> Result<(), JsonSchemaError>,
+) -> Result<SchemaShape, JsonSchemaError> {
+    if let Some(Value::Object(value)) = object.get("additionalProperties") {
+        keys(&["type", "additionalProperties"])?;
+        return Ok(SchemaShape::Map {
+            value: Box::new(parse_node(value, &format!("{path}/additionalProperties"))?),
+        });
+    }
+    keys(&["type", "properties", "required", "additionalProperties"])?;
+    Ok(SchemaShape::Record {
+        fields: parse_fields(object, path)?,
+    })
 }
 
 fn parse_fields(
@@ -202,8 +277,26 @@ fn parse_fields(
         .get("required")
         .and_then(Value::as_array)
         .ok_or_else(|| error(JsonSchemaErrorReason::Required))?;
+    let required_names = required
+        .iter()
+        .map(|name| {
+            name.as_str()
+                .ok_or_else(|| error(JsonSchemaErrorReason::Required))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    reject_duplicate_names(
+        required_names.iter().copied(),
+        path,
+        JsonSchemaErrorReason::Required,
+    )?;
+    if required_names
+        .iter()
+        .any(|name| !properties.contains_key(*name))
+    {
+        return Err(error(JsonSchemaErrorReason::Required));
+    }
+    let required_names = required_names.into_iter().collect::<BTreeSet<_>>();
     let mut fields = Vec::with_capacity(properties.len());
-    let mut expected_required = Vec::new();
     for (name, property) in properties {
         let property = property.as_object().ok_or_else(|| {
             JsonSchemaError::at(
@@ -212,18 +305,19 @@ fn parse_fields(
             )
         })?;
         let schema = parse_node(property, &format!("{path}/properties/{name}"))?;
-        let presence = presence_of(&schema);
-        if presence == FieldPresence::Required {
-            expected_required.push(Value::String(name.clone()));
+        let presence = if required_names.contains(name.as_str()) {
+            FieldPresence::Required
+        } else {
+            FieldPresence::Optional
+        };
+        if presence == FieldPresence::Optional && !matches!(schema, SchemaShape::Option { .. }) {
+            return Err(error(JsonSchemaErrorReason::Required));
         }
         fields.push(SchemaField {
             name: name.clone(),
             presence,
             schema,
         });
-    }
-    if required != &expected_required {
-        return Err(error(JsonSchemaErrorReason::Required));
     }
     Ok(fields)
 }
@@ -264,61 +358,12 @@ fn parse_variant(entry: &Value, path: &str) -> Result<SchemaVariant, JsonSchemaE
     let payload = payload
         .as_object()
         .ok_or_else(|| JsonSchemaError::at(&payload_path, JsonSchemaErrorReason::NotAnObject))?;
-    let shape = if let Some(items) = payload.get("prefixItems") {
-        for keyword in payload.keys() {
-            if !["type", "prefixItems", "minItems", "maxItems"].contains(&keyword.as_str()) {
-                return Err(JsonSchemaError::at(
-                    &payload_path,
-                    JsonSchemaErrorReason::UnknownKeyword(keyword.clone()),
-                ));
-            }
-        }
-        let items = items
-            .as_array()
-            .ok_or_else(|| JsonSchemaError::at(&payload_path, JsonSchemaErrorReason::Tuple))?;
-        if payload.get("type") != Some(&Value::String("array".to_owned())) || items.len() < 2 {
-            return Err(JsonSchemaError::at(
-                &payload_path,
-                JsonSchemaErrorReason::Tuple,
-            ));
-        }
-        let length = u64::try_from(items.len()).expect("tuple length fits");
-        if payload
-            .get("minItems")
-            .map(|value| integer(value, &payload_path))
-            .transpose()?
-            != Some(length)
-            || payload
-                .get("maxItems")
-                .map(|value| integer(value, &payload_path))
-                .transpose()?
-                != Some(length)
-        {
-            return Err(JsonSchemaError::at(
-                &payload_path,
-                JsonSchemaErrorReason::Tuple,
-            ));
-        }
-        let items = items
-            .iter()
-            .enumerate()
-            .map(|(index, item)| {
-                let item_path = format!("{payload_path}/prefixItems/{index}");
-                item.as_object()
-                    .ok_or_else(|| {
-                        JsonSchemaError::at(&item_path, JsonSchemaErrorReason::NotAnObject)
-                    })
-                    .and_then(|item| parse_node(item, &item_path))
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-        SchemaVariantShape::Tuple { items }
-    } else {
-        match parse_node(payload, &payload_path)? {
-            SchemaShape::Record { fields } => SchemaVariantShape::Record { fields },
-            schema => SchemaVariantShape::Newtype {
-                schema: Box::new(schema),
-            },
-        }
+    let shape = match parse_node(payload, &payload_path)? {
+        SchemaShape::Record { fields } => SchemaVariantShape::Record { fields },
+        SchemaShape::Tuple { items } => SchemaVariantShape::Tuple { items },
+        schema => SchemaVariantShape::Newtype {
+            schema: Box::new(schema),
+        },
     };
     Ok(SchemaVariant {
         name: name.clone(),

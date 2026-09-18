@@ -60,6 +60,26 @@ impl<'de> Deserializer<'de> for BufferedValue {
     deserialize_integer!(deserialize_u32);
     deserialize_integer!(deserialize_u64);
 
+    fn deserialize_f32<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
+        match self.value {
+            Content::Scalar(value) => value.deserialize_f32(visitor),
+            // Preserve JSON text until the requested width is known. Parsing
+            // through f64 first can double-round an otherwise exact f32 input.
+            Content::Map(fields) if self.human_readable => number(fields)?.deserialize_f32(visitor),
+            Content::Float(value) => visitor.visit_f32(value as f32),
+            _ => self.deserialize_any(visitor),
+        }
+    }
+
+    fn deserialize_f64<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
+        match self.value {
+            Content::Scalar(value) => value.deserialize_f64(visitor),
+            Content::Map(fields) if self.human_readable => number(fields)?.deserialize_f64(visitor),
+            Content::Float(value) => visitor.visit_f64(value),
+            _ => self.deserialize_any(visitor),
+        }
+    }
+
     fn deserialize_i128<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
         match self.value {
             Content::Scalar(value) => value.deserialize_i128(visitor),
@@ -153,7 +173,7 @@ impl<'de> Deserializer<'de> for BufferedValue {
     }
 
     serde::forward_to_deserialize_any! {
-        bool f32 f64 char str string bytes byte_buf unit unit_struct
+        bool char str string bytes byte_buf unit unit_struct
         tuple_struct map identifier ignored_any
     }
 }

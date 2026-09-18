@@ -316,7 +316,18 @@ fn copy_family(vendor: &Path) {
     )
     .expect("root TOML");
     let mut dependencies = Table::new();
-    for name in ["serde", "serde_json", "schemars", "thiserror", "sha2"] {
+    for name in [
+        "serde",
+        "serde_json",
+        "schemars",
+        "thiserror",
+        "sha2",
+        "typed_floats",
+        "uuid",
+        "rust_decimal",
+        "chrono",
+        "time",
+    ] {
         dependencies.insert(
             name.into(),
             manifest["workspace"]["dependencies"][name].clone(),

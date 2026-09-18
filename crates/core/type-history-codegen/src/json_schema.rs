@@ -5,14 +5,11 @@
 //! Development tooling compares these documents under each stable name and
 //! version. Type History never validates business values against a schema document.
 
-use std::{
-    collections::BTreeMap,
-    fmt::{Display, Formatter, Result as FmtResult},
-};
+use std::fmt::{Display, Formatter, Result as FmtResult};
 
 use serde::{de::Error as _, Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
-use type_history_core::resolved::{FieldPresence, SchemaField, SchemaShape};
+use type_history_core::resolved::{SchemaField, SchemaShape};
 
 use crate::canonical::{self, CanonicalJsonError};
 
@@ -105,26 +102,10 @@ impl<'de> Deserialize<'de> for JsonSchemaDocument {
     }
 }
 
-/// Build a record shape from named field shapes, assigning option presence.
-pub fn record(fields: BTreeMap<String, SchemaShape>) -> SchemaShape {
-    SchemaShape::Record {
-        fields: fields
-            .into_iter()
-            .map(|(name, schema)| SchemaField {
-                presence: presence_of(&schema),
-                name,
-                schema,
-            })
-            .collect(),
-    }
-}
-
-fn presence_of(schema: &SchemaShape) -> FieldPresence {
-    if matches!(schema, SchemaShape::Option { .. }) {
-        FieldPresence::Optional
-    } else {
-        FieldPresence::Required
-    }
+/// Build a record shape from fields carrying their explicit omission contract.
+pub fn record(mut fields: Vec<SchemaField>) -> SchemaShape {
+    fields.sort_by(|left, right| left.name.cmp(&right.name));
+    SchemaShape::Record { fields }
 }
 
 /// A document is outside the normalized Type History JSON Schema subset.
@@ -187,7 +168,7 @@ pub enum JsonSchemaErrorReason {
     #[error("numbers must be integers")]
     Number,
     /// `type` named something outside the subset.
-    #[error("`type` must name one of boolean, string, integer, array, or object")]
+    #[error("`type` must name one of boolean, string, number, integer, array, or object")]
     Type,
     /// An integer lacked a width format or named an unknown one.
     #[error("integers require a `format` naming one of the eleven Rust integer widths")]
@@ -201,8 +182,8 @@ pub enum JsonSchemaErrorReason {
     /// An object lacked `additionalProperties: false`.
     #[error("objects require `additionalProperties: false`")]
     AdditionalProperties,
-    /// `required` disagreed with the nullable properties.
-    #[error("`required` must list exactly the properties that do not admit `null`")]
+    /// `required` did not name a unique subset of the record properties.
+    #[error("`required` must contain unique string names drawn from `properties`")]
     Required,
     /// An optional node was not exactly a value or `null` alternative.
     #[error("`anyOf` must contain exactly one value schema and one `null` schema")]
@@ -213,9 +194,18 @@ pub enum JsonSchemaErrorReason {
     /// A `oneOf` entry did not describe one variant.
     #[error("each `oneOf` entry must be a unit `const` or one externally tagged variant")]
     Variant,
-    /// A tuple variant carried fewer than two items.
-    #[error("tuple variants require at least two `prefixItems`")]
+    /// A tuple carried no items or inconsistent length constraints.
+    #[error("tuples require at least one `prefixItems` entry and exact length constraints")]
     Tuple,
+    /// A set membership declaration was malformed.
+    #[error("`x-type-history-membership` must be a strict tree of nonempty IDs")]
+    Membership,
+    /// A profile ID was unknown or used the wrong primitive representation.
+    #[error("`x-type-history-profile` must be recognized and match its declared JSON type")]
+    Profile,
+    /// Generic JSON Schema uniqueness does not certify Type History membership.
+    #[error("`uniqueItems` is not a certified Type History set membership declaration")]
+    UncertifiedSet,
     /// Serialization or canonicalization failed.
     #[error("canonical JSON serialization failed")]
     Canonical,
@@ -252,6 +242,9 @@ fn read_identity(value: &Value) -> Result<String, JsonSchemaError> {
 
 mod normalize;
 use normalize::normalize;
+
+mod collections;
+mod profiles;
 
 // ---------------------------------------------------------------------------
 // Writer

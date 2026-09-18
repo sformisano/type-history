@@ -24,6 +24,8 @@ mod enums;
 mod feature_selection;
 #[path = "standalone/field_diagnostics.rs"]
 mod field_diagnostics;
+#[path = "standalone/field_support.rs"]
+mod field_support;
 #[path = "standalone/generated_hygiene.rs"]
 mod generated_hygiene;
 #[path = "standalone/hygiene.rs"]

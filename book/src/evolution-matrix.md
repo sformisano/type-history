@@ -49,7 +49,7 @@ whether a test has run.
 | M27 | Wrong callback output or borrowed output | R | Output must be owned exact destination field type |
 | M28 | Callback error lacks required traits | R | Errors require `Error + Send + Sync + 'static` |
 | M29 | Non-Copy field | S | Unchanged fields move; backfill functions clone borrowed fields when ownership is needed |
-| M30 | Field lacks a trait needed by the generated struct | R | Retained fields require `Clone`, `PartialEq`, and `Debug` |
+| M30 | Field lacks a trait needed by the generated struct | S/R | Retained fields always require `Clone`. They require `PartialEq` or `Debug` only when that per-history derive remains enabled |
 | M31 | Consume one old value to produce several fields without cloning | U | Callbacks borrow the previous record. There is no callback that consumes it once and returns the whole next record; helpers may clone explicitly |
 | M32 | Several outputs require one shared side effect | U | Write deterministic callbacks without side effects. Type History provides no shared callback cache, external transaction, or exactly-once guarantee |
 
@@ -82,7 +82,7 @@ whether a test has run.
 | M55 | self/super type, callback, expression, array length | S | Original invocation module and spans retained |
 | M56 | Author field names that resemble helpers (`previous`, `value`, `json`, or `__type_history_*`) | S | Generated identifiers hygienic; field names cannot shadow transition input/local bindings |
 | M57 | Unsupported field attributes | R | Accept history, documentation, and lint attributes; reject other attributes |
-| M58 | Per-version derives or Serde customization | U/R | All generated versions use the history's selected traits and exact historical decoders; unsupported attributes fail |
+| M58 | Per-version derives or Serde customization | U/R | Derive options apply to the complete history. Per-version traits and Serde customization remain unsupported |
 | M59 | Asynchronous or capturing-closure callback | R | Ordinary synchronous function path required |
 
 ## Freeze, draft, decode, and delivery combinations
@@ -93,7 +93,7 @@ whether a test has run.
 | M61 | Change a field's serialized shape without a new update record | R | The reconstructed historical schema changes, so the generated compile-time check fails |
 | M62 | Delete historical field or a previous_type record that changes reconstructed wire shape | R | Frozen wire shape/inventory mismatch |
 | M63 | Reorder fields or rename equivalent alias | S | Same canonical wire shape; callback order follows new source order |
-| M64 | Edit a callback, remove a same-type update, or substitute a type with the same schema | S | The ledger protects schemas and retained versions; remaining field boundaries must still preserve the latest version. Rust checks types, but author tests must check conversion meaning |
+| M64 | Edit a callback, remove a same-type update, or substitute a type with the same storage contract | S/R | A removed update is valid only when remaining field boundaries preserve the latest version. Exact equivalence includes representation, presence, profile, and membership. The ledger does not certify callback meaning or custom `Eq`, `Hash`, `Ord`, or serialization behavior |
 | M65 | Discard a latest draft update | S | Remove all draft boundaries/fields, restore prior declared types and adapt current callers; infer the prior head |
 | M66 | Incomplete discard leaves draft annotation or wire-changing declared type | S/R | A remaining draft boundary keeps the draft alive and may pass development checks; removing its update but keeping a changed prior wire type fails frozen checks |
 | M67 | Draft-only history declaration deleted | S | No frozen inventory reservation; dev bytes remain disposable |
@@ -132,6 +132,18 @@ whether a test has run.
 | M135 | Independently versioned enum or variant history attribute | R | `#[versioned]` accepts concrete named-field structs; field attributes describe enum changes |
 | M136 | Released baseline compared with edited source and ledger | S | `check --released-baseline FILE` requires a distinct frozen ledger and preserves all released entries |
 | M137 | Machine-readable schema differences | S | `check --format json` reports stable codes, complete nested paths, expected/actual values, and attributable locations while compiler enforcement stays active |
+| M139 | String-keyed `HashMap` and `BTreeMap` substitution | S | Equal value contracts are compatible. Hasher and iteration order do not enter the storage contract |
+| M140 | Map with a non-`String` key | R | Persisted maps require exact `String` keys |
+| M141 | `HashSet` and `BTreeSet` substitution | S/R | Element encoding and declared membership must match. Actual Rust `Eq`/`Hash`/`Ord` bounds still apply |
+| M142 | Sequence-to-set or changed custom membership | R | An unchanged version rejects the change. Add a new version and explicit migration |
+| M143 | Custom set element derives only `Schema` | R | Implement `SetMembership` with a stable nonempty ID. The declaration is trusted and no duplicate scan occurs |
+| M144 | Bare tuple with 1–16 elements | S | Order and arity are durable. Rust provides standard `Debug` and `PartialEq` only through arity 12 |
+| M145 | Nonempty supporting tuple struct | S | One field keeps newtype encoding. Multiple fields keep tuple order. Unit and empty tuple structs remain unsupported |
+| M146 | `Box<T>`, `Rc<T>`, or `Arc<T>` field | S/R | Values persist by value. `Rc` and `Arc` require `rc`. Allocation identity and sharing are not preserved; cycles are unsupported |
+| M147 | Required newtype wrapping `Option<T>` | S | The named field rejects omission and accepts explicit null. `Option<T>` and pointer-wrapped options allow omission |
+| M148 | Finite float or logical adapter profile change | R | Width, profile, and admitted domain are contract identity. Change them through a new version |
+| M149 | Checked UUID, decimal, or temporal adapter | S | Enable its feature and construct through `TryFrom`. Native Serde features cannot change its owned encoding |
+| M150 | Tuple arity 13–16 in a history | S | Set `derive_debug = false` and `derive_partial_eq = false`. The choices apply to every retained version; `Clone` remains required |
 
 ## Verification and limits
 
@@ -142,8 +154,9 @@ Real standalone compiler and lifecycle cases live in
 the quick start progression and reference examples. The [invoice reference application](https://github.com/sformisano/type-history/blob/main/crates/examples/invoice-history/README.md)
 demonstrates a current consumer with its frozen ledger.
 
-Generated records require `Clone`, `PartialEq`, and `Debug` for their fields.
-Generated `Debug` implementations delegate to each field's `Debug` implementation.
+Generated records always require `Clone` for their fields. `Debug` and
+`PartialEq` default to enabled and delegate to native field implementations.
+Per-history options can disable either trait for every retained version.
 Backfill expressions and functions run in field declaration order.
 Functions borrow the intact predecessor before unchanged fields move into the destination.
 A callback may explicitly clone a value; transitions add no cloning pass.

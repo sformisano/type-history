@@ -1,5 +1,7 @@
 //! Retain a payload until its envelope has supplied and validated the version.
 
+#[cfg(all(test, feature = "typed-floats"))]
+mod float_tests;
 mod replay;
 #[cfg(test)]
 mod tests;

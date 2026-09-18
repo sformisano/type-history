@@ -63,6 +63,25 @@ pub fn record_wire_type<'a>(
     Ok(quote!(#support::Record<#fields>))
 }
 
+/// Build the transparent wire marker for a supporting one-field tuple struct.
+pub fn newtype_wire_type(ty: &Type, support: &TokenStream) -> TokenStream {
+    let value = type_reference(ty, support);
+    quote!(#support::Newtype<#value>)
+}
+
+/// Build an ordered tuple wire marker from its concrete field types.
+pub fn tuple_wire_type<'a>(
+    types: impl IntoIterator<Item = &'a Type>,
+    support: &TokenStream,
+) -> TokenStream {
+    let items = types
+        .into_iter()
+        .map(|ty| type_reference(ty, support))
+        .collect();
+    let items = list_type(items, support);
+    quote!(#support::Tuple<#items>)
+}
+
 fn record_fields_type<'a>(
     fields: impl IntoIterator<Item = (&'a Ident, &'a Type)>,
     support: &TokenStream,

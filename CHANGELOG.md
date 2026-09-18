@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add stable field contracts for string-keyed maps, declared-membership sets, tuples through arity 16, supporting tuple structs, and owned wrappers.
+- Add optional finite-float, UUID, exact-decimal, Chrono, Time, `Rc`, and `Arc` integrations with checked conversions and owned encodings.
+- Add per-history `derive_debug` and `derive_partial_eq` options. Both default to enabled and can be disabled for long tuple fields.
+- Compare field presence, profiles, tuple structure, and set membership during frozen compatibility checks. Incompatible changes require explicit migrations.
 - Point unsupported persisted field errors at the field type and explain the missing schema support without suggesting private trait implementations.
 
 ## 0.1.0

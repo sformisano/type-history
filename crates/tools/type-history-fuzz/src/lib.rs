@@ -187,6 +187,11 @@ mod tests {
         assert!(matches!(shape, SchemaShape::Enum { variants } if variants.len() == 4));
         schema_json(schema);
 
+        let fields = include_bytes!("../seeds/schema_json/field-contracts.json");
+        let shape = serde_json::from_slice::<SchemaShape>(fields).unwrap();
+        assert!(matches!(shape, SchemaShape::Record { fields } if fields.len() == 3));
+        schema_json(fields);
+
         let duplicate = include_bytes!("../seeds/invoice_json/duplicate.json");
         assert!(serde_json::from_slice::<Versioned<Invoice>>(duplicate).is_err());
         assert!(rmp_serde::from_slice::<Versioned<Invoice>>(&[0xc1]).is_err());

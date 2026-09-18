@@ -27,6 +27,10 @@ pub enum DifferenceCode {
     ShapeKindChanged,
     /// A fixed array's element count changed.
     ArrayLengthChanged,
+    /// A set's declared element equality changed.
+    MembershipChanged,
+    /// A logical storage profile changed.
+    ProfileChanged,
     /// A previously present variant is absent.
     VariantMissing,
     /// A new variant appears in a frozen enum.
@@ -46,6 +50,8 @@ impl DifferenceCode {
             Self::FieldPresenceChanged => "field_presence_changed",
             Self::ShapeKindChanged => "shape_kind_changed",
             Self::ArrayLengthChanged => "array_length_changed",
+            Self::MembershipChanged => "membership_changed",
+            Self::ProfileChanged => "profile_changed",
             Self::VariantMissing => "variant_missing",
             Self::VariantAdded => "variant_added",
             Self::VariantKindChanged => "variant_kind_changed",
@@ -75,6 +81,10 @@ pub enum PathSegment {
     SequenceItem,
     /// An element of a fixed-length array.
     ArrayItem,
+    /// The value contract of a string-keyed map.
+    MapValue,
+    /// The element contract of a set.
+    SetItem,
     /// A named enum variant.
     Variant {
         /// Durable variant name.
@@ -119,6 +129,8 @@ pub fn readable_path(path: &[PathSegment]) -> String {
             PathSegment::OptionValue => rendered.push_str(".option_value"),
             PathSegment::SequenceItem => rendered.push_str(".sequence_item"),
             PathSegment::ArrayItem => rendered.push_str(".array_item"),
+            PathSegment::MapValue => rendered.push_str(".map_value"),
+            PathSegment::SetItem => rendered.push_str(".set_item"),
             PathSegment::TupleItem { index } => rendered.push_str(&format!("[{index}]")),
             PathSegment::VariantValue => rendered.push_str(".variant_value"),
         }

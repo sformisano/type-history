@@ -33,25 +33,30 @@ jobs:
       - name: Clippy
         env:
           CARGO_TARGET_DIR: ${{ github.workspace }}/target/clippy
-        run: cargo clippy --workspace --all-targets --locked -- -Dwarnings
+        run: cargo clippy --workspace --all-targets --all-features --locked -- -Dwarnings
+
+      - name: Default feature library tests
+        env:
+          TMPDIR: ${{ runner.temp }}
+        run: cargo test --workspace --lib --locked
 
       - name: Unit and integration tests
         env:
           TMPDIR: ${{ runner.temp }}
-        run: cargo test --workspace --all-targets --locked
+        run: cargo test --workspace --all-targets --all-features --locked
 
       - name: Documentation tests
         env:
           TMPDIR: ${{ runner.temp }}
-        run: cargo test --workspace --doc --locked
+        run: cargo test --workspace --doc --all-features --locked
 
       - name: Public documentation
         env:
           RUSTDOCFLAGS: -Dwarnings
-        run: cargo doc --workspace --no-deps --locked
+        run: cargo doc --workspace --no-deps --all-features --locked
 
       - name: Release build
-        run: cargo build --workspace --release --locked
+        run: cargo build --workspace --release --all-features --locked
 
       - name: Reference application
         run: cargo run -p invoice-history --release --locked

@@ -1,10 +1,11 @@
 use super::normalize::normalize;
-use super::{parse, presence_of, record, JsonSchemaDocument, JsonSchemaErrorReason};
+use super::{parse, record, JsonSchemaDocument, JsonSchemaErrorReason};
 use crate::canonical;
 use serde_json::{json, Value};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 use type_history_core::resolved::{
-    FieldPresence, SchemaField, SchemaShape, SchemaVariant, SchemaVariantShape,
+    FieldPresence, Membership, SchemaField, SchemaShape, SchemaVariant, SchemaVariantShape,
+    StorageProfile,
 };
 
 const IDENTITY: &str = "urn:typehistory:schema:billing.account.record";
@@ -12,8 +13,18 @@ const IDENTITY: &str = "urn:typehistory:schema:billing.account.record";
 fn field(name: &str, schema: SchemaShape) -> SchemaField {
     SchemaField {
         name: name.to_owned(),
-        presence: presence_of(&schema),
+        presence: FieldPresence::Required,
         schema,
+    }
+}
+
+fn optional_field(name: &str, value: SchemaShape) -> SchemaField {
+    SchemaField {
+        name: name.to_owned(),
+        presence: FieldPresence::Optional,
+        schema: SchemaShape::Option {
+            value: Box::new(value),
+        },
     }
 }
 
@@ -33,12 +44,7 @@ fn every_node_kind() -> SchemaShape {
             field("u64", SchemaShape::U64),
             field("u128", SchemaShape::U128),
             field("bytes", SchemaShape::Bytes),
-            field(
-                "optional",
-                SchemaShape::Option {
-                    value: Box::new(SchemaShape::U64),
-                },
-            ),
+            optional_field("optional", SchemaShape::U64),
             field(
                 "sequence",
                 SchemaShape::Sequence {
@@ -53,13 +59,36 @@ fn every_node_kind() -> SchemaShape {
                 },
             ),
             field(
+                "map",
+                SchemaShape::Map {
+                    value: Box::new(SchemaShape::String),
+                },
+            ),
+            field(
+                "set",
+                SchemaShape::Set {
+                    value: Box::new(SchemaShape::U8),
+                    membership: Membership {
+                        id: "example:exact:v1".to_owned(),
+                        parameters: vec![Membership {
+                            id: "example:nested:v1".to_owned(),
+                            parameters: vec![],
+                        }],
+                    },
+                },
+            ),
+            field(
+                "tuple",
+                SchemaShape::Tuple {
+                    items: vec![SchemaShape::Bool],
+                },
+            ),
+            field(
                 "nested",
                 SchemaShape::Record {
-                    fields: vec![field(
+                    fields: vec![optional_field(
                         "inner",
-                        SchemaShape::Option {
-                            value: Box::new(SchemaShape::Record { fields: vec![] }),
-                        },
+                        SchemaShape::Record { fields: vec![] },
                     )],
                 },
             ),
@@ -88,6 +117,25 @@ fn every_node_kind() -> SchemaShape {
                 },
             ),
             field("choice", choice()),
+            field(
+                "profiles",
+                SchemaShape::Tuple {
+                    items: [
+                        StorageProfile::Finite32,
+                        StorageProfile::Finite64,
+                        StorageProfile::UuidText,
+                        StorageProfile::DecimalText,
+                        StorageProfile::Date,
+                        StorageProfile::LocalTime,
+                        StorageProfile::LocalDateTime,
+                        StorageProfile::UtcInstant,
+                        StorageProfile::OffsetDateTime,
+                    ]
+                    .into_iter()
+                    .map(|profile| SchemaShape::Profile { profile })
+                    .collect(),
+                },
+            ),
         ],
     }
 }
@@ -112,14 +160,15 @@ fn choice() -> SchemaShape {
                 },
             },
             SchemaVariant {
+                name: "Single".to_owned(),
+                shape: SchemaVariantShape::Tuple {
+                    items: vec![SchemaShape::Bool],
+                },
+            },
+            SchemaVariant {
                 name: "Named".to_owned(),
                 shape: SchemaVariantShape::Record {
-                    fields: vec![field(
-                        "value",
-                        SchemaShape::Option {
-                            value: Box::new(SchemaShape::String),
-                        },
-                    )],
+                    fields: vec![optional_field("value", SchemaShape::String)],
                 },
             },
         ],
@@ -148,13 +197,13 @@ fn written_documents_are_fixed_points_of_normalization() {
 
 #[test]
 fn reference_state_document_matches_the_agreed_form() {
-    let shape = record(BTreeMap::from([
-        ("country_code".to_owned(), SchemaShape::String),
-        ("credited_funds_minor".to_owned(), SchemaShape::U128),
-        ("currency_code".to_owned(), SchemaShape::String),
-        ("debited_funds_minor".to_owned(), SchemaShape::U128),
-        ("owner_display_name".to_owned(), SchemaShape::String),
-    ]));
+    let shape = record(vec![
+        field("country_code", SchemaShape::String),
+        field("credited_funds_minor", SchemaShape::U128),
+        field("currency_code", SchemaShape::String),
+        field("debited_funds_minor", SchemaShape::U128),
+        field("owner_display_name", SchemaShape::String),
+    ]);
     let document = JsonSchemaDocument::from_shape(&shape, IDENTITY);
     assert_eq!(
         document.as_value(),
@@ -213,7 +262,7 @@ fn normalization_rewrites_every_schemars_optional_encoding_to_one_wrapper() {
                 "wrapped": optional(json!({"oneOf": [{"const": "Unit"}]})),
                 "present": {"type": "string"}
             },
-            "required": ["present"]
+            "required": ["constant", "listed", "present", "typed", "wrapped"]
         })
     );
     let shape = document.shape();
@@ -226,11 +275,11 @@ fn normalization_rewrites_every_schemars_optional_encoding_to_one_wrapper() {
             .map(|field| (field.name.as_str(), field.presence))
             .collect::<Vec<_>>(),
         vec![
-            ("constant", FieldPresence::Optional),
-            ("listed", FieldPresence::Optional),
+            ("constant", FieldPresence::Required),
+            ("listed", FieldPresence::Required),
             ("present", FieldPresence::Required),
-            ("typed", FieldPresence::Optional),
-            ("wrapped", FieldPresence::Optional),
+            ("typed", FieldPresence::Required),
+            ("wrapped", FieldPresence::Required),
         ]
     );
 }
@@ -363,13 +412,24 @@ fn distinct_shapes_produce_distinct_canonical_bytes() {
                 },
             ],
         },
-        record(BTreeMap::from([("a".to_owned(), SchemaShape::String)])),
-        record(BTreeMap::from([(
-            "a".to_owned(),
-            SchemaShape::Option {
-                value: Box::new(SchemaShape::String),
+        record(vec![field("a", SchemaShape::String)]),
+        record(vec![optional_field("a", SchemaShape::String)]),
+        SchemaShape::Map {
+            value: Box::new(SchemaShape::String),
+        },
+        SchemaShape::Set {
+            value: Box::new(SchemaShape::U8),
+            membership: Membership {
+                id: "example:exact:v1".to_owned(),
+                parameters: vec![],
             },
-        )])),
+        },
+        SchemaShape::Tuple {
+            items: vec![SchemaShape::String],
+        },
+        SchemaShape::Profile {
+            profile: StorageProfile::UuidText,
+        },
     ];
     let mut seen = BTreeSet::new();
     for shape in &shapes {
@@ -421,7 +481,38 @@ fn loader_rejects_documents_outside_the_subset() {
             ),
             JsonSchemaErrorReason::ArrayLength,
         ),
-        (root(json!({"type": "number"})), JsonSchemaErrorReason::Type),
+        (
+            root(json!({"type": "number"})),
+            JsonSchemaErrorReason::Profile,
+        ),
+        (
+            root(json!({"type": "array", "items": {"type": "string"}, "uniqueItems": true})),
+            JsonSchemaErrorReason::UncertifiedSet,
+        ),
+        (
+            root(
+                json!({"type": "array", "items": {"type": "string"}, "x-type-history-membership": {"id": "", "parameters": []}}),
+            ),
+            JsonSchemaErrorReason::Membership,
+        ),
+        (
+            root(json!({"type": "string", "x-type-history-profile": "type-history:unknown:v1"})),
+            JsonSchemaErrorReason::Profile,
+        ),
+        (
+            root(json!({"type": "number", "x-type-history-profile": "type-history:uuid-text:v1"})),
+            JsonSchemaErrorReason::Profile,
+        ),
+        (
+            root(
+                json!({"type": "object", "properties": {}, "required": [], "additionalProperties": {"type": "string"}}),
+            ),
+            JsonSchemaErrorReason::UnknownKeyword("properties".to_owned()),
+        ),
+        (
+            root(json!({"type": "array", "prefixItems": [], "minItems": 0, "maxItems": 0})),
+            JsonSchemaErrorReason::Tuple,
+        ),
         (
             root(json!({"oneOf": [{"type": "string"}]})),
             JsonSchemaErrorReason::Variant,
@@ -460,6 +551,33 @@ fn loader_rejects_documents_outside_the_subset() {
         .reason,
         JsonSchemaErrorReason::Identity
     );
+}
+
+#[test]
+fn required_nullable_and_optional_nullable_fields_remain_distinct() {
+    let nullable = SchemaShape::Option {
+        value: Box::new(SchemaShape::String),
+    };
+    let required = record(vec![SchemaField {
+        name: "value".to_owned(),
+        presence: FieldPresence::Required,
+        schema: nullable.clone(),
+    }]);
+    let optional = record(vec![SchemaField {
+        name: "value".to_owned(),
+        presence: FieldPresence::Optional,
+        schema: nullable,
+    }]);
+    let required = JsonSchemaDocument::from_shape(&required, IDENTITY);
+    let optional = JsonSchemaDocument::from_shape(&optional, IDENTITY);
+    assert_eq!(required.as_value()["required"], json!(["value"]));
+    assert_eq!(optional.as_value()["required"], json!([]));
+    assert_ne!(
+        required.canonical_bytes().unwrap(),
+        optional.canonical_bytes().unwrap()
+    );
+    assert_eq!(required.shape().clone().normalized(), required.shape());
+    assert_eq!(optional.shape().clone().normalized(), optional.shape());
 }
 
 #[test]

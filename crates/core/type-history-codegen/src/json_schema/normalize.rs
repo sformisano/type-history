@@ -69,6 +69,19 @@ fn normalize_node(
     if let Some(items) = object.get_mut("items") {
         normalize_node(items, &format!("{path}/items"), NodeContext::Value)?;
     }
+    if object
+        .get("additionalProperties")
+        .is_some_and(Value::is_object)
+    {
+        let schema = object
+            .get_mut("additionalProperties")
+            .expect("checked additionalProperties");
+        normalize_node(
+            schema,
+            &format!("{path}/additionalProperties"),
+            NodeContext::Value,
+        )?;
+    }
     if let Some(Value::Array(items)) = object.get_mut("prefixItems") {
         for (index, item) in items.iter_mut().enumerate() {
             normalize_node(
@@ -99,27 +112,25 @@ fn normalize_node(
             normalize_node(entry, &format!("{path}/anyOf/{index}"), NodeContext::Value)?;
         }
     }
-    if context == NodeContext::Value
+    let is_record = context == NodeContext::Value
         && object.get("type") == Some(&Value::String("object".to_owned()))
-    {
-        let properties = match object
+        && !matches!(object.get("additionalProperties"), Some(Value::Object(_)));
+    if is_record {
+        match object
             .entry("properties")
             .or_insert_with(|| Value::Object(Map::new()))
         {
-            Value::Object(properties) => properties,
+            Value::Object(_) => {}
             _ => {
                 return Err(JsonSchemaError::at(
                     path,
                     JsonSchemaErrorReason::InvalidKeyword("properties".to_owned()),
                 ))
             }
-        };
-        let required = properties
-            .iter()
-            .filter(|(_, schema)| !is_optional_wrapper(schema))
-            .map(|(name, _)| Value::String(name.clone()))
-            .collect::<Vec<_>>();
-        object.insert("required".to_owned(), Value::Array(required));
+        }
+        object
+            .entry("required")
+            .or_insert_with(|| Value::Array(Vec::new()));
     }
     if let Some(Value::Array(required)) = object.get_mut("required") {
         sort_by_canonical_text(required)?;
@@ -188,11 +199,6 @@ pub(super) fn optional_wrapper(inner: Value) -> Value {
         Value::Array(vec![inner, Value::Object(null)]),
     );
     Value::Object(wrapper)
-}
-
-/// Whether a normalized node is the optional wrapper.
-fn is_optional_wrapper(value: &Value) -> bool {
-    optional_inner(value).is_some()
 }
 
 pub(super) fn optional_inner(value: &Value) -> Option<&Value> {

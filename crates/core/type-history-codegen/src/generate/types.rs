@@ -1,6 +1,6 @@
 //! Retained records, their current alias, and schema expressions.
 //!
-//! Records derive Clone, PartialEq, and field-wise Debug.
+//! Records derive Clone and the selected native PartialEq and Debug traits.
 
 use crate::{
     lint_attributes::{lint_attributes, scoped_field_type_for_owner},
@@ -18,6 +18,13 @@ pub(super) fn generate(context: &Context<'_>) -> Result<(TokenStream, Vec<Genera
     let mut declarations = Vec::new();
     let mut versions = Vec::new();
     let visibility = &context.input.visibility;
+    let mut derives = vec![quote!(::core::clone::Clone)];
+    if context.input.derives.partial_eq {
+        derives.push(quote!(::core::cmp::PartialEq));
+    }
+    if context.input.derives.debug {
+        derives.push(quote!(::core::fmt::Debug));
+    }
     for version in context.history.versions() {
         let name = context.payload(version.version);
         let mut field_aliases = Vec::new();
@@ -85,7 +92,7 @@ pub(super) fn generate(context: &Context<'_>) -> Result<(TokenStream, Vec<Genera
         declarations.push(quote! {
             #(#field_aliases)*
             #docs
-            #[derive(::core::clone::Clone, ::core::cmp::PartialEq, ::core::fmt::Debug)]
+            #[derive(#(#derives),*)]
             #visibility struct #name { #(#field_declarations),* }
             #schema_impl
             #codecs

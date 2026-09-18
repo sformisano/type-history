@@ -57,8 +57,22 @@ use type_history_codegen::{
 /// frozen stable name even when the Rust type or its module is renamed.
 ///
 /// The macro supplies the generated structs' traits; additional derives on the
-/// declaration are rejected. Generated records implement `Clone`, `PartialEq`,
-/// and field-wise `Debug`.
+/// declaration are rejected. Generated records always implement `Clone`.
+/// Standard `PartialEq` and field-wise `Debug` are enabled by default and keep
+/// each field's native behavior. Set `derive_partial_eq = false` or
+/// `derive_debug = false` to omit the respective trait on every retained version.
+/// These choices do not change schemas, stored values, or version numbers.
+///
+/// Tuples with 13 through 16 elements have supported schemas and codecs but lack
+/// native `Debug` and `PartialEq`. Disable both derives when such tuples occur
+/// anywhere in a history's retained field types, including aliases and containers:
+///
+/// ```rust,ignore
+/// #[versioned(stable_name = "example.long_tuple", derive_debug = false, derive_partial_eq = false)]
+/// pub struct Record {
+///     pub value: Tuple16Alias,
+/// }
+/// ```
 #[proc_macro_attribute]
 pub fn versioned(arguments: TokenStream, item: TokenStream) -> TokenStream {
     match expand(
@@ -70,7 +84,7 @@ pub fn versioned(arguments: TokenStream, item: TokenStream) -> TokenStream {
     }
 }
 
-/// Describe how a supporting record or enum is serialized.
+/// Describe how a supporting record, nonempty tuple struct, or enum is serialized.
 ///
 /// For example, a receipt's address record needs a schema so changes to its fields
 /// can be checked against the receipt's frozen versions. This derive supplies that
@@ -80,9 +94,12 @@ pub fn versioned(arguments: TokenStream, item: TokenStream) -> TokenStream {
 /// Container `#[serde(deny_unknown_fields)]` is supported for named records and
 /// externally tagged enums. Enum variants
 /// can be unit, newtype, tuple with at least two fields, or named-field variants.
+/// A one-field tuple struct has transparent newtype value encoding; multiple
+/// fields retain their positional order. This derive adds schema traits only.
 /// Other wire-shaping attributes, generics, empty enums, zero-field tuple variants,
-/// and tuple or unit struct declarations are rejected. Enums evolve as fields of
-/// their containing versioned structs; variants have no history attributes.
+/// empty tuple structs, and unit structs are rejected. Enums and tuple structs
+/// evolve as fields of their containing versioned structs, without their own
+/// history attributes.
 #[proc_macro_derive(Schema)]
 pub fn schema(item: TokenStream) -> TokenStream {
     match schema::expand(parse_macro_input!(item as DeriveInput)) {
@@ -198,7 +215,6 @@ fn expand(arguments: Arguments, item: ItemStruct) -> Result<Tokens> {
         .to_str()
         .ok_or_else(|| Error::new_spanned(&input.name, "history admission path must be UTF-8"))?;
     let version_binding = format_ident!("__type_history_version", span = Span::mixed_site());
-    let schema_binding = format_ident!("__type_history_schema", span = Span::mixed_site());
     Ok(quote! {
         const _: &::core::primitive::str = ::core::include_str!(#ledger_path);
         const _: &::core::primitive::str = ::core::include_str!(#admission_path);
@@ -223,8 +239,7 @@ fn expand(arguments: Arguments, item: ItemStruct) -> Result<Tokens> {
         #[cfg(all(test, type_history_schema_export))]
         #[test]
         fn #export() {
-            let #schema_binding = #facade::__private::serde_json::json!({"stable_name": #stable_name, "versions": [#(#schemas),*]});
-            ::std::println!("TYPE_HISTORY_SCHEMA_EXPORT_V1\t{}", #schema_binding);
+            ::std::println!("TYPE_HISTORY_SCHEMA_EXPORT_V1\t{}", #facade::__private::serde_json::json!({"stable_name": #stable_name, "versions": [#(#schemas),*]}));
         }
     })
 }

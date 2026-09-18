@@ -574,6 +574,27 @@ Services using the old crate continue receiving the same receipt events as befor
 If reporting calculates sales totals after subtracting refunds, it must support refunds before the shop enables them. Agree on that timing with the teams running the affected services.
 
 <!-- ANCHOR_END: journey -->
+
+## Persisted field contracts
+
+Histories remain named-field structs. Their fields can use supporting records,
+enums, nonempty tuple structs, and these recursive field families:
+
+- string-keyed `HashMap` and `BTreeMap`
+- declared-membership `HashSet` and `BTreeSet`
+- bare tuples with 1 through 16 elements
+- `Box`, plus `Rc` and `Arc` with the `rc` feature
+- checked adapters behind `typed-floats`, `uuid`, `rust-decimal`, `chrono`, and `time`
+
+Type History compares the complete storage contract. Float width, logical
+profile, set membership, field presence, tuple order, and tuple arity all
+participate. Change any of them through a new version and an explicit migration.
+
+The checked adapters own their JSON and named-field MessagePack encodings.
+Enabling native dependency Serde features does not change those encodings.
+See [field integration](https://github.com/sformisano/type-history/blob/main/book/src/integration.md#supported-field-contracts)
+for exact domains, feature flags, set declarations, and codec limits.
+
 ## Documentation
 
 - [The book](https://github.com/sformisano/type-history/blob/main/book/README.md) covers the generated types, field changes, conversions, freezing, and integrations.

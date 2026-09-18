@@ -1,7 +1,6 @@
 //! Rustc-resolved structural wire schemas used by generated histories and their frontends.
 //!
-//! The v1 language is deliberately closed. It has no map or set node, so maps
-//! and sets in record payloads fail trait selection. A nested
+//! The wire language tracks encoding, domain, membership, and field presence. A nested
 //! `Option<Option<T>>` also fails selection: the wire and the JSON Schema
 //! comparison document cannot distinguish `Some(None)` from `None`.
 //!
@@ -11,15 +10,25 @@
 #![allow(missing_docs)]
 
 mod constant;
+mod containers;
 mod json_schema;
+#[doc(hidden)]
+pub mod membership;
+mod nodes;
+#[doc(hidden)]
+pub mod profile;
 #[doc(hidden)]
 #[path = "resolved/diagnostic.rs"]
 pub mod schema_diagnostic;
 mod shape;
+mod tuples;
 pub use constant::{
     ConstantFields, ConstantItems, ConstantName, ConstantShape, ConstantVariant, ConstantVariants,
 };
-pub use json_schema::{export_json_schema, FieldSchema, JsonSchemaField};
+pub use json_schema::{apply_named_presence, export_json_schema, FieldSchema, JsonSchemaField};
+pub use membership::{ConstantMembership, Membership, SetMembership};
+pub use nodes::{Map, Newtype, Profile, Set, Tuple};
+pub use profile::{profile_schema, ProfileError, ProfileMarker, StorageProfile};
 pub use shape::{FieldPresence, SchemaField, SchemaShape, SchemaVariant, SchemaVariantShape};
 
 use std::marker::PhantomData;
@@ -45,6 +54,8 @@ pub trait ResolvedSchema {
 pub trait WireNode {
     /// Static shape used by generated compile-time equality checks.
     const SHAPE: ConstantShape;
+    /// Whether a named field can be absent, independently of value nullability.
+    const FIELD_PRESENCE: FieldPresence = FieldPresence::Required;
     /// Build the equivalent runtime schema shape.
     fn schema() -> SchemaShape;
 }
@@ -96,6 +107,7 @@ primitive_node!(U128, U128, u128);
 primitive_node!(StringValue, String, String);
 
 impl<Value: WireNode> WireNode for Optional<Value> {
+    const FIELD_PRESENCE: FieldPresence = FieldPresence::Optional;
     const SHAPE: ConstantShape = ConstantShape::Option(&Value::SHAPE);
     fn schema() -> SchemaShape {
         SchemaShape::Option {
@@ -111,8 +123,8 @@ where
     type Wire = Optional<Value::Wire>;
 }
 
-/// Implemented by every wire node except [`Optional`], so `Option<T>` is a
-/// persisted type only when `T` is not itself optional.
+/// Implemented by wire nodes whose values cannot be null.
+/// `Option<T>` requires this bound, including through transparent newtypes.
 #[diagnostic::on_unimplemented(
     message = "`Option<Option<_>>` is not a supported persisted type",
     label = "nested optional persisted field",
@@ -283,16 +295,17 @@ impl WireFields for End {
 impl<Name: WireName, Value: WireNode, Tail: WireFields> WireFields
     for Item<Field<Name, Value>, Tail>
 {
-    const FIELDS: ConstantFields = ConstantFields::Field(Name::NAME, &Value::SHAPE, &Tail::FIELDS);
+    const FIELDS: ConstantFields = ConstantFields::Field(
+        Name::NAME,
+        Value::FIELD_PRESENCE,
+        &Value::SHAPE,
+        &Tail::FIELDS,
+    );
     fn fields() -> Vec<SchemaField> {
         let schema = Value::schema();
         let mut output = vec![SchemaField {
             name: Name::value(),
-            presence: if matches!(schema, SchemaShape::Option { .. }) {
-                FieldPresence::Optional
-            } else {
-                FieldPresence::Required
-            },
+            presence: Value::FIELD_PRESENCE,
             schema,
         }];
         output.extend(Tail::fields());
@@ -332,6 +345,7 @@ impl<Value: WireNode> WireVariantNode for NewtypeVariant<Value> {
     fn shape() -> SchemaVariantShape {
         match Value::schema() {
             SchemaShape::Record { fields } => SchemaVariantShape::Record { fields },
+            SchemaShape::Tuple { items } => SchemaVariantShape::Tuple { items },
             schema => SchemaVariantShape::Newtype {
                 schema: Box::new(schema),
             },

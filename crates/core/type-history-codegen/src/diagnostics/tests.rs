@@ -1,6 +1,7 @@
 use serde_json::{json, Value};
 use type_history_core::resolved::{
-    FieldPresence, SchemaField, SchemaShape, SchemaVariant, SchemaVariantShape,
+    FieldPresence, Membership, SchemaField, SchemaShape, SchemaVariant, SchemaVariantShape,
+    StorageProfile,
 };
 
 use super::{
@@ -255,6 +256,19 @@ fn incompatible_containers_report_complete_subtrees() {
             value: Box::new(SchemaShape::U32),
             length: 2,
         },
+        SchemaShape::Map {
+            value: Box::new(SchemaShape::U32),
+        },
+        SchemaShape::Set {
+            value: Box::new(SchemaShape::U32),
+            membership: membership("example:exact:v1"),
+        },
+        SchemaShape::Tuple {
+            items: vec![SchemaShape::U32],
+        },
+        SchemaShape::Profile {
+            profile: StorageProfile::Finite32,
+        },
     ];
     for (a, expected) in shapes.iter().enumerate() {
         for (b, actual) in shapes.iter().enumerate() {
@@ -271,6 +285,56 @@ fn incompatible_containers_report_complete_subtrees() {
             }
         }
     }
+}
+
+fn membership(id: &str) -> Membership {
+    Membership {
+        id: id.to_owned(),
+        parameters: vec![],
+    }
+}
+
+#[test]
+fn collection_profile_and_membership_changes_have_precise_paths() {
+    let expected = SchemaShape::Map {
+        value: Box::new(SchemaShape::Set {
+            value: Box::new(SchemaShape::Tuple {
+                items: vec![SchemaShape::Profile {
+                    profile: StorageProfile::Finite32,
+                }],
+            }),
+            membership: membership("example:exact:v1"),
+        }),
+    };
+    let actual = SchemaShape::Map {
+        value: Box::new(SchemaShape::Set {
+            value: Box::new(SchemaShape::Tuple {
+                items: vec![SchemaShape::Profile {
+                    profile: StorageProfile::Finite64,
+                }],
+            }),
+            membership: membership("example:folded:v1"),
+        }),
+    };
+    let differences = compare_shapes(&expected, &actual);
+    assert_eq!(differences.len(), 2);
+    assert_eq!(differences[0].code, DifferenceCode::MembershipChanged);
+    assert_eq!(differences[0].path, vec![PathSegment::MapValue]);
+    assert_eq!(differences[0].expected["id"], "example:exact:v1");
+    assert_eq!(differences[1].code, DifferenceCode::ProfileChanged);
+    assert_eq!(
+        differences[1].path,
+        vec![
+            PathSegment::MapValue,
+            PathSegment::SetItem,
+            PathSegment::TupleItem { index: 0 },
+        ]
+    );
+    assert_eq!(differences[1].expected, "type-history:finite32:v1");
+    assert_eq!(
+        readable_path(&differences[1].path),
+        "$.map_value.set_item[0]"
+    );
 }
 
 #[test]
@@ -321,6 +385,8 @@ fn readable_names_and_codes_have_stable_unambiguous_spellings() {
         DifferenceCode::FieldPresenceChanged,
         DifferenceCode::ShapeKindChanged,
         DifferenceCode::ArrayLengthChanged,
+        DifferenceCode::MembershipChanged,
+        DifferenceCode::ProfileChanged,
         DifferenceCode::VariantMissing,
         DifferenceCode::VariantAdded,
         DifferenceCode::VariantKindChanged,

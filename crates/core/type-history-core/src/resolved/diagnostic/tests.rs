@@ -2,7 +2,8 @@ use serde_json::Value;
 
 use super::{encode, encoded_len};
 use crate::resolved::{
-    ConstantFields, ConstantItems, ConstantName, ConstantShape, ConstantVariant, ConstantVariants,
+    ConstantFields, ConstantItems, ConstantMembership, ConstantName, ConstantShape,
+    ConstantVariant, ConstantVariants, FieldPresence, StorageProfile,
 };
 
 const NAME: &str = "a\0\u{1}\u{2}\u{3}\u{4}\u{5}\u{6}\u{7}\u{8}\t\n\u{b}\u{c}\r\u{e}\u{f}\u{10}\u{11}\u{12}\u{13}\u{14}\u{15}\u{16}\u{17}\u{18}\u{19}\u{1a}\u{1b}\u{1c}\u{1d}\u{1e}\u{1f}\"\\é🦀";
@@ -15,9 +16,11 @@ const FIELD: ConstantName = ConstantName::Byte(
 );
 const FIELDS: ConstantFields = ConstantFields::Field(
     FIELD,
+    FieldPresence::Optional,
     &ConstantShape::Option(&ConstantShape::U32),
     &ConstantFields::Field(
         ConstantName::End,
+        FieldPresence::Required,
         &ConstantShape::String,
         &ConstantFields::End,
     ),
@@ -129,6 +132,7 @@ fn equal_shapes_use_no_buffer_or_serialization() {
     // A malformed UTF-8 name would fail message decoding if traversed.
     const SHAPE: ConstantShape = ConstantShape::Record(ConstantFields::Field(
         ConstantName::Byte(255, &ConstantName::End),
+        FieldPresence::Required,
         &ConstantShape::U8,
         &ConstantFields::End,
     ));
@@ -148,4 +152,44 @@ fn oversized_buffers_are_rejected() {
 #[should_panic]
 fn undersized_buffers_are_rejected() {
     encode::<1>("changed", 1, &ConstantShape::U8, &ConstantShape::U32);
+}
+
+#[test]
+fn extended_diagnostics_preserve_profile_membership_tuple_and_presence() {
+    const MEMBER: ConstantMembership = ConstantMembership {
+        id: "example:tuple:v1",
+        parameters: &[ConstantMembership::custom("example:exact:v1")],
+    };
+    check!(ConstantShape::Map(&ConstantShape::U32));
+    check!(ConstantShape::Set(&ConstantShape::U8, MEMBER));
+    check!(ConstantShape::Tuple(ITEMS));
+    check!(ConstantShape::Profile(StorageProfile::Finite32));
+    check!(ConstantShape::Profile(StorageProfile::Finite64));
+    check!(ConstantShape::Profile(StorageProfile::UuidText));
+    check!(ConstantShape::Profile(StorageProfile::DecimalText));
+    check!(ConstantShape::Profile(StorageProfile::Date));
+    check!(ConstantShape::Profile(StorageProfile::LocalTime));
+    check!(ConstantShape::Profile(StorageProfile::LocalDateTime));
+    check!(ConstantShape::Profile(StorageProfile::UtcInstant));
+    check!(ConstantShape::Profile(StorageProfile::OffsetDateTime));
+    check!(ConstantShape::Enum(ConstantVariants::Variant(
+        FIELD,
+        ConstantVariant::Newtype(&ConstantShape::Tuple(ITEMS)),
+        &ConstantVariants::End,
+    )));
+    const REQUIRED: ConstantShape = ConstantShape::Record(ConstantFields::Field(
+        FIELD,
+        FieldPresence::Required,
+        &ConstantShape::Option(&ConstantShape::U32),
+        &ConstantFields::End,
+    ));
+    const OPTIONAL: ConstantShape = ConstantShape::Record(ConstantFields::Field(
+        FIELD,
+        FieldPresence::Optional,
+        &ConstantShape::Option(&ConstantShape::U32),
+        &ConstantFields::End,
+    ));
+    const LENGTH: usize = encoded_len(NAME, u32::MAX, &REQUIRED, &OPTIONAL);
+    const BYTES: [u8; LENGTH] = encode(NAME, u32::MAX, &REQUIRED, &OPTIONAL);
+    assert_message(&BYTES, REQUIRED, OPTIONAL);
 }

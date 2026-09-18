@@ -72,6 +72,30 @@ impl Differences {
                 }
                 self.shape(a, b, &child(path, PathSegment::ArrayItem));
             }
+            (SchemaShape::Map { value: a }, SchemaShape::Map { value: b }) => {
+                self.shape(a, b, &child(path, PathSegment::MapValue));
+            }
+            (
+                SchemaShape::Set {
+                    value: a,
+                    membership: am,
+                },
+                SchemaShape::Set {
+                    value: b,
+                    membership: bm,
+                },
+            ) => {
+                if am != bm {
+                    self.push(DifferenceCode::MembershipChanged, path, am, bm);
+                }
+                self.shape(a, b, &child(path, PathSegment::SetItem));
+            }
+            (SchemaShape::Tuple { items: a }, SchemaShape::Tuple { items: b }) => {
+                self.tuple(a, b, path);
+            }
+            (SchemaShape::Profile { profile: a }, SchemaShape::Profile { profile: b }) => {
+                self.push(DifferenceCode::ProfileChanged, path, a, b)
+            }
             _ => self.push(DifferenceCode::ShapeKindChanged, path, expected, actual),
         }
     }
@@ -178,18 +202,29 @@ impl Differences {
                 SchemaVariantShape::Record { fields: b },
             ) => self.fields(a, b, path),
             (SchemaVariantShape::Tuple { items: a }, SchemaVariantShape::Tuple { items: b }) => {
-                if a.len() != b.len() {
-                    self.push(DifferenceCode::TupleLengthChanged, path, a.len(), b.len());
-                }
-                for index in 0..a.len().max(b.len()) {
-                    let path = child(path, PathSegment::TupleItem { index });
-                    match (a.get(index), b.get(index)) {
-                        (Some(a), Some(b)) => self.shape(a, b, &path),
-                        (a, b) => self.push(DifferenceCode::ShapeKindChanged, &path, a, b),
-                    }
-                }
+                self.tuple(a, b, path);
             }
             _ => self.push(DifferenceCode::VariantKindChanged, path, expected, actual),
+        }
+    }
+
+    fn tuple(&mut self, expected: &[SchemaShape], actual: &[SchemaShape], path: &[PathSegment]) {
+        if expected.len() != actual.len() {
+            self.push(
+                DifferenceCode::TupleLengthChanged,
+                path,
+                expected.len(),
+                actual.len(),
+            );
+        }
+        for index in 0..expected.len().max(actual.len()) {
+            let path = child(path, PathSegment::TupleItem { index });
+            match (expected.get(index), actual.get(index)) {
+                (Some(expected), Some(actual)) => self.shape(expected, actual, &path),
+                (expected, actual) => {
+                    self.push(DifferenceCode::ShapeKindChanged, &path, expected, actual)
+                }
+            }
         }
     }
 }

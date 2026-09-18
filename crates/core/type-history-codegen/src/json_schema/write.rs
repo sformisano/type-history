@@ -1,7 +1,11 @@
 //! Canonical closed-shape JSON Schema writer.
+use super::collections::MEMBERSHIP_KEY;
 use super::normalize::{optional_wrapper, sort_by_canonical_text, unit_constant};
+use super::profiles::PROFILE_KEY;
 use serde_json::{Map, Value};
-use type_history_core::resolved::{SchemaField, SchemaShape, SchemaVariant, SchemaVariantShape};
+use type_history_core::resolved::{
+    FieldPresence, SchemaField, SchemaShape, SchemaVariant, SchemaVariantShape,
+};
 
 pub(super) fn write_node(shape: &SchemaShape) -> Value {
     let mut object = Map::new();
@@ -37,10 +41,40 @@ pub(super) fn write_node(shape: &SchemaShape) -> Value {
             object.insert("minItems".to_owned(), (*length).into());
             object.insert("maxItems".to_owned(), (*length).into());
         }
+        SchemaShape::Map { value } => {
+            object.insert("type".to_owned(), "object".into());
+            object.insert("additionalProperties".to_owned(), write_node(value));
+        }
+        SchemaShape::Set { value, membership } => {
+            object.insert("type".to_owned(), "array".into());
+            object.insert("items".to_owned(), write_node(value));
+            object.insert(MEMBERSHIP_KEY.to_owned(), membership.to_json());
+        }
+        SchemaShape::Tuple { items } => return write_tuple(items),
+        SchemaShape::Profile { profile } => {
+            object.insert("type".to_owned(), profile.json_type().into());
+            object.insert(PROFILE_KEY.to_owned(), profile.id().into());
+        }
         SchemaShape::Record { fields } => return write_record(fields),
         SchemaShape::Enum { variants } => return write_enum(variants),
     }
     Value::Object(object)
+}
+
+fn write_tuple(items: &[SchemaShape]) -> Value {
+    assert!(
+        !items.is_empty(),
+        "Type History tuples require at least one item"
+    );
+    let mut tuple = Map::new();
+    tuple.insert("type".to_owned(), "array".into());
+    tuple.insert(
+        "prefixItems".to_owned(),
+        Value::Array(items.iter().map(write_node).collect()),
+    );
+    tuple.insert("minItems".to_owned(), items.len().into());
+    tuple.insert("maxItems".to_owned(), items.len().into());
+    Value::Object(tuple)
 }
 
 fn write_integer(format: &str, bounds: Option<(i64, i64)>) -> Value {
@@ -69,7 +103,7 @@ fn write_record(fields: &[SchemaField]) -> Value {
     sorted.sort_by(|left, right| left.name.cmp(&right.name));
     for field in sorted {
         properties.insert(field.name.clone(), write_node(&field.schema));
-        if !matches!(field.schema, SchemaShape::Option { .. }) {
+        if field.presence == FieldPresence::Required {
             required.push(Value::String(field.name.clone()));
         }
     }
@@ -108,15 +142,7 @@ fn write_enum(variants: &[SchemaVariant]) -> Value {
                 variant_wrapper(&variant.name, write_node(schema))
             }
             SchemaVariantShape::Tuple { items } => {
-                let mut tuple = Map::new();
-                tuple.insert("type".to_owned(), "array".into());
-                tuple.insert(
-                    "prefixItems".to_owned(),
-                    Value::Array(items.iter().map(write_node).collect()),
-                );
-                tuple.insert("minItems".to_owned(), items.len().into());
-                tuple.insert("maxItems".to_owned(), items.len().into());
-                variant_wrapper(&variant.name, Value::Object(tuple))
+                variant_wrapper(&variant.name, write_tuple(items))
             }
             SchemaVariantShape::Record { fields } => {
                 variant_wrapper(&variant.name, write_record(fields))

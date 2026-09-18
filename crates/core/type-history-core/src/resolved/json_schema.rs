@@ -1,5 +1,8 @@
 //! JSON Schema adapters for resolved field wire types.
 
+mod presence;
+pub use presence::apply_named_presence;
+
 use schemars::{generate::SchemaSettings, JsonSchema, Schema, SchemaGenerator};
 use serde_json::Value;
 use std::{borrow::Cow, marker::PhantomData};

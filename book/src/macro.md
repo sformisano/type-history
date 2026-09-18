@@ -14,7 +14,7 @@ A new history starts at V1, even when no field has a history attribute. Later ve
 | `ReceiptCreated` | Alias of the latest generated type, including an allowed draft |
 | `ReceiptCreated::into_versioned()` | Wraps a current value in `Versioned<ReceiptCreated>` with its stable name and current version |
 | `ReceiptCreated::from_versioned(...)` | Converts a deserialized `Versioned<ReceiptCreated>` into the current `ReceiptCreated` |
-| Record implementations | `Clone`, `Debug`, `PartialEq`, Serde serialization and deserialization, and schema support |
+| Record implementations | `Clone`, optional `Debug` and `PartialEq`, Serde serialization and deserialization, and schema support |
 | `HasHistory` on the current type | `STABLE_NAME` names the history, `VERSION` identifies the current version, and `history()` provides its decoder |
 | `History<ReceiptCreated>` | Lists supported versions and decodes their JSON payloads into the current `ReceiptCreated` |
 
@@ -23,9 +23,44 @@ The alias and numbered structs keep the declaration's visibility. A `pub struct 
 
 ## Traits and declaration attributes
 
-The macro generates these traits for every version, including versions used only to read old data. Each retained field type therefore needs `Clone`, `PartialEq`, and `Debug`, together with serialization and schema support. See [supported field types](integration.md#supported-scope) for those requirements.
+The macro always generates `Clone` for every version, including versions used
+only to read old data. Each retained field type therefore needs `Clone`,
+serialization, and schema support.
 
-Generated `Debug` calls each field's own `Debug` implementation.
+`Debug` and `PartialEq` are enabled by default. Generated implementations call
+the native field traits, so custom field behavior remains intact.
+
+Disable either trait for a complete history when a field lacks that native
+trait. Bare tuples with 13 through 16 elements need both traits disabled because
+Rust's standard tuple implementations stop at arity 12:
+
+```rust
+use type_history::versioned;
+
+#[versioned(
+    stable_name = "example.long_tuple",
+    derive_debug = false,
+    derive_partial_eq = false,
+)]
+pub struct Record {
+    pub value: (u8, u8, u8, u8, u8, u8, u8, u8, u8, u8, u8, u8, u8),
+}
+```
+
+Both arguments require boolean literals and default to `true`. Each choice
+applies to every retained version. A field used only by an old version still
+follows the same choice.
+
+Disabling one trait removes its generated implementation and field bound.
+It does not create a fallback implementation. It also does not change schema
+identity, frozen ledgers, payload bytes, codecs, or migrations.
+
+Frontends that construct `type_history_codegen::RecordInput` directly must set
+its `derives: RecordDerives` field. Use `RecordDerives::default()` to keep both
+traits enabled.
+
+See [supported field contracts](integration.md#supported-field-contracts) for
+tuple, set, adapter, and codec limits.
 
 The macro owns the generated implementations, so do not add derives to the history
 declaration. You can add documentation and `allow`, `warn`, or `deny` attributes.

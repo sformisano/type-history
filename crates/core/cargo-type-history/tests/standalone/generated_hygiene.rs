@@ -15,6 +15,7 @@ const serializer: u32 = 3;
 const formatter: u32 = 4;
 const generator: u32 = 5;
 const schema: u32 = 6;
+const __type_history_schema: u32 = 8;
 const value: u32 = 7;
 type u8 = String;
 type str = String;
@@ -32,6 +33,10 @@ pub struct Receipt {
 pub struct Details { pub byte: ::core::primitive::u8, pub alias: u8, pub optional: Option<String> }
 #[derive(history_api::Schema)]
 pub enum Choice { Unit, One(::core::primitive::u8), Pair(u8, str), Named { count: usize } }
+#[derive(history_api::Schema)]
+pub struct Pair(pub ::core::primitive::u8, pub u8);
+#[derive(history_api::Schema)]
+pub struct Nullable(pub Option<String>);
 #[test]
 fn roundtrip() {
     let input = Receipt { byte: 8, alias: "a".to_owned(), text: "b".to_owned(), count: "c".to_owned() };
@@ -47,8 +52,13 @@ fn roundtrip() {
     assert_eq!(wire["properties"]["byte"]["type"], "integer");
     let details = history_api::__private::export_json_schema::<Details>();
     assert_eq!(details["properties"]["optional"]["type"], serde_json::json!(["string", "null"]));
-    assert!(details["required"].as_array().unwrap().iter().any(|name| name == "optional"));
+    assert!(!details["required"].as_array().unwrap().iter().any(|name| name == "optional"));
     let _ = history_api::__private::export_json_schema::<Choice>();
+    let pair = history_api::__private::export_json_schema::<Pair>();
+    assert_eq!(pair["prefixItems"][0]["type"], "integer");
+    assert_eq!(pair["prefixItems"][1]["type"], "string");
+    let nullable = history_api::__private::export_json_schema::<Nullable>();
+    assert_eq!(nullable["type"], serde_json::json!(["string", "null"]));
 }
 "#);
     success(&fixture.cargo(&["test", "--locked", "--offline"]));

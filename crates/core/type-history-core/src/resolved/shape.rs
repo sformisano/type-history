@@ -1,5 +1,6 @@
 //! Runtime structural shapes and their canonical field ordering.
 
+use super::{Membership, StorageProfile};
 use serde::{Deserialize, Serialize};
 
 mod deserialize;
@@ -40,6 +41,23 @@ pub enum SchemaShape {
         /// Required number of elements.
         length: usize,
     },
+    /// A map whose keys are strings.
+    Map {
+        value: Box<SchemaShape>,
+    },
+    /// A set with an explicit element equality declaration.
+    Set {
+        value: Box<SchemaShape>,
+        membership: Membership,
+    },
+    /// An ordered, fixed-arity heterogeneous tuple.
+    Tuple {
+        items: Vec<SchemaShape>,
+    },
+    /// A fixed encoding and admitted domain.
+    Profile {
+        profile: StorageProfile,
+    },
     /// A closed record with named fields.
     Record {
         /// Fields in canonical name order after normalization.
@@ -65,6 +83,16 @@ impl SchemaShape {
             Self::Array { value, length } => Self::Array {
                 value: Box::new(value.normalized()),
                 length,
+            },
+            Self::Map { value } => Self::Map {
+                value: Box::new(value.normalized()),
+            },
+            Self::Set { value, membership } => Self::Set {
+                value: Box::new(value.normalized()),
+                membership,
+            },
+            Self::Tuple { items } => Self::Tuple {
+                items: items.into_iter().map(Self::normalized).collect(),
             },
             Self::Record { mut fields } => {
                 for field in &mut fields {
@@ -105,6 +133,16 @@ pub enum FieldPresence {
     Required,
     /// The encoded object may omit the field.
     Optional,
+}
+
+impl FieldPresence {
+    /// Exact comparison usable in generated constant assertions.
+    pub const fn same(self, other: Self) -> bool {
+        matches!(
+            (self, other),
+            (Self::Required, Self::Required) | (Self::Optional, Self::Optional)
+        )
+    }
 }
 
 /// One named variant in an externally tagged enumeration.
@@ -149,6 +187,7 @@ impl SchemaVariantShape {
                 let normalized = schema.clone().normalized();
                 *self = match normalized {
                     SchemaShape::Record { fields } => Self::Record { fields },
+                    SchemaShape::Tuple { items } => Self::Tuple { items },
                     schema => Self::Newtype {
                         schema: Box::new(schema),
                     },

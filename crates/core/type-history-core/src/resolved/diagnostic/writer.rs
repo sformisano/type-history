@@ -1,5 +1,6 @@
 use super::super::{
-    ConstantFields, ConstantItems, ConstantName, ConstantShape, ConstantVariant, ConstantVariants,
+    ConstantFields, ConstantItems, ConstantMembership, ConstantName, ConstantShape,
+    ConstantVariant, ConstantVariants, FieldPresence,
 };
 
 /// Counting and writing share the same traversal, including escaping rules.
@@ -139,6 +140,25 @@ impl<const N: usize> Writer<N> {
                 self.text(",\"length\":");
                 self.number(*length);
             }
+            ConstantShape::Map(value) => {
+                self.string("map");
+                self.value(value);
+            }
+            ConstantShape::Set(value, membership) => {
+                self.string("set");
+                self.value(value);
+                self.text(",\"membership\":");
+                self.membership(membership);
+            }
+            ConstantShape::Tuple(items) => {
+                self.string("tuple");
+                self.items(items);
+            }
+            ConstantShape::Profile(profile) => {
+                self.string("profile");
+                self.text(",\"profile\":");
+                self.string(profile.id());
+            }
             ConstantShape::Record(fields) => {
                 self.string("record");
                 self.fields(fields);
@@ -172,7 +192,7 @@ impl<const N: usize> Writer<N> {
     const fn fields(&mut self, mut next: &ConstantFields) {
         self.text(",\"fields\":[");
         let mut first = true;
-        while let ConstantFields::Field(name, shape, tail) = next {
+        while let ConstantFields::Field(name, presence, shape, tail) = next {
             if !first {
                 self.byte(b',');
             }
@@ -180,7 +200,7 @@ impl<const N: usize> Writer<N> {
             self.text("{\"name\":");
             self.name(name);
             self.text(",\"presence\":");
-            if matches!(shape, ConstantShape::Option(_)) {
+            if matches!(presence, FieldPresence::Optional) {
                 self.string("optional");
             } else {
                 self.string("required");
@@ -200,26 +220,43 @@ impl<const N: usize> Writer<N> {
                 self.string("record");
                 self.fields(fields);
             }
+            ConstantVariant::Newtype(ConstantShape::Tuple(items))
+            | ConstantVariant::Tuple(items) => {
+                self.string("tuple");
+                self.items(items);
+            }
             ConstantVariant::Newtype(value) => {
                 self.string("newtype");
                 self.text(",\"schema\":");
                 self.shape(value);
             }
-            ConstantVariant::Tuple(items) => {
-                self.string("tuple");
-                self.text(",\"items\":[");
-                let mut next = items;
-                let mut first = true;
-                while let ConstantItems::Item(shape, tail) = next {
-                    if !first {
-                        self.byte(b',');
-                    }
-                    first = false;
-                    self.shape(shape);
-                    next = tail;
-                }
-                self.byte(b']');
-            }
         }
+    }
+    const fn items(&mut self, mut next: &ConstantItems) {
+        self.text(",\"items\":[");
+        let mut first = true;
+        while let ConstantItems::Item(shape, tail) = next {
+            if !first {
+                self.byte(b',');
+            }
+            first = false;
+            self.shape(shape);
+            next = tail;
+        }
+        self.byte(b']');
+    }
+    const fn membership(&mut self, membership: &ConstantMembership) {
+        self.text("{\"id\":");
+        self.string(membership.id);
+        self.text(",\"parameters\":[");
+        let mut index = 0;
+        while index < membership.parameters.len() {
+            if index != 0 {
+                self.byte(b',');
+            }
+            self.membership(&membership.parameters[index]);
+            index += 1;
+        }
+        self.text("]}");
     }
 }

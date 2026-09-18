@@ -65,18 +65,34 @@
 //!
 //! A receipt may contain another record or an enum. The [`Schema`] derive
 //! describes how those supporting types are serialized so changes can be checked
-//! against frozen schemas. It supports named records and externally tagged enums,
-//! including inside containers such as
-//! `Option<T>` and `Vec<T>`. Keep earlier enum definitions when a containing field
+//! against frozen schemas. It supports named records, nonempty tuple structs,
+//! and externally tagged enums, including inside supported containers.
+//! Keep earlier enum definitions when a containing field
 //! changes type; `#[versioned]` remains restricted to concrete named-field structs.
 //! [`ResolvedSchema`], [`JsonSchemaField`], and [`FieldSchema`] provide the
 //! underlying schema description and export traits.
+//!
+//! String-keyed hash/tree maps share a storage contract. Sets carry an explicit
+//! [`SetMembership`] contract and differ from vectors. Custom membership IDs are
+//! trusted declarations of equality; schema derivation does not verify custom
+//! `Eq`, `Hash`, or `Ord`. A membership change requires a versioned field update.
+//! Bare tuples support arities 1 through 16. Owned `Box` values preserve the inner
+//! contract; feature `rc` adds `Rc` and `Arc` by value.
+//! Histories containing tuples above arity 12 can disable generated native traits
+//! with `derive_debug = false` and `derive_partial_eq = false`.
+//!
+//! Optional features `typed-floats`, `uuid`, `rust-decimal`, `chrono`, and `time`
+//! add finite numeric types and checked [`adapters`]. Defaults are empty. Adapters
+//! own their serialization, so native dependencies' Serde features do not change
+//! stored profiles. See the [field integration guide](https://github.com/sformisano/type-history/blob/main/book/src/integration.md).
 
 extern crate self as type_history;
 
-pub use type_history_core::resolved::{FieldSchema, JsonSchemaField, ResolvedSchema};
+pub use type_history_core::resolved::{
+    ConstantMembership, FieldSchema, JsonSchemaField, ResolvedSchema, SetMembership,
+};
 pub use type_history_core::{
-    decode, DecodeContext, DecodeError, DecodeFailureKind, HasHistory, History,
+    adapters, decode, DecodeContext, DecodeError, DecodeFailureKind, HasHistory, History,
     InvalidPayloadVersion, InvalidStableName, PayloadVersion, ReadError, StableName, Versioned,
 };
 pub use type_history_macros::{versioned, Schema};

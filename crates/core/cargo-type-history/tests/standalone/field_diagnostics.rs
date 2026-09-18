@@ -16,7 +16,7 @@ fn unsupported_fields_report_missing_support_at_the_authored_type() {
     let mut failures = Vec::new();
     for (kind, ty, displayed) in [
         ("plain", "Undeclared", "Undeclared"),
-        ("map", "HashMap<String, u32>", "HashMap<String, u32>"),
+        ("map", "HashMap<u32, u32>", "HashMap<u32, u32>"),
         ("float", "f64", "f64"),
     ] {
         for (path, declaration) in [

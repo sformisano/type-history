@@ -180,38 +180,212 @@ The containing struct owns the history. Enum variants have no history attributes
 
 A variant containing one named struct can serialize exactly like a variant declaring those same fields itself. The frozen check compares their serialized structures, so it accepts that equivalent representation.
 
-## Supported scope
+## Supported field contracts
 
-History declarations use structs with named fields, including empty structs.
-Supported field types include:
+History declarations use concrete structs with named fields, including empty
+structs. Supporting records, enums, and nonempty tuple structs can appear as
+fields. These supporting types do not own separate histories.
 
-| Kind | Supported types |
+| Kind | Supported types and contract |
 | --- | --- |
 | Scalars | `bool`, `String`, and signed or unsigned integers from 8 to 128 bits |
-| Containers | Vectors, fixed arrays of lengths 0–32, and optional values with supported element types |
-| Nested records | Named records with schema support, including generated history versions |
-| Enums | Concrete supporting enums with externally tagged variants and schema support |
+| Existing containers | `Vec<T>`, arrays of lengths 0–32, and `Option<T>` |
+| Maps | `HashMap<String, V, S>` and `BTreeMap<String, V>` |
+| Sets | `HashSet<T, S>` and `BTreeSet<T>` when `T` declares stable membership |
+| Tuples | Bare tuples with 1–16 items and supporting tuple structs with at least one field |
+| Owned wrappers | `Box<T>`, plus `Rc<T>` and `Arc<T>` with the `rc` feature |
+| Supporting types | Named records, externally tagged enums, and nonempty tuple structs with `Schema` and matching Serde support |
 
-Array length is part of the schema. `Vec<u8>` has a dedicated byte schema;
-other vectors use a sequence schema.
+Array length, tuple length, and tuple position are part of the storage contract.
+`Vec<u8>` has a dedicated byte contract. Other vectors use a sequence contract.
+A one-field tuple struct uses Serde's newtype encoding. It differs from `(T,)`.
 
-The authoring API currently rejects:
+Maps require `String` keys. `HashMap` and `BTreeMap` have the same storage
+contract when their value contracts match. The hasher and iteration order do
+not affect compatibility. Serialization order is not a deterministic byte-order
+promise.
 
-- **Unsupported history declarations:** Enums, tuple structs, unit structs, generics, and recursive histories. Supporting enums are allowed as fields.
-- **Unsupported field types:** Floats, pointer-sized integers, maps, sets, and nested options.
-- **Unsupported callbacks:** Async functions and functions that consume the whole previous record.
-- **Conditional declarations:** The set of histories must not change with conditional compilation.
-  Supported feature-selected type aliases still undergo frozen schema checks.
-- **Serialization overrides:** Serde `rename`, `default`, `flatten`, `skip`, `alias`, and `with`.
-  Use history attributes to describe field changes.
+Sets differ from sequences. `HashSet` and `BTreeSet` have the same storage
+contract only when the element encoding and membership declaration match.
+Standard Rust bounds still apply. `HashSet` needs `Eq + Hash`, and `BTreeSet`
+needs `Ord`.
 
-When a field type lacks schema support, compilation reports that the type is
-not supported as a persisted field. The error points to the field type and
-identifies missing structural wire schema or JSON Schema field support.
-For a supported named record or enum, derive `Schema` as shown above.
-For other types, choose a supported serialized representation. Wrapping a map
-or float in another record does not make that inner field supported.
+Built-in supported values provide membership declarations. Custom elements
+must implement `SetMembership` with a stable, namespaced ID:
 
-Each retained version adds generated code. Before generating those types, Type History checks that the declared version range agrees with the ledger. A mistaken large version number is rejected before the generator tries to create all those versions.
-An existing history can be brought into a package through [import](lifecycle.md#import-a-complete-history).
+```rust
+use type_history::{ConstantMembership, SetMembership};
+
+impl SetMembership for CustomerCode {
+    const MEMBERSHIP: ConstantMembership =
+        ConstantMembership::custom("com.example:customer-code:case-folded:v1");
+}
+```
+
+The declaration is a contract you maintain. `Schema` does not derive it or
+prove custom `Eq`, `Hash`, or `Ord` behavior. Change the ID when membership
+behavior changes. Introduce that change through a new history version.
+Type History does not scan stored collections for duplicate members.
+
+## Presence and nullable values
+
+Named-field presence and nullability are separate parts of the contract.
+`Option<T>` permits an omitted field or an explicit null. `Box`, `Rc`, and
+`Arc` preserve the wrapped value's field-presence rule.
+
+A one-field tuple struct is a required field even when its inner value is
+`Option<T>`. Its field rejects omission and accepts an explicit null.
+This preserves Serde's newtype encoding without treating the newtype as an
+optional field.
+
+Ambiguous nested nulls remain unsupported. For example,
+`Option<NullableNewtype>` is rejected when `NullableNewtype` wraps `Option<T>`.
+Tuple positions are always present, although a supported position can contain
+an explicit null.
+
+Changing only field presence is still a storage-contract change. Add a new
+history version and migrate explicitly.
+
+## Optional adapters
+
+The facade has no default features. Enable only the integrations a record uses:
+
+```toml
+[dependencies]
+type-history = { version = "0.1.0", features = ["uuid", "rust-decimal", "time"] }
+```
+
+| Feature | Public field type | Stored contract |
+| --- | --- | --- |
+| `typed-floats` | `typed_floats::NonNaNFinite<f32>` and `NonNaNFinite<f64>` | Finite JSON numbers with distinct 32-bit and 64-bit profiles |
+| `uuid` | `type_history::adapters::UuidText` | Lowercase hyphenated UUID text; all UUID bit patterns |
+| `rust-decimal` | `type_history::adapters::DecimalText` | Signed decimal text with a 96-bit coefficient and scale 0–28 |
+| `chrono` | Five wrappers in `type_history::adapters::chrono` | Shared checked date and time text profiles |
+| `time` | Five wrappers in `type_history::adapters::time` | The same checked profiles as `chrono` |
+| `rc` | `Rc<T>` and `Arc<T>` | The inner value by value |
+
+The temporal modules expose `Date`, `LocalTime`, `LocalDateTime`, `UtcInstant`,
+and `OffsetDateTime`. Their shared domains are:
+
+- Dates use proleptic Gregorian years `0000` through `9999`.
+- Local times use seconds `00` through `59` and at most nine fraction digits.
+- Local datetimes join the date and time with `T`.
+- UTC instants end in `Z`.
+- Offset datetimes retain a minute-aligned numeric offset.
+
+Offset datetimes require both local and UTC dates to stay in range. The adapters
+reject leap seconds, second offsets, excessive precision, and unknown `-00:00`
+offsets. They write the shortest exact nanosecond fraction.
+
+`DecimalText` preserves coefficient and scale, including trailing zeros.
+Its membership follows numeric equality, so `1.0` and `1.00` are equal set
+members. `OffsetDateTime` membership follows instant equality and ignores the
+retained offset. The bytes still retain scale and offset.
+
+Each wrapper provides checked `TryFrom<Native>`, `as_inner()`, and `into_inner()`.
+It provides no mutable native access. Native values outside the profile fail
+conversion. Native dependency Serde features cannot change the wrapper's domain,
+schema, or encoding.
+
+Each profile is distinct from unrestricted `String`. The finite `f32` and `f64`
+profiles are also distinct. Switching between these contracts requires a new
+history version and an explicit migration.
+
+## Tuple trait limits
+
+Type History supports bare tuples through arity 16 because the supported codecs
+handle those arities. Rust's standard `Debug` and `PartialEq` tuple implementations
+stop at arity 12.
+
+Use per-history derive options for a field containing a tuple of arity 13–16:
+
+```rust
+use type_history::versioned;
+
+type Coordinates = (u8, u8, u8, u8, u8, u8, u8, u8, u8, u8, u8, u8, u8);
+
+#[versioned(
+    stable_name = "mapping.coordinates",
+    derive_debug = false,
+    derive_partial_eq = false,
+)]
+pub struct CoordinatesRecord {
+    pub value: Coordinates,
+}
+```
+
+Both options default to `true`. Each option applies to every retained version
+in that history. Disabling one removes that generated implementation and its
+field bound. `Clone` remains required.
+
+When an option stays enabled, generated code uses the native field trait.
+Custom `Debug` and `PartialEq` behavior is preserved. Type History does not
+replace missing traits with byte comparison or structural formatting.
+
+These options do not change schemas, payload bytes, frozen ledgers, migrations,
+or set membership. Sets still require the standard equality, hash, or ordering
+traits for their chosen collection.
+
+## Codec guarantees
+
+The storage guarantees cover JSON and MessagePack with named struct fields.
+Use `rmp_serde::to_vec_named` for MessagePack. Wrapper and payload object fields
+can appear in any order when decoding.
+
+Supported `Versioned` writing and decoding preserve finite float width and bits,
+including signed zero and subnormal values. They also preserve decimal
+coefficient and scale, temporal nanoseconds, and retained offsets. Invalid
+profile values return checked errors without rounding, truncation, clamping, or
+null substitution.
+
+Other Serde formats are outside this guarantee. MessagePack payload struct arrays
+are unsupported. Map iteration order does not promise deterministic serialized
+bytes.
+
+## Changes that require migration
+
+An unchanged version requires the same complete storage contract. This includes
+representation, admitted domain, field presence, logical profile, set membership,
+tuple order, and tuple arity.
+
+For example, these substitutions require a new version:
+
+- `Vec<T>` to a set
+- `NonNaNFinite<f32>` to `NonNaNFinite<f64>`
+- `UuidText` or `DecimalText` to `String`
+- a required nullable newtype to `Option<T>`
+- a changed custom membership ID
+
+Keep the previous field type in the retained version. Add an `updated_in` record
+with `previous_type` and an explicit conversion. Frozen checks do not certify
+custom conversion meaning, `Eq`, `Hash`, `Ord`, or serialization behavior.
+Existing frozen ledger bytes remain unchanged. New contract vocabulary appears
+only when a new field uses it.
+
+## Unsupported scope
+
+The authoring API rejects:
+
+- history roots that are enums, tuple structs, unit structs, generic, or recursive
+- non-string map keys, unit values, and empty tuple structs
+- raw or non-finite floats, pointer-sized integers, and ambiguous nested options
+- borrowed data, weak pointers, cycles, locks, and atomics
+- arbitrary-precision decimals, named timezones, and epoch-unit profiles
+- arbitrary Serde `rename`, `default`, `flatten`, `skip`, `alias`, or `with` overrides
+- async callbacks and callbacks that consume the whole previous record
+- conditionally compiled history declarations
+
+Supported feature-selected aliases still undergo frozen storage-contract checks.
+`Box`, `Rc`, and `Arc` store only the inner value. Allocation identity and
+sharing are not preserved.
+
+When a field type lacks schema support, compilation points to that field type.
+For a supported record, enum, or tuple struct, derive `Schema` as shown above.
+For another type, choose a supported stored representation.
+
+Each retained version adds generated code. Type History validates the declared
+version range before generation. A mistaken large version number fails before
+the generator creates those versions.
+
+An existing history can enter a package through [import](lifecycle.md#import-a-complete-history).
 Its ledger must include every version starting at V1.

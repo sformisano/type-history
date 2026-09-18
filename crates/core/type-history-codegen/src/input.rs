@@ -1,31 +1,41 @@
 //! Pure standalone declaration parsing, independent of environment and ledger access.
 
-use crate::model::{NamedField, RecordInput};
+use crate::model::{NamedField, RecordDerives, RecordInput};
 use std::collections::BTreeMap;
 use syn::{
     parse::{Parse, ParseStream},
-    Attribute, Error, Fields, Generics, Ident, ItemStruct, LitStr, Result, Token,
+    Attribute, Error, Fields, Generics, Ident, ItemStruct, LitBool, LitStr, Result, Token,
 };
 use type_history_core::StableName;
 
-/// Explicit stable name for the outer versioned attribute.
+/// Stable name and optional native trait choices for the versioned attribute.
 pub struct Arguments {
     stable_name: LitStr,
+    derives: RecordDerives,
 }
 
 impl Parse for Arguments {
     fn parse(input: ParseStream<'_>) -> Result<Self> {
         let mut stable_name = None;
+        let mut derive_debug: Option<LitBool> = None;
+        let mut derive_partial_eq: Option<LitBool> = None;
         while !input.is_empty() {
             let key: Ident = input.parse()?;
             input.parse::<Token![=]>()?;
             match key.to_string().as_str() {
                 "stable_name" if stable_name.is_none() => stable_name = Some(input.parse()?),
-                "stable_name" => {
+                "derive_debug" if derive_debug.is_none() => derive_debug = Some(input.parse()?),
+                "derive_partial_eq" if derive_partial_eq.is_none() => {
+                    derive_partial_eq = Some(input.parse()?)
+                }
+                "stable_name" | "derive_debug" | "derive_partial_eq" => {
                     return Err(Error::new_spanned(key, "duplicate history argument"));
                 }
                 _ => {
-                    return Err(Error::new_spanned(key, "expected `stable_name`"));
+                    return Err(Error::new_spanned(
+                        key,
+                        "expected `stable_name`, `derive_debug`, or `derive_partial_eq`",
+                    ));
                 }
             }
             if input.is_empty() {
@@ -33,9 +43,14 @@ impl Parse for Arguments {
             }
             input.parse::<Token![,]>()?;
         }
+        let defaults = RecordDerives::default();
         Ok(Self {
             stable_name: stable_name
                 .ok_or_else(|| input.error("history requires an explicit `stable_name`"))?,
+            derives: RecordDerives {
+                debug: derive_debug.map_or(defaults.debug, |value| value.value),
+                partial_eq: derive_partial_eq.map_or(defaults.partial_eq, |value| value.value),
+            },
         })
     }
 }
@@ -93,6 +108,7 @@ pub fn parse(arguments: Arguments, item: ItemStruct) -> Result<(RecordInput, Str
         name: item.ident,
         visibility: item.vis,
         attributes,
+        derives: arguments.derives,
         fields,
         field_visibility,
     };
@@ -119,6 +135,7 @@ pub fn reject_generics(generics: &Generics) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::{parse, Arguments};
+    use crate::model::RecordDerives;
     use syn::parse_quote;
 
     fn argument_error(source: &str) -> String {
@@ -146,6 +163,8 @@ mod tests {
         )
         .expect("ordinary record fields");
         assert_eq!(stable_name, "example.record.created");
+        assert_eq!(input.derives, RecordDerives::default());
+        assert!(input.derives.debug && input.derives.partial_eq);
         assert!(input.fields[0].attributes.is_empty());
         let attributes = &input.fields[1].attributes;
         for name in ["doc", "allow", "history"] {
@@ -181,7 +200,7 @@ mod tests {
             ("stable_name", "expected `=`"),
             (
                 "stable_name = \"example.record.created\", unknown = true",
-                "expected `stable_name`",
+                "expected `stable_name`, `derive_debug`, or `derive_partial_eq`",
             ),
         ] {
             assert_eq!(argument_error(source), diagnostic);
@@ -195,6 +214,65 @@ mod tests {
                 "stable_name = \"example.record.created\", stable_name = \"example.record.updated\""
             ),
             "duplicate history argument"
+        );
+    }
+
+    #[test]
+    fn native_trait_options_are_independent_and_order_insensitive() {
+        for (source, debug, partial_eq) in [
+            (
+                "stable_name = \"example.record\", derive_debug = false",
+                false,
+                true,
+            ),
+            (
+                "derive_partial_eq = false, stable_name = \"example.record\",",
+                true,
+                false,
+            ),
+            (
+                "derive_debug = false, derive_partial_eq = false, stable_name = \"example.record\"",
+                false,
+                false,
+            ),
+            (
+                "derive_partial_eq = true, stable_name = \"example.record\", derive_debug = true,",
+                true,
+                true,
+            ),
+        ] {
+            let arguments = syn::parse_str::<Arguments>(source).unwrap();
+            let (input, _) = parse(
+                arguments,
+                parse_quote!(
+                    struct Record {
+                        value: u32,
+                    }
+                ),
+            )
+            .unwrap();
+            assert_eq!(input.derives, RecordDerives { debug, partial_eq });
+        }
+    }
+
+    #[test]
+    fn native_trait_options_reject_duplicates_and_non_boolean_values() {
+        for name in ["derive_debug", "derive_partial_eq"] {
+            for values in ["false", "true"] {
+                let source =
+                    format!("stable_name = \"example.record\", {name} = {values}, {name} = false");
+                assert_eq!(argument_error(&source), "duplicate history argument");
+            }
+            for value in ["0", "\"false\"", "Some(false)", "!true"] {
+                let source = format!("stable_name = \"example.record\", {name} = {value}");
+                assert!(
+                    argument_error(&source).contains("boolean literal"),
+                    "{source}"
+                );
+            }
+        }
+        assert!(
+            argument_error("derive_debug = false").contains("requires an explicit `stable_name`")
         );
     }
 

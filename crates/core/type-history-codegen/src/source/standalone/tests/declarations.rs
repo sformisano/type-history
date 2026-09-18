@@ -14,11 +14,13 @@ fn attribute_aliases_and_literal_module_paths_share_discovery() {
         "use history_api::versioned as evolve; #[path=\"invoice.rs\"] mod invoice;",
     )
     .unwrap();
-    fs::write(root.path().join("src/invoice.rs"), "use crate::evolve; #[evolve(stable_name=\"billing.invoice.issued\")] pub struct Invoice { number: String }").unwrap();
+    fs::write(root.path().join("src/invoice.rs"), "use crate::evolve; #[evolve(derive_debug=false, stable_name=\"billing.invoice.issued\", derive_partial_eq=false,)] pub struct Invoice { number: String }").unwrap();
     let source = discover(root.path(), &library, &["history_api".to_owned()]).unwrap();
     assert_eq!(source.declarations.len(), 1);
     assert_eq!(source.declarations[0].stable_name, "billing.invoice.issued");
     assert_eq!(source.declarations[0].module_path, ["invoice"]);
+    assert!(!source.declarations[0].input.derives.debug);
+    assert!(!source.declarations[0].input.derives.partial_eq);
     assert!(source
         .tracked_paths
         .contains(&root.path().join("src/invoice.rs")));

@@ -123,8 +123,8 @@ fn declarations_reject_unsupported_enum_and_record_authoring() {
             "generic",
         ),
         (
-            "#[derive(history_api::Schema)] struct Bad(u32);",
-            "Schema supports named records and enums",
+            "#[derive(history_api::Schema)] struct Bad();",
+            "Schema tuple structs require at least one field",
         ),
         (
             "#[derive(history_api::Schema)] enum Bad {}",

@@ -10,6 +10,20 @@ readme.workspace = true
 homepage.workspace = true
 documentation = "https://docs.rs/type-history"
 
+[features]
+default = []
+typed-floats = ["type-history-core/typed-floats"]
+uuid = ["type-history-core/uuid"]
+rust-decimal = ["type-history-core/rust-decimal"]
+chrono = ["type-history-core/chrono"]
+time = ["type-history-core/time"]
+rc = ["type-history-core/rc"]
+
 [dependencies]
 type-history-core = { path = "../type-history-core", version = "0.1.0" }
 type-history-macros = { path = "../type-history-macros", version = "0.1.0" }
+
+[dev-dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+type-history-codegen = { path = "../type-history-codegen", version = "0.1.0" }
