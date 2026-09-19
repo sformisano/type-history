@@ -252,8 +252,13 @@ The facade has no default features. Enable only the integrations a record uses:
 
 ```toml
 [dependencies]
-type-history = { version = "0.1.0", features = ["uuid", "rust-decimal", "time"] }
+type-history = { git = "https://github.com/sformisano/type-history", rev = "fdfda383685bad2253f4d7dc1dfbc1d5de2fd8f3", features = ["uuid", "rust-decimal", "time"] }
 ```
+
+These features exist only at that revision. The facade's manifest in the published
+0.1.0 release has no `[features]` section, so a dependency written against
+`version = "0.1.0"` with any of these features fails to resolve. See
+[package setup](setup.md#1-install-the-components).
 
 | Feature | Public field type | Stored contract |
 | --- | --- | --- |

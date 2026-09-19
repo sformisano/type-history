@@ -22,24 +22,54 @@ Type History works through three components:
 
 ### Install the Components
 
-Type History requires Rust 1.97 or later. Install the CLI:
+Type History requires Rust 1.97 or later.
+
+Install from git revision `fdfda383685bad2253f4d7dc1dfbc1d5de2fd8f3`, not from the
+crates.io 0.1.0 release. The checked adapters and the field contracts this page
+documents below were added after 0.1.0 was published, and the version number cannot
+separate the two artifacts: every workspace manifest still reads `version = "0.1.0"`
+twelve commits past publication. A package that depends on `"0.1.0"` and then asks
+for an adapter feature fails to resolve, because the published manifests carry no
+`[features]` section at all.
+
+Install the CLI:
 
 ```sh
-cargo install cargo-type-history --version 0.1.0 --locked
+cargo install --git https://github.com/sformisano/type-history \
+  --rev fdfda383685bad2253f4d7dc1dfbc1d5de2fd8f3 \
+  cargo-type-history --locked
 ```
 
 Add the library and build hook to your package:
 
 ```toml
 [dependencies]
-type-history = "0.1.0"
+type-history = { git = "https://github.com/sformisano/type-history", rev = "fdfda383685bad2253f4d7dc1dfbc1d5de2fd8f3" }
 
 [build-dependencies]
-type-history-build = "0.1.0"
+type-history-build = { git = "https://github.com/sformisano/type-history", rev = "fdfda383685bad2253f4d7dc1dfbc1d5de2fd8f3" }
 ```
 
 The [package setup guide](https://github.com/sformisano/type-history/blob/main/book/src/setup.md)
 shows the complete configuration and a source checkout alternative.
+
+#### Known state of this revision
+
+CI at `fdfda383685bad2253f4d7dc1dfbc1d5de2fd8f3` is red. Run 35336387633 of 18
+September 2026 failed in the `Unit and integration tests` step, in
+`field_support::features::field_support_individual_and_unified_feature_graphs_preserve_contracts`
+of `cargo-type-history`'s `standalone` suite, with `error: no matching package named
+'time-macros' found` and `note: offline mode (via --offline) can sometimes cause
+surprising resolution failures`. That test builds a throwaway consumer package and
+resolves it with `--offline`; the failure is the runner's dependency cache, not a
+defect in the library. Every other step in that run — formatting, Clippy, the
+default-feature library tests, the codec fuzz smoke job — passed, and the five steps
+after the failure never ran.
+
+There is no release workflow. The repository has two workflows, `ci.yml` and
+`book.yml`. Cutting 0.1.1 so the version number could identify the artifact again
+would be a manual `cargo publish` off a red `main`, with no gate in front of it.
+That is why this page sends you to a revision instead of to a release.
 
 ### Connect Type History to Cargo
 
@@ -598,7 +628,13 @@ for exact domains, feature flags, set declarations, and codec limits.
 ## Documentation
 
 - [The book](https://github.com/sformisano/type-history/blob/main/book/README.md) covers the generated types, field changes, conversions, freezing, and integrations.
-- [The API reference](https://docs.rs/type-history/0.1.0/type_history/) documents public types, methods, and traits.
+- No API reference is published for git revision
+  `fdfda383685bad2253f4d7dc1dfbc1d5de2fd8f3`, the revision this page installs.
+  [docs.rs/type-history/0.1.0](https://docs.rs/type-history/0.1.0/type_history/)
+  is the 0.1.0 release and contains neither the adapters nor the field contracts
+  described above. Build the current reference from a checkout of that revision with
+  `cargo doc --workspace --no-deps --all-features --locked`, then open
+  `target/doc/type_history/index.html`.
 - [The invoice example](https://github.com/sformisano/type-history/blob/main/crates/examples/invoice-history/README.md) is a complete runnable package.
 
 Licensed under [MIT

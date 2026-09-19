@@ -2,19 +2,30 @@
 
 Before the shop can declare `ReceiptCreated`, its package needs the Type History library, a build hook, and a place to save frozen schemas. This guide creates `my-shop-demo-project`, the Cargo library used by the [receipt walkthrough](quick-start.md).
 
-The current setup uses the crates.io releases and requires Rust 1.97 or later.
+The current setup installs from git revision
+`fdfda383685bad2253f4d7dc1dfbc1d5de2fd8f3` and requires Rust 1.97 or later.
 Linux is the tested host for lifecycle commands. Windows and macOS have not been validated.
 
-## 1. Install the released components
+This guide does not use the crates.io 0.1.0 release. The optional adapters in
+[field integration](integration.md#optional-adapters) and the current field grammar
+were added after 0.1.0 was published, and the version number cannot separate the two
+artifacts: every workspace manifest still reads `version = "0.1.0"` twelve commits
+past publication. A package that depends on `"0.1.0"` and then asks for an adapter
+feature fails to resolve, because the published manifests carry no `[features]`
+section at all.
+
+## 1. Install the components
 
 Install the CLI:
 
 <!-- setup:release-install.sh -->
 ```sh
-cargo install cargo-type-history --version 0.1.0 --locked
+cargo install --git https://github.com/sformisano/type-history \
+  --rev fdfda383685bad2253f4d7dc1dfbc1d5de2fd8f3 \
+  cargo-type-history --locked
 ```
 
-Use matching crate versions for the library, build hook, and CLI so they agree on the schema format and supported attributes. The Cargo package is `type-history`; Rust imports use `type_history`.
+Pin the library, build hook, and CLI to the same revision so they agree on the schema format and supported attributes. The Cargo package is `type-history`; Rust imports use `type_history`.
 
 | Package | Why the example needs it |
 | --- | --- |
@@ -40,12 +51,12 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-type-history = "0.1.0"
+type-history = { git = "https://github.com/sformisano/type-history", rev = "fdfda383685bad2253f4d7dc1dfbc1d5de2fd8f3" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 
 [build-dependencies]
-type-history-build = "0.1.0"
+type-history-build = { git = "https://github.com/sformisano/type-history", rev = "fdfda383685bad2253f4d7dc1dfbc1d5de2fd8f3" }
 ```
 
 `serde_json` reads and writes the receipt examples; Serde's derives support the [nested records](integration.md#nested-records) used later.
