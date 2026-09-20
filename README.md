@@ -27,8 +27,8 @@ Type History requires Rust 1.97 or later.
 Install from git revision `fdfda383685bad2253f4d7dc1dfbc1d5de2fd8f3`, not from the
 crates.io 0.1.0 release. The checked adapters and the field contracts this page
 documents below were added after 0.1.0 was published, and the version number cannot
-separate the two artifacts: every workspace manifest still reads `version = "0.1.0"`
-twelve commits past publication. A package that depends on `"0.1.0"` and then asks
+separate the two artifacts: all six published manifests still read
+`version = "0.1.0"` twelve commits past publication. A package that depends on `"0.1.0"` and then asks
 for an adapter feature fails to resolve, because the published manifests carry no
 `[features]` section at all.
 

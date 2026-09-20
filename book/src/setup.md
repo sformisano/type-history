@@ -9,8 +9,8 @@ Linux is the tested host for lifecycle commands. Windows and macOS have not been
 This guide does not use the crates.io 0.1.0 release. The optional adapters in
 [field integration](integration.md#optional-adapters) and the current field grammar
 were added after 0.1.0 was published, and the version number cannot separate the two
-artifacts: every workspace manifest still reads `version = "0.1.0"` twelve commits
-past publication. A package that depends on `"0.1.0"` and then asks for an adapter
+artifacts: all six published manifests still read `version = "0.1.0"` twelve
+commits past publication. A package that depends on `"0.1.0"` and then asks for an adapter
 feature fails to resolve, because the published manifests carry no `[features]`
 section at all.
 
