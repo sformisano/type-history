@@ -27,3 +27,6 @@ type-history-macros = { path = "../type-history-macros", version = "0.1.0" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 type-history-codegen = { path = "../type-history-codegen", version = "0.1.0" }
+
+[lints]
+workspace = true

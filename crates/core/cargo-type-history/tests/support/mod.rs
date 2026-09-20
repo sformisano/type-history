@@ -1,3 +1,4 @@
+// Stays `mod.rs`: as `tests/support.rs` Cargo would compile it as its own test binary.
 use rustix::process::{kill_process_group, Pid, Signal};
 use std::collections::BTreeMap;
 use std::env;

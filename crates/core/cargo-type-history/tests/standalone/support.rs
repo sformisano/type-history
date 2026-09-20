@@ -352,6 +352,7 @@ fn copy_family(vendor: &Path) {
     );
     workspace.insert("resolver".into(), "2".into());
     workspace.insert("package".into(), manifest["workspace"]["package"].clone());
+    workspace.insert("lints".into(), manifest["workspace"]["lints"].clone());
     workspace.insert("dependencies".into(), dependencies.into());
     fs::write(
         vendor.join("Cargo.toml"),
