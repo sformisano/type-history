@@ -22,6 +22,9 @@ thiserror.workspace = true
 tempfile = "3.23.0"
 serde_json.workspace = true
 toml = "0.9.8"
+# Seed the root lock/fetch with the extra features used by offline standalone
+# consumers. Their separate workspaces still resolve each feature graph alone.
+time = { workspace = true, features = ["serde-human-readable", "large-dates"] }
 
 [target.'cfg(unix)'.dev-dependencies]
 rustix = { version = "1.1", features = ["process"] }

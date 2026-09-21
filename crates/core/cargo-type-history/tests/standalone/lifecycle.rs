@@ -36,6 +36,19 @@ fn standalone_draft_reset_undo_exact_freeze_and_read_only_check() {
     assert_eq!(fixture.read(LEDGER), initial);
     fixture.write("src/lib.rs", V2);
     success(&fixture.cargo(&["build", "--locked", "--offline"]));
+    failure(
+        &fixture.cli(&[
+            "reset",
+            "--package",
+            "standalone-history-consumer",
+            "--type",
+            STABLE_NAME,
+            "--version",
+            "1",
+        ]),
+        "successor",
+    );
+    assert_eq!(fixture.read(LEDGER), initial);
     fixture.write("src/lib.rs", V1);
     success(&fixture.cargo(&["build", "--release", "--locked", "--offline"]));
     assert_eq!(
@@ -80,6 +93,14 @@ fn standalone_draft_reset_undo_exact_freeze_and_read_only_check() {
     let reserved = fixture.read(LEDGER);
     assert_eq!(fixture.ledger()[STABLE_NAME]["1"]["reset_draft"], true);
     assert_eq!(
+        fixture.ledger()[STABLE_NAME]
+            .as_object()
+            .unwrap()
+            .keys()
+            .collect::<Vec<_>>(),
+        ["1"]
+    );
+    assert_eq!(
         fixture.ledger()[STABLE_NAME]["1"]["schema"],
         serde_json::from_str::<Value>(&initial).unwrap()[STABLE_NAME]["1"]["schema"]
     );
@@ -114,6 +135,10 @@ fn standalone_draft_reset_undo_exact_freeze_and_read_only_check() {
     failure(
         &fixture.cargo(&["build", "--release", "--locked", "--offline"]),
         "committed history",
+    );
+    failure(
+        &fixture.cli(&["freeze", "--package", "standalone-history-consumer"]),
+        "retained",
     );
     assert_eq!(fixture.read(LEDGER), reserved);
     fixture.write("src/lib.rs", V1);

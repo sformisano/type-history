@@ -61,15 +61,18 @@ September 2026 failed in the `Unit and integration tests` step, in
 of `cargo-type-history`'s `standalone` suite, with `error: no matching package named
 'time-macros' found` and `note: offline mode (via --offline) can sometimes cause
 surprising resolution failures`. That test builds a throwaway consumer package and
-resolves it with `--offline`; the failure is the runner's dependency cache, not a
-defect in the library. Every other step in that run — formatting, Clippy, the
-default-feature library tests, the codec fuzz smoke job — passed, and the five steps
-after the failure never ran.
+resolves it with `--offline`. The root lockfile omitted a dependency needed by the
+consumer's additional `time` features, so CI's `cargo fetch --locked` could not
+prepare that graph. This source tree adds those features to the CLI's development
+dependencies so the normal fetch step includes them; the pinned revision above
+predates that test-setup fix. Every other step in that run — formatting, Clippy,
+the default-feature library tests, the codec fuzz smoke job — passed, and the
+five steps after the failure never ran.
 
 There is no release workflow. The repository has two workflows, `ci.yml` and
-`book.yml`. Cutting 0.1.1 so the version number could identify the artifact again
-would be a manual `cargo publish` off a red `main`, with no gate in front of it.
-That is why this page sends you to a revision instead of to a release.
+`book.yml`. A registry release requires verifying the exact candidate and
+publishing the crate family in dependency order. Until that release is made,
+the revision above identifies the field-adapter API this page documents.
 
 ### Connect Type History to Cargo
 
