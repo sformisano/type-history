@@ -57,7 +57,7 @@ fn probe(profile: &str, settings: &[(&str, &str)]) -> Output {
     fs::write(&ledger, b"{}\n").unwrap();
     fs::create_dir(owner.path().join("src")).unwrap();
     fs::create_dir(owner.path().join("out")).unwrap();
-    fs::write(owner.path().join("Cargo.toml"), "[package]\nname='custom-history-fixture'\nversion='0.1.0'\n[workspace]\n[dependencies]\nhistory_api={package='type-history',version='0.1.0'}\n").unwrap();
+    fs::write(owner.path().join("Cargo.toml"), "[package]\nname='custom-history-fixture'\nversion='0.1.0'\n[workspace]\n[dependencies]\nhistory_api={package='type-history',version='0.2.0'}\n").unwrap();
     fs::write(owner.path().join("src/lib.rs"), "#[history_api::versioned(stable_name=\"shop.receipt.created\")] pub struct ReceiptCreated {}\n").unwrap();
     let mut command = Command::new(env::current_exe().unwrap());
     command

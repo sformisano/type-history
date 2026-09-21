@@ -24,55 +24,25 @@ Type History works through three components:
 
 Type History requires Rust 1.97 or later.
 
-Install from git revision `fdfda383685bad2253f4d7dc1dfbc1d5de2fd8f3`, not from the
-crates.io 0.1.0 release. The checked adapters and the field contracts this page
-documents below were added after 0.1.0 was published, and the version number cannot
-separate the two artifacts: all six published manifests still read
-`version = "0.1.0"` twelve commits past publication. A package that depends on `"0.1.0"` and then asks
-for an adapter feature fails to resolve, because the published manifests carry no
-`[features]` section at all.
-
-Install the CLI:
+Install the 0.2.0 library, build hook, and CLI from crates.io:
 
 ```sh
-cargo install --git https://github.com/sformisano/type-history \
-  --rev fdfda383685bad2253f4d7dc1dfbc1d5de2fd8f3 \
-  cargo-type-history --locked
+cargo install cargo-type-history --version '=0.2.0' --locked
 ```
 
 Add the library and build hook to your package:
 
 ```toml
 [dependencies]
-type-history = { git = "https://github.com/sformisano/type-history", rev = "fdfda383685bad2253f4d7dc1dfbc1d5de2fd8f3" }
+type-history = "=0.2.0"
 
 [build-dependencies]
-type-history-build = { git = "https://github.com/sformisano/type-history", rev = "fdfda383685bad2253f4d7dc1dfbc1d5de2fd8f3" }
+type-history-build = "=0.2.0"
 ```
 
-The [package setup guide](https://github.com/sformisano/type-history/blob/main/book/src/setup.md)
+Keep the library, build hook, and CLI on the same release.
+The [package setup guide](https://github.com/sformisano/type-history/blob/v0.2.0/book/src/setup.md)
 shows the complete configuration and a source checkout alternative.
-
-#### Known state of this revision
-
-CI at `fdfda383685bad2253f4d7dc1dfbc1d5de2fd8f3` is red. Run 35336387633 of 18
-September 2026 failed in the `Unit and integration tests` step, in
-`field_support::features::field_support_individual_and_unified_feature_graphs_preserve_contracts`
-of `cargo-type-history`'s `standalone` suite, with `error: no matching package named
-'time-macros' found` and `note: offline mode (via --offline) can sometimes cause
-surprising resolution failures`. That test builds a throwaway consumer package and
-resolves it with `--offline`. The root lockfile omitted a dependency needed by the
-consumer's additional `time` features, so CI's `cargo fetch --locked` could not
-prepare that graph. This source tree adds those features to the CLI's development
-dependencies so the normal fetch step includes them; the pinned revision above
-predates that test-setup fix. Every other step in that run — formatting, Clippy,
-the default-feature library tests, the codec fuzz smoke job — passed, and the
-five steps after the failure never ran.
-
-There is no release workflow. The repository has two workflows, `ci.yml` and
-`book.yml`. A registry release requires verifying the exact candidate and
-publishing the crate family in dependency order. Until that release is made,
-the revision above identifies the field-adapter API this page documents.
 
 ### Prepare a Source Checkout for Tests
 
@@ -582,7 +552,7 @@ let bytes = to_vec(&receipt.into_versioned())?;
 }
 ```
 
-Your application chooses how to save and retrieve the bytes. This example uses JSON; the same API works with other [supported Serde formats](https://github.com/sformisano/type-history/blob/main/book/src/decoding.md#choose-a-serde-format).
+Your application chooses how to save and retrieve the bytes. This example uses JSON; the same API works with other [supported Serde formats](https://github.com/sformisano/type-history/blob/v0.2.0/book/src/decoding.md#choose-a-serde-format).
 
 ## Using Type History in a distributed system
 
@@ -635,20 +605,14 @@ participate. Change any of them through a new version and an explicit migration.
 
 The checked adapters own their JSON and named-field MessagePack encodings.
 Enabling native dependency Serde features does not change those encodings.
-See [field integration](https://github.com/sformisano/type-history/blob/main/book/src/integration.md#supported-field-contracts)
+See [field integration](https://github.com/sformisano/type-history/blob/v0.2.0/book/src/integration.md#supported-field-contracts)
 for exact domains, feature flags, set declarations, and codec limits.
 
 ## Documentation
 
-- [The book](https://github.com/sformisano/type-history/blob/main/book/README.md) covers the generated types, field changes, conversions, freezing, and integrations.
-- No API reference is published for git revision
-  `fdfda383685bad2253f4d7dc1dfbc1d5de2fd8f3`, the revision this page installs.
-  [docs.rs/type-history/0.1.0](https://docs.rs/type-history/0.1.0/type_history/)
-  is the 0.1.0 release and contains neither the adapters nor the field contracts
-  described above. Build the current reference from a checkout of that revision with
-  `cargo doc --workspace --no-deps --all-features --locked`, then open
-  `target/doc/type_history/index.html`.
-- [The invoice example](https://github.com/sformisano/type-history/blob/main/crates/examples/invoice-history/README.md) is a complete runnable package.
+- [The book](https://github.com/sformisano/type-history/blob/v0.2.0/book/README.md) covers the generated types, field changes, conversions, freezing, and integrations.
+- [The 0.2.0 API reference](https://docs.rs/type-history/0.2.0/type_history/) includes all optional field integrations. Build it locally with `cargo doc --workspace --no-deps --all-features --locked`, then open `target/doc/type_history/index.html`.
+- [The invoice example](https://github.com/sformisano/type-history/blob/v0.2.0/crates/examples/invoice-history/README.md) is a complete runnable package.
 
 Licensed under [MIT
-](https://github.com/sformisano/type-history/blob/main/LICENSE-MIT)or [Apache 2.0](https://github.com/sformisano/type-history/blob/main/LICENSE-APACHE), at your option.
+](https://github.com/sformisano/type-history/blob/v0.2.0/LICENSE-MIT)or [Apache 2.0](https://github.com/sformisano/type-history/blob/v0.2.0/LICENSE-APACHE), at your option.

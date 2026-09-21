@@ -1,6 +1,6 @@
 [package]
 name = "type-history-build"
-version = "0.1.0"
+version = "0.2.0"
 edition.workspace = true
 rust-version.workspace = true
 repository.workspace = true
@@ -11,7 +11,7 @@ license.workspace = true
 description = "Shared build authority and checked type history lifecycle operations"
 
 [dependencies]
-type-history-codegen = { path = "../type-history-codegen", version = "0.1.0" }
+type-history-codegen = { path = "../type-history-codegen", version = "0.2.0" }
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
@@ -23,7 +23,7 @@ syn = { version = "2", features = ["full", "extra-traits"] }
 rustix = { version = "1.1", features = ["fs"] }
 
 [dev-dependencies]
-type-history-core = { path = "../type-history-core", version = "0.1.0" }
+type-history-core = { path = "../type-history-core", version = "0.2.0" }
 
 [lints]
 workspace = true

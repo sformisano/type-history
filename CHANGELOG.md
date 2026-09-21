@@ -1,12 +1,17 @@
 # Changelog
 
-## Unreleased
+## 0.2.0
 
 - Add stable field contracts for string-keyed maps, declared-membership sets, tuples through arity 16, supporting tuple structs, and owned wrappers.
 - Add optional finite-float, UUID, exact-decimal, Chrono, Time, `Rc`, and `Arc` integrations with checked conversions and owned encodings.
 - Add per-history `derive_debug` and `derive_partial_eq` options. Both default to enabled and can be disabled for long tuple fields.
 - Compare field presence, profiles, tuple structure, and set membership during frozen compatibility checks. Incompatible changes require explicit migrations.
 - Point unsupported persisted field errors at the field type and explain the missing schema support without suggesting private trait implementations.
+- Allow public supporting tuple structs to contain private field types without exposing them through generated schema types. Preserve nullable-newtype and nested-option checks.
+- Capture lifecycle inputs by package, including declared extra inputs and symlink routes, and release inherited file locks when commands exit.
+- Preserve lifecycle operations for explicit workspace members outside the workspace directory.
+- Publish all six crates together at 0.2.0 and document matching registry dependencies.
+- Breaking API changes for framework and macro integrations: `RecordInput` requires `derives`, `json_schema::record` accepts `Vec<SchemaField>` with explicit presence, and public schema enums and constant fields carry the extended storage contracts.
 
 ## 0.1.0
 

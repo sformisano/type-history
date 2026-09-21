@@ -176,7 +176,7 @@ mod tests {
         fs::write(&unrelated, "[workspace]\n").unwrap();
         fs::write(root.join("Cargo.toml"), "[package]\nname = 'member'\nworkspace = '../../workspace'\n[dependencies]\nhistory_api.workspace = true\n").unwrap();
         let selected = workspace.join("Cargo.toml");
-        fs::write(&selected, "[workspace]\nmembers = ['../parent/member']\n[workspace.dependencies]\nhistory_api = { package = 'type-history', version = '0.1.0' }\n").unwrap();
+        fs::write(&selected, "[workspace]\nmembers = ['../parent/member']\n[workspace.dependencies]\nhistory_api = { package = 'type-history', version = '0.2.0' }\n").unwrap();
         let package = read(&root, &["type-history"]).unwrap();
         assert_eq!(package.facades, ["history_api"]);
         assert!(package.tracked_paths.contains(&selected));
