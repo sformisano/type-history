@@ -122,7 +122,8 @@ impl Snapshot {
                 .any(|parent| parent != path && path.starts_with(parent))
         });
         let invocation = env::current_dir()?.canonicalize()?;
-        if !invocation.starts_with(&workspace_root) {
+        // An explicit workspace member can live outside its workspace directory.
+        if !boundaries.iter().any(|root| invocation.starts_with(root)) {
             return Err("Cargo invocation directory is outside the resolved local graph".into());
         }
         for ancestor in invocation.ancestors() {
