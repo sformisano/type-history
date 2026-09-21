@@ -62,3 +62,81 @@ fn field_support_presence_matches_serde_and_survives_export() {
         assert_eq!(restored, document);
     }
 }
+
+const NULLABLE: usize = 2;
+
+#[derive(Debug, PartialEq, Serialize, Deserialize, Schema)]
+pub struct PublicConstArray([u8; NULLABLE]);
+
+#[derive(Debug, PartialEq, Serialize, Deserialize, Schema)]
+struct PrivateRecord {
+    value: u32,
+}
+
+#[derive(Debug, PartialEq, Serialize, Deserialize, Schema)]
+pub struct PublicNewtype(PrivateRecord);
+
+#[derive(Debug, PartialEq, Serialize, Deserialize, Schema)]
+pub struct PublicTuple(PrivateRecord, Option<u32>);
+
+#[derive(Debug, PartialEq, Serialize, Deserialize, Schema)]
+pub struct PublicNullable(Option<PrivateRecord>);
+
+#[derive(Debug, PartialEq, Serialize, Deserialize, Schema)]
+pub struct PublicNested(PublicNullable);
+
+#[derive(Debug, PartialEq, Serialize, Deserialize, Schema)]
+struct EncapsulatedFields {
+    required: PublicNullable,
+    nested: PublicNested,
+    optional: Option<PublicNewtype>,
+    tuple: PublicTuple,
+}
+
+#[test]
+fn public_tuple_structs_keep_private_fields_and_their_wire_contracts() {
+    let array = json!([1, 2]);
+    let value: PublicConstArray = serde_json::from_value(array.clone()).unwrap();
+    assert_eq!(serde_json::to_value(value).unwrap(), array);
+    assert_eq!(
+        PublicConstArray::resolved_wire_schema(),
+        <[u8; NULLABLE]>::resolved_wire_schema()
+    );
+
+    let record = json!({"value": 7});
+    let newtype: PublicNewtype = serde_json::from_value(record.clone()).unwrap();
+    assert_eq!(serde_json::to_value(newtype).unwrap(), record);
+    let tuple = json!([record, null]);
+    let pair: PublicTuple = serde_json::from_value(tuple.clone()).unwrap();
+    assert_eq!(serde_json::to_value(pair).unwrap(), tuple);
+
+    let value = json!({"required": null, "nested": null, "tuple": tuple});
+    let fields: EncapsulatedFields = serde_json::from_value(value.clone()).unwrap();
+    assert_eq!(fields.required, PublicNullable(None));
+    assert_eq!(fields.nested, PublicNested(PublicNullable(None)));
+    assert_eq!(fields.optional, None);
+    for required in ["required", "nested", "tuple"] {
+        let mut missing = value.clone();
+        missing.as_object_mut().unwrap().remove(required);
+        assert!(serde_json::from_value::<EncapsulatedFields>(missing).is_err());
+    }
+
+    assert_eq!(
+        PublicNewtype::resolved_wire_schema(),
+        PrivateRecord::resolved_wire_schema()
+    );
+    assert_eq!(
+        PublicTuple::resolved_wire_schema(),
+        <(PrivateRecord, Option<u32>)>::resolved_wire_schema()
+    );
+    assert_eq!(
+        PublicNested::resolved_wire_schema(),
+        <Option<PrivateRecord>>::resolved_wire_schema()
+    );
+    let document = JsonSchemaDocument::from_export(
+        export_json_schema::<EncapsulatedFields>(),
+        "private-fields",
+    )
+    .unwrap();
+    assert_eq!(document.shape(), EncapsulatedFields::resolved_wire_schema());
+}

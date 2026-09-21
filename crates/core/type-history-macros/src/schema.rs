@@ -31,7 +31,7 @@ pub(super) fn expand(input: DeriveInput) -> Result<TokenStream> {
                 let (wire, declaration) = record(fields, name, &support)?;
                 nominal(name, visibility, &wire, &declaration, &support)
             }
-            Fields::Unnamed(fields) => tuple::expand(fields, name, &helper, &support)?,
+            Fields::Unnamed(fields) => tuple::expand(fields, name, visibility, &helper, &support)?,
             Fields::Unit => {
                 return Err(Error::new_spanned(
                     &input,

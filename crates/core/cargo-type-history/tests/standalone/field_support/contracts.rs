@@ -92,6 +92,7 @@ fn field_support_presence_omission_null_and_nested_options() {
         "Option<Rc<Option<u32>>>",
         "Option<Arc<Option<u32>>>",
         "Option<Nullable>",
+        "Option<Nested>",
         "Option<Box<Nullable>>",
         "Option<Rc<Nullable>>",
         "Option<Arc<Nullable>>",

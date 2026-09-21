@@ -1,8 +1,8 @@
 //! Supporting tuple-struct schema helpers.
 
 use proc_macro2::TokenStream;
-use quote::quote;
-use syn::{Error, FieldsUnnamed, Ident, Result};
+use quote::{format_ident, quote};
+use syn::{Error, FieldsUnnamed, Ident, Result, Visibility};
 use type_history_codegen::lint_attributes::scoped_field_type;
 
 use super::validate_attribute;
@@ -10,6 +10,7 @@ use super::validate_attribute;
 pub(super) fn expand(
     fields: &FieldsUnnamed,
     name: &Ident,
+    visibility: &Visibility,
     helper: &Ident,
     support: &TokenStream,
 ) -> Result<TokenStream> {
@@ -44,10 +45,28 @@ pub(super) fn expand(
     } else {
         type_history_codegen::json_schema_derive::field_impl_for_derived(name, support)
     };
+    let marker = format_ident!("__TypeHistory{}SchemaWire", name);
+    let wire_alias = format_ident!("__TypeHistory{}TupleWire", name);
+    // A public associated type must not expose private field types. Keep their
+    // shape behind a nominal marker, but retain nullability for Option<T>'s
+    // nested-option rejection, including through aliases and other newtypes.
     Ok(quote! {
         #(#aliases)*
         #schema
-        impl #support::ResolvedSchema for #name { type Wire = #wire; }
+        // Resolve authored field constants outside the generated generic scope.
+        type #wire_alias = #wire;
+        #[doc(hidden)]
+        #visibility struct #marker<const NULLABLE: ::core::primitive::bool>;
+        impl<const NULLABLE: ::core::primitive::bool> #support::WireNode for #marker<NULLABLE> {
+            const SHAPE: #support::ConstantShape = <#wire_alias as #support::WireNode>::SHAPE;
+            fn schema() -> #support::SchemaShape { <#wire_alias as #support::WireNode>::schema() }
+        }
+        impl #support::NonOptionalNode for #marker<false> {}
+        impl #support::ResolvedSchema for #name {
+            type Wire = #marker<{
+                ::core::matches!(<#wire_alias as #support::WireNode>::SHAPE, #support::ConstantShape::Option(_))
+            }>;
+        }
         #field_contract
     })
 }
