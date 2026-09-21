@@ -1,5 +1,5 @@
 //! Deterministic edit/copy/undo probes do not depend on filesystem timing.
-use super::{cargo_cache_roots, cargo_config, Snapshot};
+use super::{cargo_cache_roots, cargo_config, declared_snapshot_inputs, Snapshot};
 use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::OsString;
 use std::fs;
@@ -24,6 +24,7 @@ fn fixture() -> Snapshot {
         toolchain: None,
         mirror: owner.path().join("mirror"),
         roots: vec![root],
+        boundaries: Vec::new(),
         manifests: BTreeSet::new(),
         workspaces: BTreeSet::new(),
         extra: Vec::new(),
@@ -35,6 +36,55 @@ fn fixture() -> Snapshot {
         compiler: Vec::new(),
         _owner: owner,
     }
+}
+
+#[test]
+fn declared_inputs_are_relative_existing_paths() {
+    let owner = TempBuilder::new()
+        .prefix("declared-snapshot-inputs-")
+        .tempdir()
+        .unwrap();
+    let root = owner.path().join("workspace/crates/domain");
+    let input = owner.path().join("workspace/generated/schema.json");
+    fs::create_dir_all(root.join("src")).unwrap();
+    fs::create_dir_all(input.parent().unwrap()).unwrap();
+    fs::write(&input, "captured").unwrap();
+    let document = toml::from_str(
+        "[package.metadata.type-history]\nsnapshot-inputs = ['../../generated/schema.json']\n",
+    )
+    .unwrap();
+    assert_eq!(
+        declared_snapshot_inputs(&root, &document).unwrap(),
+        [input.canonicalize().unwrap()]
+    );
+
+    for value in ["'/absolute/input'", "'../../missing'"] {
+        let document = toml::from_str(&format!(
+            "[package.metadata.type-history]\nsnapshot-inputs = [{value}]\n"
+        ))
+        .unwrap();
+        assert!(declared_snapshot_inputs(&root, &document).is_err());
+    }
+}
+
+#[test]
+fn declared_input_bytes_remain_part_of_freshness_checks() {
+    let mut snapshot = fixture();
+    let input = snapshot._owner.path().join("generated/schema.json");
+    fs::create_dir_all(input.parent().unwrap()).unwrap();
+    fs::write(&input, "captured").unwrap();
+    snapshot.roots.push(input.clone());
+    snapshot.before = snapshot.fingerprint().unwrap();
+    snapshot.copy_tree(&input).unwrap();
+    snapshot.verify_complete_copy().unwrap();
+
+    fs::write(&input, "changed").unwrap();
+    assert_ne!(snapshot.before, snapshot.fingerprint().unwrap());
+    assert!(snapshot
+        .copy_tree(&input)
+        .unwrap_err()
+        .to_string()
+        .contains("InputsChanged"));
 }
 
 #[test]

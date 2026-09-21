@@ -1,6 +1,63 @@
-use super::support::{success, Fixture, LEDGER};
+use super::support::{failure, success, Fixture, LEDGER};
 use std::fs;
+#[cfg(unix)]
+use std::os::unix::net::UnixListener;
 use toml::Value;
+
+#[cfg(unix)]
+#[test]
+fn workspace_output_is_omitted_and_declared_sibling_input_is_captured() {
+    let fixture = Fixture::empty();
+    let root = fixture.root();
+    let manifest = fixture.read("Cargo.toml").replace("[workspace]\n", "");
+    fixture.write("app/Cargo.toml", &manifest);
+    fixture.write("app/build.rs", "fn main() { history_build::compile(); }\n");
+    fixture.write("app/src/lib.rs", "");
+    fixture.write("Cargo.toml", "[workspace]\nmembers=['app']\nresolver='2'\n");
+    fs::remove_file(root.join("build.rs")).unwrap();
+    fs::remove_dir_all(root.join("src")).unwrap();
+    fs::remove_file(root.join("Cargo.lock")).unwrap();
+    fixture.write(".gitignore", "/site/node_modules/\n");
+    fs::create_dir_all(root.join("site/node_modules/generated")).unwrap();
+    let _generated_socket =
+        UnixListener::bind(root.join("site/node_modules/generated/output.sock")).unwrap();
+    assert!(!root.join(".git").exists());
+
+    success(&fixture.cargo(&["generate-lockfile", "--offline"]));
+    success(&fixture.cli(&["init", "--package", "standalone-history-consumer"]));
+
+    fixture.write("site/node_modules/flag", "present");
+    fixture.write(
+        "app/Cargo.toml",
+        &format!(
+            "{manifest}\n[package.metadata.type-history]\nsnapshot-inputs=['../site/node_modules/flag']\n"
+        ),
+    );
+    fixture.write(
+        "app/build.rs",
+        r#"use std::path::Path;
+fn main() {
+    println!("cargo::rustc-check-cfg=cfg(input_present)");
+    if Path::new("../site/node_modules/flag").exists() {
+        println!("cargo::rustc-cfg=input_present");
+    }
+    history_build::compile();
+}
+"#,
+    );
+    fixture.write(
+        "app/src/lib.rs",
+        "#[cfg(input_present)] compile_error!(\"declared sibling input was captured\");\n",
+    );
+    failure(
+        &fixture.cargo(&["check", "--locked", "--offline"]),
+        "declared sibling input was captured",
+    );
+    failure(
+        &fixture.cli(&["check", "--package", "standalone-history-consumer"]),
+        "declared sibling input was captured",
+    );
+}
 
 #[cfg(unix)]
 #[test]

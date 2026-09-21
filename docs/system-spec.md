@@ -16,6 +16,7 @@
 - Checked adapters expose `TryFrom`, `as_inner`, and `into_inner`. They expose no mutable native access.
 - JSON and named-field MessagePack preserve admitted float bits, decimal scale, temporal nanoseconds, and offsets.
 - `derive_debug` and `derive_partial_eq` control those generated traits for every retained version. Both default to `true`.
+- Lifecycle commands capture local package roots, workspace manifests, lockfiles, effective Cargo configuration, and declared snapshot inputs.
 
 ## Repository Layout
 
@@ -39,6 +40,7 @@
 - Feature unification must not change adapter schemas, domains, or encodings.
 - Incompatible contract changes require a new retained version and explicit conversion.
 - Native dependency Serde features must not change adapter encodings.
+- Generated files outside local package roots are captured only when a package declares them in `package.metadata.type-history.snapshot-inputs`.
 
 ## External Interfaces
 
@@ -50,6 +52,7 @@
 - `typed-floats` adds direct support for `NonNaNFinite<f32>` and `NonNaNFinite<f64>`.
 - `Versioned` reads and writes generated history envelopes.
 - `cargo type-history` initializes, checks, freezes, imports, resets, and undoes ledger changes.
+- `package.metadata.type-history.snapshot-inputs` declares relative files or directories that a package needs from outside its root.
 
 ## Known Gaps / Deferred
 

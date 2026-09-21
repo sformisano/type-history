@@ -34,6 +34,7 @@ pub struct Snapshot {
     toolchain: Option<OsString>,
     mirror: PathBuf,
     roots: Vec<PathBuf>,
+    boundaries: Vec<PathBuf>,
     manifests: BTreeSet<PathBuf>,
     workspaces: BTreeSet<PathBuf>,
     extra: Vec<PathBuf>,
@@ -55,28 +56,36 @@ impl Snapshot {
             .prefix("type-history-schema-")
             .tempdir_in(env::temp_dir().canonicalize()?)?;
         let mirror = owner.path().join("tree");
-        let mut roots = vec![metadata.workspace_root.canonicalize()?];
-        let mut manifests = BTreeSet::from([metadata.workspace_root.join("Cargo.toml")]);
+        let workspace_root = metadata.workspace_root.canonicalize()?;
+        let root_manifest = workspace_root.join("Cargo.toml").canonicalize()?;
+        let mut roots = Vec::new();
+        let mut boundaries = BTreeSet::from([workspace_root.clone()]);
+        let mut manifests = BTreeSet::from([root_manifest.clone()]);
         let mut workspaces = manifests.clone();
+        let mut extra = extra.to_vec();
+        extra.extend([root_manifest.clone(), workspace_root.join("Cargo.lock")]);
         for package in metadata
             .packages
             .iter()
             .filter(|package| package.source.is_none())
         {
             let root = package.root().canonicalize()?;
-            manifests.insert(package.manifest_path.clone());
-            let document: Value = toml::from_slice(&fs::read(&package.manifest_path)?)?;
+            boundaries.insert(root.clone());
+            let manifest = package.manifest_path.canonicalize()?;
+            manifests.insert(manifest.clone());
+            let document: Value = toml::from_slice(&fs::read(&manifest)?)?;
+            roots.extend(declared_snapshot_inputs(&root, &document)?);
             if let Some(workspace) = workspace_manifest(&root, &document)? {
-                roots.push(
-                    workspace
-                        .parent()
-                        .ok_or("workspace manifest parent")?
-                        .to_owned(),
-                );
+                let parent = workspace
+                    .parent()
+                    .ok_or("workspace manifest parent")?
+                    .to_owned();
+                boundaries.insert(parent.clone());
                 workspaces.insert(workspace.clone());
-                manifests.insert(workspace);
+                manifests.insert(workspace.clone());
+                extra.extend([workspace, parent.join("Cargo.lock")]);
             } else {
-                workspaces.insert(package.manifest_path.clone());
+                workspaces.insert(manifest);
             }
             roots.push(root);
         }
@@ -91,18 +100,22 @@ impl Snapshot {
                 .any(|parent| parent != path && path.starts_with(parent))
         });
         let invocation = env::current_dir()?.canonicalize()?;
-        if !roots.iter().any(|root| invocation.starts_with(root)) {
+        if !invocation.starts_with(&workspace_root) {
             return Err("Cargo invocation directory is outside the resolved local graph".into());
         }
-        let mut extra = extra.to_vec();
         for ancestor in invocation.ancestors() {
             extra.push(ancestor.join("Cargo.toml"));
             for name in ["config", "config.toml"] {
                 extra.push(ancestor.join(".cargo").join(name));
             }
         }
-        for root in &roots {
-            for ancestor in root.ancestors() {
+        for root in boundaries.iter().chain(&roots) {
+            let discovery_root = if root.is_dir() {
+                root.as_path()
+            } else {
+                root.parent().ok_or("snapshot input parent")?
+            };
+            for ancestor in discovery_root.ancestors() {
                 // Excluded packages still depend on ancestor membership rules.
                 // Track absent manifests too, so a new workspace is detected.
                 extra.push(ancestor.join("Cargo.toml"));
@@ -129,6 +142,7 @@ impl Snapshot {
             toolchain: crate::toolchain::active()?,
             mirror,
             roots,
+            boundaries: boundaries.into_iter().collect(),
             manifests,
             workspaces,
             extra,
@@ -396,7 +410,7 @@ impl Snapshot {
                     .ok_or("manifest must be a TOML table")?
                     .insert("workspace".into(), Value::Table(Table::new()));
             }
-            if manifest::remap_paths(&mut document, &self.mirror, &self.roots)? || standalone {
+            if manifest::remap_paths(&mut document, &self.mirror, &self.boundaries)? || standalone {
                 let staged = copied.with_extension("toml.type-history-stage");
                 fs::write(&staged, toml::to_string(&document)?)?;
                 fs::rename(staged, copied)?;
@@ -404,6 +418,42 @@ impl Snapshot {
         }
         Ok(())
     }
+}
+
+fn declared_snapshot_inputs(root: &Path, document: &Value) -> Result<Vec<PathBuf>> {
+    let Some(value) = document
+        .get("package")
+        .and_then(|value| value.get("metadata"))
+        .and_then(|value| value.get("type-history"))
+        .and_then(|value| value.get("snapshot-inputs"))
+    else {
+        return Ok(Vec::new());
+    };
+    let values = value.as_array().ok_or(
+        "package.metadata.type-history.snapshot-inputs must be an array of relative paths",
+    )?;
+    values
+        .iter()
+        .map(|value| {
+            let value = value.as_str().ok_or(
+                "package.metadata.type-history.snapshot-inputs must contain relative paths",
+            )?;
+            let path = Path::new(value);
+            if path.is_absolute() {
+                return Err(
+                    "package.metadata.type-history.snapshot-inputs must contain relative paths"
+                        .into(),
+                );
+            }
+            root.join(path).canonicalize().map_err(|error| {
+                format!(
+                    "cannot resolve declared Type History snapshot input {}: {error}",
+                    root.join(path).display()
+                )
+                .into()
+            })
+        })
+        .collect()
 }
 
 fn cargo_cache_roots(roots: &[PathBuf]) -> BTreeSet<PathBuf> {

@@ -150,6 +150,17 @@ ignored and can be removed.
 
 Commands such as `freeze` build a temporary copy of the package to check its schemas. They run Cargo with `--locked --offline`, so the lockfile and downloaded dependencies must already be ready. After changing dependencies, update the lockfile and fetch them before running these commands again.
 
+Type History captures each local Cargo package, its workspace manifest and lockfile,
+and the effective Cargo configuration. Declare any build input outside a package:
+
+```toml
+[package.metadata.type-history]
+snapshot-inputs = ["../../generated/schema.json"]
+```
+
+Each entry is relative to that package. It must name an existing file or directory.
+Type History copies it into the checked build and rejects changes during the command.
+
 Add this line to `.gitignore`:
 
 ```gitignore
