@@ -52,10 +52,18 @@ fn lock_symlinks_cannot_create_or_open_another_filesystem_authority() {
         assert!(!authority.join("schemas.json").exists());
     }
     fs::remove_file(&lock).unwrap();
+}
+
+#[cfg(unix)]
+#[test]
+fn transaction_drop_unlocks_a_duplicated_lock_descriptor() {
+    let root = tempfile::tempdir().unwrap();
     let first = Transaction::acquire(root.path(), "lock-control", &STANDALONE).unwrap();
+    let inherited = first._lock.duplicate().unwrap();
     assert!(Transaction::acquire(root.path(), "busy-control", &STANDALONE).is_err());
     drop(first);
     Transaction::acquire(root.path(), "retry-control", &STANDALONE).unwrap();
+    drop(inherited);
 }
 
 #[cfg(unix)]

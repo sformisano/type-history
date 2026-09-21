@@ -6,7 +6,7 @@ use serde::{de::DeserializeOwned, Serialize};
 use sha2::{Digest, Sha256};
 #[cfg(test)]
 use std::cell::Cell;
-use std::fs::{self, File, TryLockError};
+use std::fs::{self, File};
 #[cfg(test)]
 use std::io::Error as IoError;
 use std::io::{ErrorKind, Result as IoResult, Write};
@@ -17,7 +17,7 @@ use type_history_codegen::ledger::{HistoryLedger, SchemaIdentity};
 mod lock;
 
 pub(crate) struct Transaction {
-    _lock: File,
+    _lock: lock::Lock,
     pub path: PathBuf,
     original: Option<Vec<u8>>,
 }
@@ -29,17 +29,7 @@ impl Transaction {
             return Err("history authority directory must not be a symlink; keep it inside its owning package".into());
         }
         fs::create_dir_all(directory)?;
-        let lock = lock::open(&package_root.join(contract.lock_path))?;
-        match lock.try_lock() {
-            Ok(()) => {}
-            Err(TryLockError::WouldBlock) => {
-                return Err(format!(
-                    "package {package} is busy: another history transaction holds its lock"
-                )
-                .into());
-            }
-            Err(error) => return Err(format!("cannot lock package {package}: {error}").into()),
-        }
+        let lock = lock::Lock::acquire(&package_root.join(contract.lock_path), package)?;
         if fs::symlink_metadata(&path).is_ok_and(|metadata| metadata.file_type().is_symlink()) {
             return Err("history authority must be a regular file, not a symlink".into());
         }

@@ -1,10 +1,41 @@
 //! Keep the persistent lock inode inside its checked directory.
 use crate::Result;
-use std::fs::File;
+use std::fs::{File, TryLockError};
+#[cfg(test)]
+use std::io::Result as IoResult;
 use std::path::Path;
 
+pub(super) struct Lock(File);
+
+impl Lock {
+    pub(super) fn acquire(path: &Path, package: &str) -> Result<Self> {
+        let lock = open(path)?;
+        match lock.try_lock() {
+            Ok(()) => Ok(Self(lock)),
+            Err(TryLockError::WouldBlock) => Err(format!(
+                "package {package} is busy: another history transaction holds its lock"
+            )
+            .into()),
+            Err(error) => Err(format!("cannot lock package {package}: {error}").into()),
+        }
+    }
+
+    #[cfg(test)]
+    pub(super) fn duplicate(&self) -> IoResult<File> {
+        self.0.try_clone()
+    }
+}
+
+impl Drop for Lock {
+    fn drop(&mut self) {
+        // A fork can inherit this open file description before CLOEXEC takes
+        // effect. Closing only our descriptor would then retain the lock.
+        let _ = self.0.unlock();
+    }
+}
+
 #[cfg(unix)]
-pub(super) fn open(path: &Path) -> Result<File> {
+fn open(path: &Path) -> Result<File> {
     use rustix::fs::{openat, Mode, OFlags, CWD};
 
     let parent = path.parent().ok_or("history lock parent")?;
@@ -37,6 +68,6 @@ pub(super) fn open(path: &Path) -> Result<File> {
 }
 
 #[cfg(not(unix))]
-pub(super) fn open(_path: &Path) -> Result<File> {
+fn open(_path: &Path) -> Result<File> {
     Err("history locks require supported Unix filesystem semantics".into())
 }
