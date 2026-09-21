@@ -1,6 +1,12 @@
 use super::support::{failure, success, Fixture, LEDGER, STABLE_NAME, V1, V2};
 use serde_json::{json, Value};
-use std::fs::OpenOptions;
+use std::env;
+use std::fs::{self, OpenOptions, Permissions};
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
+use std::path::{Path, PathBuf};
+use std::process::Output;
+use tempfile::Builder as TempBuilder;
 
 #[test]
 fn source_module_named_target_survives_lifecycle_snapshots() {
@@ -300,4 +306,260 @@ fn standalone_busy_lock_and_invalid_candidates_preserve_exact_authority() {
         "highest",
     );
     assert_eq!(fixture.read(LEDGER), frozen);
+}
+
+#[cfg(unix)]
+#[test]
+fn standalone_init_rejects_a_declaration_added_before_snapshot_capture() {
+    let fixture = Fixture::empty();
+    let controls = TempBuilder::new()
+        .prefix("type-history-init-race-")
+        .tempdir()
+        .unwrap();
+    let incoming = controls.path().join("incoming.rs");
+    let marker = controls.path().join("inserted");
+    fs::write(&incoming, V1).unwrap();
+    let old_path = env::var_os("PATH").unwrap();
+    let rustc = executable_on_path("rustc");
+    let wrapper = controls.path().join("rustc");
+    fs::write(
+        &wrapper,
+        format!(
+            r#"#!/usr/bin/env bash
+set -euo pipefail
+if [[ ${{1-}} == -vV && -f {lock} && ! -e {marker} ]]; then
+    cp {incoming} {source}
+    touch {marker}
+fi
+exec {rustc} "$@"
+"#,
+            lock = quote(&fixture.root().join("type-history/.schemas.lock")),
+            marker = quote(&marker),
+            incoming = quote(&incoming),
+            source = quote(&fixture.root().join("src/lib.rs")),
+            rustc = quote(&rustc),
+        ),
+    )
+    .unwrap();
+    fs::set_permissions(&wrapper, Permissions::from_mode(0o755)).unwrap();
+    let path = env::join_paths(
+        std::iter::once(controls.path().to_owned()).chain(env::split_paths(&old_path)),
+    )
+    .unwrap();
+    let output = fixture.cli_env(
+        &["init", "--package", "standalone-history-consumer"],
+        &[("PATH", Some(path.to_str().unwrap()))],
+    );
+    assert!(
+        marker.exists(),
+        "compiler probe must inject the declaration"
+    );
+    failure(
+        &output,
+        "init requires a package without history declarations",
+    );
+    assert_eq!(fixture.read("src/lib.rs"), V1);
+    assert!(!fixture.root().join(LEDGER).exists());
+
+    fixture.write("src/lib.rs", "");
+    success(&fixture.cli(&["init", "--package", "standalone-history-consumer"]));
+    assert_eq!(fixture.read(LEDGER), "{}\n");
+    let initialized = fixture.read(LEDGER);
+    failure(
+        &fixture.cli(&["init", "--package", "standalone-history-consumer"]),
+        "overwrite",
+    );
+    assert_eq!(fixture.read(LEDGER), initialized);
+}
+
+#[test]
+fn standalone_draft_edits_rollback_removal_and_incomplete_discard() {
+    let fixture = Fixture::frozen();
+    let authority = fixture.read(LEDGER);
+
+    for source in [V2.to_owned(), V2.replace("u64", "u128")] {
+        fixture.write("src/lib.rs", &source);
+        check_and_build(&fixture, None);
+        assert_eq!(fixture.read(LEDGER), authority);
+    }
+
+    fixture.write(
+        "src/lib.rs",
+        &V1.replace("pub count: u32", "pub count: u128"),
+    );
+    check_and_build(&fixture, Some("frozen"));
+    assert_eq!(fixture.read(LEDGER), authority);
+    fixture.write("src/lib.rs", V2);
+    failure(
+        &fixture.cargo(&["build", "--release", "--locked", "--offline"]),
+        "draft",
+    );
+    assert_eq!(fixture.read(LEDGER), authority);
+
+    fixture.write("src/lib.rs", V1);
+    check_and_build(&fixture, None);
+    assert_eq!(fixture.read(LEDGER), authority);
+    fixture.write(
+        "src/lib.rs",
+        &format!("{V1}\nfn current_alias(value: Invoice) -> u32 {{ value.count }}\n"),
+    );
+    check_and_build(&fixture, None);
+    assert_eq!(fixture.read(LEDGER), authority);
+
+    let removal = V1.replace(
+        "pub legacy: String,",
+        "#[history(removed_in = v2)]\n    pub legacy: String,",
+    );
+    fixture.write("src/lib.rs", &removal);
+    check_and_build(&fixture, None);
+    assert_eq!(fixture.read(LEDGER), authority);
+    fixture.write("src/lib.rs", V1);
+    check_and_build(&fixture, None);
+
+    let successor = V2.replace(
+        "pub revision: u32,",
+        "pub revision: u32,\n    #[history(added_in = v3, backfill_value = false)]\n    pub ready: bool,",
+    );
+    fixture.write("src/lib.rs", &successor);
+    check_and_build(&fixture, Some("successor"));
+    assert_eq!(fixture.read(LEDGER), authority);
+}
+
+#[test]
+fn standalone_selected_reset_preserves_earlier_and_unrelated_history() {
+    const OTHER: &str = "billing.invoice.reviewed";
+    let fixture = Fixture::empty();
+    success(&fixture.cli(&["init", "--package", "standalone-history-consumer"]));
+    fixture.write("src/lib.rs", &selected_reset_v1_source("bool"));
+    success(&fixture.cli(&["freeze", "--package", "standalone-history-consumer"]));
+    let v2_source = selected_reset_source("u32", "u64", "widen", "bool");
+    fixture.write("src/lib.rs", &v2_source);
+    success(&fixture.cli(&["freeze", "--package", "standalone-history-consumer"]));
+    let saved = fixture.ledger();
+    let before = fixture.read(LEDGER);
+
+    for (source, expected) in [
+        (
+            selected_reset_source("u16", "u64", "widen", "bool"),
+            "frozen",
+        ),
+        (
+            selected_reset_source("u32", "u64", "widen", "u32"),
+            "frozen",
+        ),
+        (
+            selected_reset_source("u32", "u64", "missing_widen", "bool"),
+            "missing_widen",
+        ),
+    ] {
+        fixture.write("src/lib.rs", &source);
+        failure(&selected(&fixture, "reset", "2"), expected);
+        assert_eq!(fixture.read(LEDGER), before);
+    }
+
+    fixture.write("src/lib.rs", &v2_source.replace("u64", "u128"));
+    success(&selected(&fixture, "reset", "2"));
+    let reserved = fixture.ledger();
+    assert_eq!(reserved[STABLE_NAME]["1"], saved[STABLE_NAME]["1"]);
+    assert_eq!(reserved[OTHER], saved[OTHER]);
+    assert_eq!(
+        reserved[STABLE_NAME]["2"]["schema"],
+        saved[STABLE_NAME]["2"]["schema"]
+    );
+    assert_eq!(reserved[STABLE_NAME]["2"]["reset_draft"], true);
+    success(&selected(&fixture, "freeze", "2"));
+    let frozen = fixture.ledger();
+    assert_eq!(frozen[STABLE_NAME]["1"], saved[STABLE_NAME]["1"]);
+    assert_eq!(frozen[OTHER], saved[OTHER]);
+    assert_ne!(
+        frozen[STABLE_NAME]["2"]["schema"],
+        saved[STABLE_NAME]["2"]["schema"]
+    );
+}
+
+#[test]
+fn standalone_never_frozen_record_can_be_edited_and_discarded() {
+    let fixture = Fixture::frozen();
+    let authority = fixture.read(LEDGER);
+    let scratch = r#"
+#[history_api::versioned(stable_name = "billing.scratch")]
+pub struct Scratch { pub value: u32 }
+"#;
+    for source in [
+        format!("{V1}\n{scratch}"),
+        format!("{V1}\n{}", scratch.replace("u32", "u64")),
+        V1.to_owned(),
+    ] {
+        fixture.write("src/lib.rs", &source);
+        check_and_build(&fixture, None);
+        assert_eq!(fixture.read(LEDGER), authority);
+    }
+}
+
+fn check_and_build(fixture: &Fixture, expected: Option<&str>) {
+    for command in ["check", "build"] {
+        let output = fixture.cargo(&[command, "--locked", "--offline"]);
+        match expected {
+            Some(diagnostic) => failure(&output, diagnostic),
+            None => success(&output),
+        }
+    }
+}
+
+fn selected(fixture: &Fixture, action: &str, version: &str) -> Output {
+    fixture.cli(&[
+        action,
+        "--package",
+        "standalone-history-consumer",
+        "--type",
+        STABLE_NAME,
+        "--version",
+        version,
+    ])
+}
+
+fn selected_reset_v1_source(other: &str) -> String {
+    format!(
+        r#"use history_api::versioned;
+#[versioned(stable_name = "{STABLE_NAME}")]
+pub struct Invoice {{ pub count: u32 }}
+#[versioned(stable_name = "billing.invoice.reviewed")]
+pub struct Reviewed {{ pub accepted: {other} }}
+"#
+    )
+}
+
+fn selected_reset_source(previous: &str, current: &str, callback: &str, other: &str) -> String {
+    format!(
+        r#"use history_api::versioned;
+#[versioned(stable_name = "{STABLE_NAME}")]
+pub struct Invoice {{
+    #[history(updated_in = v2, previous_type = {previous}, backfill_fn = {callback})]
+    pub count: {current},
+}}
+fn widen(previous: &InvoiceV1) -> Result<{current}, std::convert::Infallible> {{
+    Ok(previous.count.into())
+}}
+#[versioned(stable_name = "billing.invoice.reviewed")]
+pub struct Reviewed {{ pub accepted: {other} }}
+"#
+    )
+}
+
+#[cfg(unix)]
+fn executable_on_path(name: &str) -> PathBuf {
+    let candidate = env::split_paths(&env::var_os("PATH").unwrap())
+        .map(|directory| directory.join(name))
+        .find(|candidate| candidate.is_file())
+        .unwrap();
+    if candidate.is_absolute() {
+        candidate
+    } else {
+        env::current_dir().unwrap().join(candidate)
+    }
+}
+
+#[cfg(unix)]
+fn quote(path: &Path) -> String {
+    format!("'{}'", path.to_str().unwrap().replace('\'', "'\\''"))
 }

@@ -239,6 +239,17 @@ fn standalone_build_policy_tracks_strict_setting_and_profile_families() {
         &["build", "--release", "--locked", "--offline"],
         &[("TYPE_HISTORY_REQUIRE_FROZEN", Some("1"))],
     ));
+    let frozen = fixture.read(LEDGER);
+    fixture.write("src/lib.rs", &V2.replace("u64", "u128"));
+    for command in ["check", "build"] {
+        for profile in ["dev", "release", "dev_child", "release_child"] {
+            failure(
+                &fixture.cargo(&[command, "--profile", profile, "--locked", "--offline"]),
+                "frozen",
+            );
+            assert_eq!(fixture.read(LEDGER), frozen);
+        }
+    }
 }
 
 #[test]

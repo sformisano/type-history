@@ -74,6 +74,16 @@ There is no release workflow. The repository has two workflows, `ci.yml` and
 publishing the crate family in dependency order. Until that release is made,
 the revision above identifies the field-adapter API this page documents.
 
+### Prepare a Source Checkout for Tests
+
+The standalone tests compile an AArch64 consumer without linking or running it.
+Install that target and fetch the locked dependencies before running the tests:
+
+```sh
+rustup target add --toolchain 1.97.1 aarch64-unknown-linux-gnu
+cargo fetch --locked
+```
+
 ### Connect Type History to Cargo
 
 Create `build.rs` in the project root if you don't already have it, then add the `type-history-build` compile step:

@@ -175,6 +175,16 @@ opt-level = 2
     pub fn cli_env(&self, arguments: &[&str], environment: &[(&str, Option<&str>)]) -> Output {
         self.command_at(&self.root, &self.cli, arguments, environment)
     }
+    pub fn cli_command_env(
+        &self,
+        arguments: &[&str],
+        environment: &[(&str, Option<&str>)],
+    ) -> Command {
+        self.configured_command(&self.root, &self.cli, arguments, environment)
+    }
+    pub fn cli_path(&self) -> &Path {
+        &self.cli
+    }
     pub fn cargo_at(&self, root: &Path, arguments: &[&str]) -> Output {
         self.command_at(root, "cargo", arguments, &[])
     }
@@ -188,6 +198,17 @@ opt-level = 2
         arguments: &[&str],
         environment: &[(&str, Option<&str>)],
     ) -> Output {
+        self.configured_command(root, executable, arguments, environment)
+            .output()
+            .expect("consumer command")
+    }
+    fn configured_command(
+        &self,
+        root: &Path,
+        executable: impl AsRef<Path>,
+        arguments: &[&str],
+        environment: &[(&str, Option<&str>)],
+    ) -> Command {
         let mut command = Command::new(executable.as_ref());
         command
             .current_dir(root)
@@ -214,7 +235,7 @@ opt-level = 2
                 }
             }
         }
-        command.output().expect("consumer command")
+        command
     }
 
     pub fn assert_independent_graph(&self) {

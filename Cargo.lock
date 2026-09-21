@@ -82,6 +82,8 @@ dependencies = [
  "time",
  "toml",
  "type-history-build",
+ "type-history-codegen",
+ "type-history-core",
 ]
 
 [[package]]

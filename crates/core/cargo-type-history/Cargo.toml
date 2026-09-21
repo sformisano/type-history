@@ -19,6 +19,8 @@ type-history-build = { path = "../type-history-build", version = "0.1.0" }
 thiserror.workspace = true
 
 [dev-dependencies]
+type-history-core = { path = "../type-history-core", version = "0.1.0" }
+type-history-codegen = { path = "../type-history-codegen", version = "0.1.0" }
 tempfile = "3.23.0"
 serde_json.workspace = true
 toml = "0.9.8"

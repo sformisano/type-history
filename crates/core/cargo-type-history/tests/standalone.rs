@@ -12,6 +12,8 @@ mod authority;
 mod backfills;
 #[path = "standalone/cargo_regressions.rs"]
 mod cargo_regressions;
+#[path = "standalone/compiler.rs"]
+mod compiler;
 #[path = "standalone/diagnostics.rs"]
 mod diagnostics;
 #[path = "standalone/discovery_regressions.rs"]
@@ -28,6 +30,8 @@ mod field_diagnostics;
 mod field_support;
 #[path = "standalone/generated_hygiene.rs"]
 mod generated_hygiene;
+#[path = "standalone/growth.rs"]
+mod growth;
 #[path = "standalone/hygiene.rs"]
 mod hygiene;
 #[path = "standalone/lifecycle.rs"]
@@ -36,6 +40,10 @@ mod lifecycle;
 mod macro_regressions;
 #[path = "standalone/nested.rs"]
 mod nested;
+#[path = "standalone/public_snapshot.rs"]
+mod public_snapshot;
+#[path = "standalone/public_transaction.rs"]
+mod public_transaction;
 #[path = "standalone/released_baseline.rs"]
 mod released_baseline;
 #[path = "standalone/schema_identity.rs"]

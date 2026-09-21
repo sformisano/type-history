@@ -163,6 +163,71 @@ fn default_backend_preserves_existing_lifecycle_calls_and_public_callers() {
     success(&fixture.cli(&["check"]));
 }
 
+#[test]
+fn conditional_frozen_schema_tracks_features_and_named_cross_target() {
+    let fixture = Fixture::empty();
+    let mut manifest: Table = toml::from_str(&fixture.read("Cargo.toml")).unwrap();
+    manifest.insert(
+        "features".into(),
+        Table::from_iter([
+            ("default".into(), Value::Array(Vec::new())),
+            ("wide".into(), Value::Array(Vec::new())),
+            ("equivalent".into(), Value::Array(Vec::new())),
+        ])
+        .into(),
+    );
+    fixture.write("Cargo.toml", &toml::to_string(&manifest).unwrap());
+    success(&fixture.cargo(&["generate-lockfile", "--offline"]));
+    success(&fixture.cli(&["init", "--package", "standalone-history-consumer"]));
+    fixture.write(
+        "src/lib.rs",
+        &format!(
+            r#"#[cfg(feature = "wide")]
+type Count = u64;
+#[cfg(not(feature = "wide"))]
+type Count = u32;
+{}
+"#,
+            V1.replace("pub count: u32", "pub count: Count")
+        ),
+    );
+    success(&fixture.cli(&["freeze", "--package", "standalone-history-consumer"]));
+    let authority = fixture.read(LEDGER);
+
+    success(&fixture.cli(&[
+        "check",
+        "--package",
+        "standalone-history-consumer",
+        "--features",
+        "equivalent",
+    ]));
+    failure(
+        &fixture.cli(&[
+            "check",
+            "--package",
+            "standalone-history-consumer",
+            "--features",
+            "wide",
+        ]),
+        "frozen wire shape",
+    );
+    failure(
+        &fixture.cargo_env(
+            &["check", "--locked", "--offline", "--features", "wide"],
+            &[("TYPE_HISTORY_REQUIRE_FROZEN", Some("1"))],
+        ),
+        "frozen wire shape",
+    );
+    success(&fixture.cargo(&[
+        "check",
+        "--locked",
+        "--offline",
+        "--target",
+        "aarch64-unknown-linux-gnu",
+    ]));
+    assert_eq!(fixture.read(LEDGER), authority);
+}
+
 fn configure_backends(fixture: &Fixture) {
     for package in ["default-backend", "alternative-backend"] {
         fixture.write(
