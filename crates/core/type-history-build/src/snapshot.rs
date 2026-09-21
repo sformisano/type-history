@@ -1,15 +1,15 @@
 //! Owned copies of all local Cargo inputs; live source never sees a candidate ledger.
 use crate::contract::ToolContract;
-use crate::package::workspace_manifest;
+use crate::package::workspace_manifest_logical;
 use crate::workspace::CargoMetadata;
 use crate::Result;
 use sha2::{Digest, Sha256};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::env;
 use std::ffi::OsString;
 use std::fs;
 use std::io::ErrorKind;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use std::process::Command;
 use tempfile::Builder as TempBuilder;
 use tempfile::TempDir;
@@ -34,6 +34,7 @@ pub struct Snapshot {
     toolchain: Option<OsString>,
     mirror: PathBuf,
     roots: Vec<PathBuf>,
+    resolution: BTreeSet<PathBuf>,
     boundaries: Vec<PathBuf>,
     manifests: BTreeSet<PathBuf>,
     workspaces: BTreeSet<PathBuf>,
@@ -57,13 +58,22 @@ impl Snapshot {
             .tempdir_in(env::temp_dir().canonicalize()?)?;
         let mirror = owner.path().join("tree");
         let workspace_root = metadata.workspace_root.canonicalize()?;
-        let root_manifest = workspace_root.join("Cargo.toml").canonicalize()?;
         let mut roots = Vec::new();
+        let mut resolution = BTreeSet::new();
+        let root_manifest_input = resolve_snapshot_input(&workspace_root, Path::new("Cargo.toml"))?;
+        let root_manifest = root_manifest_input.resolved;
+        resolution.extend(root_manifest_input.resolution);
         let mut boundaries = BTreeSet::from([workspace_root.clone()]);
         let mut manifests = BTreeSet::from([root_manifest.clone()]);
         let mut workspaces = manifests.clone();
         let mut extra = extra.to_vec();
-        extra.extend([root_manifest.clone(), workspace_root.join("Cargo.lock")]);
+        extra.push(root_manifest.clone());
+        capture_optional_input(
+            &workspace_root,
+            Path::new("Cargo.lock"),
+            &mut extra,
+            &mut resolution,
+        )?;
         for package in metadata
             .packages
             .iter()
@@ -74,16 +84,28 @@ impl Snapshot {
             let manifest = package.manifest_path.canonicalize()?;
             manifests.insert(manifest.clone());
             let document: Value = toml::from_slice(&fs::read(&manifest)?)?;
-            roots.extend(declared_snapshot_inputs(&root, &document)?);
-            if let Some(workspace) = workspace_manifest(&root, &document)? {
+            for input in declared_snapshot_inputs(&root, &document)? {
+                roots.push(input.resolved);
+                resolution.extend(input.resolution);
+            }
+            if let Some(workspace) = workspace_manifest_logical(&root, &document)? {
                 let parent = workspace
                     .parent()
                     .ok_or("workspace manifest parent")?
                     .to_owned();
-                boundaries.insert(parent.clone());
-                workspaces.insert(workspace.clone());
-                manifests.insert(workspace.clone());
-                extra.extend([workspace, parent.join("Cargo.lock")]);
+                let name = workspace.file_name().ok_or("workspace manifest name")?;
+                let input = resolve_snapshot_input(&parent, Path::new(name))?;
+                boundaries.insert(parent.canonicalize()?);
+                workspaces.insert(input.resolved.clone());
+                manifests.insert(input.resolved.clone());
+                extra.push(input.resolved);
+                resolution.extend(input.resolution);
+                capture_optional_input(
+                    &parent,
+                    Path::new("Cargo.lock"),
+                    &mut extra,
+                    &mut resolution,
+                )?;
             } else {
                 workspaces.insert(manifest);
             }
@@ -142,6 +164,7 @@ impl Snapshot {
             toolchain: crate::toolchain::active()?,
             mirror,
             roots,
+            resolution,
             boundaries: boundaries.into_iter().collect(),
             manifests,
             workspaces,
@@ -157,12 +180,14 @@ impl Snapshot {
         snapshot.before = snapshot.fingerprint()?;
         snapshot.configs =
             cargo_config::ordered_configs(&invocation, &cargo_home, &snapshot.before);
+        snapshot.copy_resolution()?;
         for root in &snapshot.roots {
             snapshot.copy_tree(root)?;
         }
         for path in &snapshot.extra {
             if snapshot.roots.iter().any(|root| path.starts_with(root))
                 || snapshot.before.get(path).is_some_and(|value| value == &[0])
+                || snapshot.before.get(path).and_then(|value| value.first()) == Some(&2)
             {
                 continue;
             }
@@ -236,6 +261,9 @@ impl Snapshot {
         for root in &self.roots {
             self.collect(root, &mut files)?;
         }
+        for path in &self.resolution {
+            files.insert(path.clone(), entry_fingerprint(path)?);
+        }
         for path in &self.extra {
             if files.contains_key(path) {
                 continue;
@@ -256,7 +284,14 @@ impl Snapshot {
         if self.excluded(path) {
             return Ok(());
         }
-        let metadata = fs::symlink_metadata(path)?;
+        let metadata = match fs::symlink_metadata(path) {
+            Ok(metadata) => metadata,
+            Err(error) if error.kind() == ErrorKind::NotFound => {
+                files.insert(path.to_owned(), vec![0]);
+                return Ok(());
+            }
+            Err(error) => return Err(error.into()),
+        };
         if metadata.file_type().is_symlink() {
             let target = fs::read_link(path)?;
             let resolved = path.canonicalize()?;
@@ -281,6 +316,16 @@ impl Snapshot {
         }
         Ok(())
     }
+    fn copy_resolution(&self) -> Result<()> {
+        for path in &self.resolution {
+            match self.before.get(path).and_then(|value| value.first()) {
+                Some(2) => self.copy_symlink(path)?,
+                Some(3) => fs::create_dir_all(self.mapped(path)?)?,
+                _ => {}
+            }
+        }
+        Ok(())
+    }
     fn excluded(&self, path: &Path) -> bool {
         // Skip only this capture's owner when TMPDIR lies in the workspace.
         // Traversal stops here, before it can visit the growing mirror.
@@ -295,24 +340,7 @@ impl Snapshot {
         }
         let metadata = fs::symlink_metadata(path)?;
         if metadata.file_type().is_symlink() {
-            let target = fs::read_link(path)?;
-            self.verify_captured(
-                path,
-                &[vec![2], target.as_os_str().as_encoded_bytes().to_vec()].concat(),
-            )?;
-            let destination = self.mapped(path)?;
-            fs::create_dir_all(destination.parent().ok_or("symlink parent")?)?;
-            let target = if target.is_absolute() {
-                self.mapped(&target)?
-            } else {
-                target
-            };
-            #[cfg(unix)]
-            std::os::unix::fs::symlink(target, destination)?;
-            #[cfg(not(unix))]
-            return Err(
-                "source symlink snapshots require supported Unix filesystem semantics".into(),
-            );
+            self.copy_symlink(path)?;
         } else if metadata.is_dir() {
             fs::create_dir_all(self.mapped(path)?)?;
             for child in fs::read_dir(path)? {
@@ -321,6 +349,45 @@ impl Snapshot {
         } else {
             self.copy_file(path)?;
         }
+        Ok(())
+    }
+    fn copy_symlink(&self, path: &Path) -> Result<()> {
+        let target = fs::read_link(path)?;
+        self.verify_captured(
+            path,
+            &[vec![2], target.as_os_str().as_encoded_bytes().to_vec()].concat(),
+        )?;
+        let destination = self.mapped(path)?;
+        fs::create_dir_all(destination.parent().ok_or("symlink parent")?)?;
+        let target = if target.is_absolute() {
+            self.mapped(&target)?
+        } else {
+            let copied_resolution =
+                lexical_absolute(&destination.parent().ok_or("symlink parent")?.join(&target))?;
+            if copied_resolution.starts_with(&self.mirror) {
+                target
+            } else {
+                return Err(format!(
+                    "snapshot relative symlink {} would escape the owned mirror",
+                    path.display()
+                )
+                .into());
+            }
+        };
+        if fs::symlink_metadata(&destination).is_ok() {
+            if fs::read_link(&destination).is_ok_and(|existing| existing == target) {
+                return Ok(());
+            }
+            return Err(format!(
+                "InputsChanged: copied symlink {} conflicts with the captured graph",
+                path.display()
+            )
+            .into());
+        }
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(target, destination)?;
+        #[cfg(not(unix))]
+        return Err("source symlink snapshots require supported Unix filesystem semantics".into());
         Ok(())
     }
     fn copy_file(&self, path: &Path) -> Result<()> {
@@ -370,6 +437,14 @@ impl Snapshot {
                     path,
                     &[vec![2], original.as_os_str().as_encoded_bytes().to_vec()].concat(),
                 )?;
+            } else if expected.first() == Some(&3)
+                && !fs::symlink_metadata(self.mapped(path)?).is_ok_and(|metadata| metadata.is_dir())
+            {
+                return Err(format!(
+                    "InputsChanged: captured directory {} is missing from the copied graph",
+                    path.display()
+                )
+                .into());
             }
         }
         Ok(())
@@ -420,7 +495,139 @@ impl Snapshot {
     }
 }
 
-fn declared_snapshot_inputs(root: &Path, document: &Value) -> Result<Vec<PathBuf>> {
+struct DeclaredSnapshotInput {
+    resolved: PathBuf,
+    resolution: BTreeSet<PathBuf>,
+}
+
+fn resolve_snapshot_input(root: &Path, path: &Path) -> Result<DeclaredSnapshotInput> {
+    let (resolved, resolution) = resolve_snapshot_route(root, path, false)?;
+    Ok(DeclaredSnapshotInput {
+        resolved: resolved.ok_or("snapshot input must exist")?,
+        resolution,
+    })
+}
+
+#[derive(Clone)]
+enum RouteStep {
+    Root,
+    Parent,
+    Normal(OsString),
+}
+
+fn route_steps(path: &Path) -> Result<VecDeque<RouteStep>> {
+    path.components()
+        .filter_map(|component| match component {
+            Component::Prefix(_) => Some(Err("snapshot inputs require Unix paths".into())),
+            Component::RootDir => Some(Ok(RouteStep::Root)),
+            Component::CurDir => None,
+            Component::ParentDir => Some(Ok(RouteStep::Parent)),
+            Component::Normal(name) => Some(Ok(RouteStep::Normal(name.to_owned()))),
+        })
+        .collect()
+}
+
+fn resolve_snapshot_route(
+    root: &Path,
+    path: &Path,
+    allow_missing_final: bool,
+) -> Result<(Option<PathBuf>, BTreeSet<PathBuf>)> {
+    let authored = root.join(path);
+    let mut pending = route_steps(&authored)?;
+    let mut cursor = PathBuf::new();
+    let mut resolution = BTreeSet::new();
+    let mut followed_links = 0_u8;
+    while let Some(step) = pending.pop_front() {
+        match step {
+            RouteStep::Root => cursor = PathBuf::from("/"),
+            RouteStep::Parent => {
+                if cursor != Path::new("/") {
+                    if !fs::symlink_metadata(&cursor)?.is_dir() {
+                        return Err(format!(
+                            "snapshot input traverses through non-directory {}",
+                            cursor.display()
+                        )
+                        .into());
+                    }
+                    cursor.pop();
+                }
+            }
+            RouteStep::Normal(name) => {
+                cursor.push(name);
+                resolution.insert(cursor.clone());
+                let metadata = match fs::symlink_metadata(&cursor) {
+                    Ok(metadata) => metadata,
+                    Err(error)
+                        if error.kind() == ErrorKind::NotFound
+                            && allow_missing_final
+                            && pending.is_empty() =>
+                    {
+                        return Ok((None, resolution));
+                    }
+                    Err(error) => return Err(error.into()),
+                };
+                if metadata.file_type().is_symlink() {
+                    followed_links = followed_links
+                        .checked_add(1)
+                        .ok_or("snapshot input symlink depth overflow")?;
+                    if followed_links > 64 {
+                        return Err("snapshot input has too many symlink hops".into());
+                    }
+                    let target = fs::read_link(&cursor)?;
+                    cursor.pop();
+                    let mut target_steps = route_steps(&target)?;
+                    target_steps.append(&mut pending);
+                    pending = target_steps;
+                } else if !pending.is_empty() && !metadata.is_dir() {
+                    return Err(format!(
+                        "snapshot input traverses through non-directory {}",
+                        cursor.display()
+                    )
+                    .into());
+                } else if !metadata.is_dir() && !metadata.is_file() {
+                    return Err(format!(
+                        "snapshot input is not a regular file: {}",
+                        cursor.display()
+                    )
+                    .into());
+                }
+            }
+        }
+    }
+    let resolved = authored.canonicalize().map_err(|error| {
+        format!(
+            "cannot resolve snapshot input {}: {error}",
+            authored.display()
+        )
+    })?;
+    if cursor != resolved {
+        return Err(format!(
+            "snapshot input resolution disagrees with the filesystem for {}",
+            authored.display()
+        )
+        .into());
+    }
+    Ok((Some(resolved), resolution))
+}
+
+fn capture_optional_input(
+    root: &Path,
+    path: &Path,
+    extra: &mut Vec<PathBuf>,
+    resolution: &mut BTreeSet<PathBuf>,
+) -> Result<()> {
+    let logical = root.join(path);
+    let (resolved, route) = resolve_snapshot_route(root, path, true)?;
+    resolution.extend(route);
+    if let Some(resolved) = resolved {
+        extra.push(resolved);
+    } else {
+        extra.push(logical);
+    }
+    Ok(())
+}
+
+fn declared_snapshot_inputs(root: &Path, document: &Value) -> Result<Vec<DeclaredSnapshotInput>> {
     let Some(value) = document
         .get("package")
         .and_then(|value| value.get("metadata"))
@@ -445,7 +652,7 @@ fn declared_snapshot_inputs(root: &Path, document: &Value) -> Result<Vec<PathBuf
                         .into(),
                 );
             }
-            root.join(path).canonicalize().map_err(|error| {
+            resolve_snapshot_input(root, path).map_err(|error| {
                 format!(
                     "cannot resolve declared Type History snapshot input {}: {error}",
                     root.join(path).display()
@@ -468,6 +675,43 @@ fn cargo_cache_roots(roots: &[PathBuf]) -> BTreeSet<PathBuf> {
 }
 fn file_fingerprint(bytes: &[u8]) -> Vec<u8> {
     [vec![1], Sha256::digest(bytes).to_vec()].concat()
+}
+
+fn entry_fingerprint(path: &Path) -> Result<Vec<u8>> {
+    let metadata = match fs::symlink_metadata(path) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == ErrorKind::NotFound => return Ok(vec![0]),
+        Err(error) => return Err(error.into()),
+    };
+    if metadata.file_type().is_symlink() {
+        let target = fs::read_link(path)?;
+        Ok([vec![2], target.as_os_str().as_encoded_bytes().to_vec()].concat())
+    } else if metadata.is_dir() {
+        Ok(vec![3])
+    } else if metadata.is_file() {
+        Ok(file_fingerprint(&fs::read(path)?))
+    } else {
+        Err(format!("snapshot input is not a regular file: {}", path.display()).into())
+    }
+}
+
+fn lexical_absolute(path: &Path) -> Result<PathBuf> {
+    let mut resolved = PathBuf::new();
+    for component in path.components() {
+        match component {
+            Component::Prefix(_) => return Err("snapshot inputs require Unix paths".into()),
+            Component::RootDir => resolved = PathBuf::from("/"),
+            Component::CurDir => {}
+            Component::ParentDir => {
+                resolved.pop();
+            }
+            Component::Normal(name) => resolved.push(name),
+        }
+    }
+    if !resolved.is_absolute() {
+        return Err("snapshot path must be absolute".into());
+    }
+    Ok(resolved)
 }
 fn mirrored(mirror: &Path, path: &Path) -> Result<PathBuf> {
     Ok(mirror.join(

@@ -24,6 +24,7 @@ fn fixture() -> Snapshot {
         toolchain: None,
         mirror: owner.path().join("mirror"),
         roots: vec![root],
+        resolution: BTreeSet::new(),
         boundaries: Vec::new(),
         manifests: BTreeSet::new(),
         workspaces: BTreeSet::new(),
@@ -53,10 +54,10 @@ fn declared_inputs_are_relative_existing_paths() {
         "[package.metadata.type-history]\nsnapshot-inputs = ['../../generated/schema.json']\n",
     )
     .unwrap();
-    assert_eq!(
-        declared_snapshot_inputs(&root, &document).unwrap(),
-        [input.canonicalize().unwrap()]
-    );
+    let declared = declared_snapshot_inputs(&root, &document).unwrap();
+    assert_eq!(declared.len(), 1);
+    assert_eq!(declared[0].resolved, input.canonicalize().unwrap());
+    assert!(declared[0].resolution.contains(&input));
 
     for value in ["'/absolute/input'", "'../../missing'"] {
         let document = toml::from_str(&format!(
@@ -65,6 +66,156 @@ fn declared_inputs_are_relative_existing_paths() {
         .unwrap();
         assert!(declared_snapshot_inputs(&root, &document).is_err());
     }
+}
+
+#[cfg(unix)]
+#[test]
+fn declared_input_symlink_route_and_equal_byte_retarget_are_freshness_inputs() {
+    use std::os::unix::fs::symlink;
+
+    let mut snapshot = fixture();
+    let workspace = snapshot._owner.path().join("workspace");
+    let root = workspace.join("app");
+    let inputs = workspace.join("inputs");
+    let current = inputs.join("current");
+    for generated in ["generated-a", "generated-b"] {
+        fs::create_dir_all(workspace.join(generated)).unwrap();
+        fs::write(workspace.join(generated).join("flag"), "same bytes").unwrap();
+    }
+    fs::create_dir_all(&root).unwrap();
+    fs::create_dir_all(&inputs).unwrap();
+    let alias = inputs.join("alias");
+    symlink("alias", &current).unwrap();
+    symlink("../generated-a", &alias).unwrap();
+    let document = toml::from_str(
+        "[package.metadata.type-history]\nsnapshot-inputs = ['../inputs/current/flag']\n",
+    )
+    .unwrap();
+    let declared = declared_snapshot_inputs(&root, &document).unwrap();
+    snapshot.roots = std::iter::once(root.clone())
+        .chain(declared.iter().map(|input| input.resolved.clone()))
+        .collect();
+    snapshot.resolution = declared
+        .into_iter()
+        .flat_map(|input| input.resolution)
+        .collect();
+    snapshot.before = snapshot.fingerprint().unwrap();
+    snapshot.copy_resolution().unwrap();
+    for input in &snapshot.roots {
+        snapshot.copy_tree(input).unwrap();
+    }
+    snapshot.verify_complete_copy().unwrap();
+    assert_eq!(
+        fs::read_to_string(
+            snapshot
+                .mapped(&root.join("../inputs/current/flag"))
+                .unwrap()
+        )
+        .unwrap(),
+        "same bytes"
+    );
+    assert_eq!(
+        fs::read_link(snapshot.mapped(&alias).unwrap()).unwrap(),
+        Path::new("../generated-a")
+    );
+
+    fs::remove_file(&alias).unwrap();
+    symlink("../generated-b", &alias).unwrap();
+    let error = snapshot.copy_resolution().unwrap_err();
+    assert!(error.to_string().contains("InputsChanged"));
+}
+
+#[cfg(unix)]
+#[test]
+fn optional_missing_input_tracks_linked_prefix_and_file_parent_is_rejected() {
+    use std::os::unix::fs::symlink;
+
+    let snapshot = fixture();
+    let root = snapshot._owner.path().join("workspace");
+    let first = snapshot._owner.path().join("workspace-a");
+    let second = snapshot._owner.path().join("workspace-b");
+    fs::create_dir_all(&root).unwrap();
+    fs::create_dir_all(&first).unwrap();
+    fs::create_dir_all(&second).unwrap();
+    symlink(&first, root.join("linked")).unwrap();
+    let (resolved, route) =
+        super::resolve_snapshot_route(&root, Path::new("linked/Cargo.lock"), true).unwrap();
+    assert!(resolved.is_none());
+    let before: BTreeMap<_, _> = route
+        .iter()
+        .map(|path| (path.clone(), super::entry_fingerprint(path).unwrap()))
+        .collect();
+    fs::remove_file(root.join("linked")).unwrap();
+    symlink(&second, root.join("linked")).unwrap();
+    let after: BTreeMap<_, _> = route
+        .iter()
+        .map(|path| (path.clone(), super::entry_fingerprint(path).unwrap()))
+        .collect();
+    assert_ne!(before, after);
+
+    fs::write(root.join("file"), "not a directory").unwrap();
+    assert!(
+        super::resolve_snapshot_route(&root, Path::new("file/../Cargo.lock"), true,)
+            .unwrap_err()
+            .to_string()
+            .contains("non-directory")
+    );
+}
+
+#[test]
+fn traversed_directory_is_recreated_without_copying_unrelated_contents() {
+    let mut snapshot = fixture();
+    let root = snapshot._owner.path().join("workspace");
+    let unused = root.join("unused");
+    let requested = root.join("generated/flag");
+    fs::create_dir_all(&unused).unwrap();
+    fs::write(unused.join("unrelated"), "omit").unwrap();
+    fs::create_dir_all(requested.parent().unwrap()).unwrap();
+    fs::write(&requested, "captured").unwrap();
+    let input =
+        super::resolve_snapshot_input(&root, Path::new("unused/../generated/flag")).unwrap();
+    snapshot.roots = vec![input.resolved];
+    snapshot.resolution = input.resolution;
+    snapshot.before = snapshot.fingerprint().unwrap();
+    snapshot.copy_resolution().unwrap();
+    for input in &snapshot.roots {
+        snapshot.copy_tree(input).unwrap();
+    }
+    snapshot.verify_complete_copy().unwrap();
+    assert!(snapshot.mapped(&unused).unwrap().is_dir());
+    assert!(!snapshot.mapped(&unused.join("unrelated")).unwrap().exists());
+    assert_eq!(
+        fs::read_to_string(snapshot.mapped(&requested).unwrap()).unwrap(),
+        "captured"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn relative_symlink_with_excess_parents_cannot_escape_mirror() {
+    use std::os::unix::fs::symlink;
+
+    let mut snapshot = fixture();
+    let root = snapshot.roots[0].clone();
+    let target = root.join("captured");
+    let link = root.join("nested/link");
+    fs::create_dir_all(link.parent().unwrap()).unwrap();
+    fs::write(&target, "captured").unwrap();
+    let mut authored_target = PathBuf::new();
+    for _ in 0..32 {
+        authored_target.push("..");
+    }
+    authored_target.push(target.strip_prefix("/").unwrap());
+    symlink(&authored_target, &link).unwrap();
+    assert_eq!(link.canonicalize().unwrap(), target);
+
+    snapshot.before = snapshot.fingerprint().unwrap();
+    assert!(snapshot
+        .copy_tree(&root)
+        .unwrap_err()
+        .to_string()
+        .contains("would escape the owned mirror"));
+    assert!(!snapshot.mapped(&link).unwrap().exists());
 }
 
 #[test]

@@ -160,6 +160,11 @@ snapshot-inputs = ["../../generated/schema.json"]
 
 Each entry is relative to that package. It must name an existing file or directory.
 Type History copies it into the checked build and rejects changes during the command.
+For a path containing symlinks, the snapshot preserves the declared route and resolved
+contents. Adding, removing, or retargeting a route symlink invalidates the snapshot even
+when the resolved bytes are unchanged.
+Type History rejects a relative symlink whose unchanged target would escape the isolated
+copy.
 
 Add this line to `.gitignore`:
 

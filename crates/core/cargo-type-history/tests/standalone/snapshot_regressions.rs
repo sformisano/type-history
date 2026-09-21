@@ -1,12 +1,12 @@
 use super::support::{failure, success, Fixture, LEDGER};
 use std::fs;
 #[cfg(unix)]
-use std::os::unix::net::UnixListener;
+use std::os::unix::{fs::symlink, net::UnixListener};
 use toml::Value;
 
 #[cfg(unix)]
 #[test]
-fn workspace_output_is_omitted_and_declared_sibling_input_is_captured() {
+fn virtual_workspace_links_and_declared_sibling_input_are_captured_without_outputs() {
     let fixture = Fixture::empty();
     let root = fixture.root();
     let manifest = fixture.read("Cargo.toml").replace("[workspace]\n", "");
@@ -24,13 +24,28 @@ fn workspace_output_is_omitted_and_declared_sibling_input_is_captured() {
     assert!(!root.join(".git").exists());
 
     success(&fixture.cargo(&["generate-lockfile", "--offline"]));
+    fs::create_dir_all(root.join("workspace-files")).unwrap();
+    fs::rename(
+        root.join("Cargo.toml"),
+        root.join("workspace-files/workspace.toml"),
+    )
+    .unwrap();
+    symlink("workspace-files/workspace.toml", root.join("Cargo.toml")).unwrap();
+    fs::rename(
+        root.join("Cargo.lock"),
+        root.join("workspace-files/workspace.lock"),
+    )
+    .unwrap();
+    symlink("workspace-files/workspace.lock", root.join("Cargo.lock")).unwrap();
     success(&fixture.cli(&["init", "--package", "standalone-history-consumer"]));
 
-    fixture.write("site/node_modules/flag", "present");
+    fixture.write("generated-a/flag", "present");
+    fs::create_dir_all(root.join("inputs")).unwrap();
+    symlink("../generated-a", root.join("inputs/current")).unwrap();
     fixture.write(
         "app/Cargo.toml",
         &format!(
-            "{manifest}\n[package.metadata.type-history]\nsnapshot-inputs=['../site/node_modules/flag']\n"
+            "{manifest}\n[package.metadata.type-history]\nsnapshot-inputs=['../inputs/current/flag']\n"
         ),
     );
     fixture.write(
@@ -38,7 +53,7 @@ fn workspace_output_is_omitted_and_declared_sibling_input_is_captured() {
         r#"use std::path::Path;
 fn main() {
     println!("cargo::rustc-check-cfg=cfg(input_present)");
-    if Path::new("../site/node_modules/flag").exists() {
+    if Path::new("../inputs/current/flag").exists() {
         println!("cargo::rustc-cfg=input_present");
     }
     history_build::compile();

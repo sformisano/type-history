@@ -81,6 +81,14 @@ pub fn read(root: &Path, facade_packages: &[&str]) -> Result<PackageSource> {
 
 /// Resolve the manifest that owns a local package's workspace inheritance.
 pub(crate) fn workspace_manifest(root: &Path, manifest: &Value) -> Result<Option<PathBuf>> {
+    workspace_manifest_logical(root, manifest)?
+        .map(|path| path.canonicalize())
+        .transpose()
+        .map_err(Into::into)
+}
+
+/// Resolve the authored path Cargo uses for a local package's workspace manifest.
+pub(crate) fn workspace_manifest_logical(root: &Path, manifest: &Value) -> Result<Option<PathBuf>> {
     // This reads workspace ownership without resolving dependencies or acquiring
     // the build lock. Ancestor search alone ignores Cargo's membership/exclusions.
     let cargo = env::var_os("CARGO");
@@ -115,7 +123,7 @@ pub(crate) fn workspace_manifest(root: &Path, manifest: &Value) -> Result<Option
         )
         .into());
     }
-    let path = PathBuf::from(String::from_utf8(output.stdout)?.trim()).canonicalize()?;
+    let path = PathBuf::from(String::from_utf8(output.stdout)?.trim());
     Ok((path != root.join("Cargo.toml") || manifest.get("workspace").is_some()).then_some(path))
 }
 

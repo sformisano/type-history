@@ -53,6 +53,8 @@
 - `Versioned` reads and writes generated history envelopes.
 - `cargo type-history` initializes, checks, freezes, imports, resets, and undoes ledger changes.
 - `package.metadata.type-history.snapshot-inputs` declares relative files or directories that a package needs from outside its root.
+- Declared input snapshots bind every path-resolution component and the resolved contents; adding, removing, or retargeting a symlink invalidates the snapshot even when the resolved bytes are unchanged.
+- A relative source symlink is rejected when its unchanged target would escape the isolated snapshot.
 
 ## Known Gaps / Deferred
 
