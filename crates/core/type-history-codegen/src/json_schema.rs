@@ -42,7 +42,17 @@ impl JsonSchemaDocument {
     }
 
     /// Write the normalized document for one resolved structural shape.
+    ///
+    /// # Panics
+    /// Panics for a shape outside the supported subset. Use
+    /// [`Self::try_from_shape`] for observations supplied by a frontend.
     pub fn from_shape(shape: &SchemaShape, identity: &str) -> Self {
+        Self::try_from_shape(shape, identity).expect("resolved shape is valid")
+    }
+
+    /// Validate and write a resolved structural shape without discarding names.
+    pub fn try_from_shape(shape: &SchemaShape, identity: &str) -> Result<Self, JsonSchemaError> {
+        validate::shape(shape, "")?;
         let mut value = write_node(shape);
         let root = value.as_object_mut().expect("written nodes are objects");
         root.insert(
@@ -50,7 +60,7 @@ impl JsonSchemaDocument {
             Value::String(Self::META_SCHEMA.to_owned()),
         );
         root.insert("$id".to_owned(), Value::String(identity.to_owned()));
-        Self::from_normalized(value).expect("written documents are normalized and valid")
+        Self::from_normalized(value)
     }
 
     /// Accept one stored document that must already be normalized.
@@ -185,6 +195,9 @@ pub enum JsonSchemaErrorReason {
     /// `required` did not name a unique subset of the record properties.
     #[error("`required` must contain unique string names drawn from `properties`")]
     Required,
+    /// A record repeats a field name that JSON object insertion would discard.
+    #[error("record fields must have unique names")]
+    DuplicateField,
     /// An optional node was not exactly a value or `null` alternative.
     #[error("`anyOf` must contain exactly one value schema and one `null` schema")]
     Option,
@@ -252,6 +265,7 @@ mod profiles;
 
 mod write;
 use write::write_node;
+mod validate;
 
 // ---------------------------------------------------------------------------
 

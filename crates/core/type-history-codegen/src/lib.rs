@@ -25,7 +25,10 @@ pub mod lint_attributes;
 pub mod model;
 pub mod record;
 pub mod resolved_schema;
-pub use generate::{generate_history, GeneratedHistory, GeneratedVersion, GenerationPaths};
+pub use generate::{
+    generate_history, generate_history_with_options, GeneratedHistory, GeneratedVersion,
+    GenerationOptions, GenerationPaths, PayloadTraits,
+};
 pub use history::{AuthorizedHistory, HistoryPlan};
 pub use identifier::normalize_rust_identifier;
 pub use model::{NamedField, RecordDerives, RecordInput};

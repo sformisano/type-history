@@ -1,6 +1,6 @@
 //! Retained records, their current alias, and schema expressions.
 //!
-//! Records derive Clone and the selected native PartialEq and Debug traits.
+//! Native mode derives Clone and the selected PartialEq and Debug traits.
 
 use crate::{
     lint_attributes::{lint_attributes, scoped_field_type_for_owner},
@@ -8,11 +8,14 @@ use crate::{
 };
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
-use syn::Result;
+use syn::{parse_quote, DeriveInput, Result};
 
-use super::{Context, GeneratedVersion};
+use super::{Context, GeneratedVersion, GenerationOptions, PayloadTraits};
 
-pub(super) fn generate(context: &Context<'_>) -> Result<(TokenStream, Vec<GeneratedVersion>)> {
+pub(super) fn generate(
+    context: &Context<'_>,
+    options: &GenerationOptions,
+) -> Result<(TokenStream, Vec<GeneratedVersion>)> {
     let support_path = &context.paths.support;
     let support = quote!(#support_path);
     let mut declarations = Vec::new();
@@ -25,6 +28,10 @@ pub(super) fn generate(context: &Context<'_>) -> Result<(TokenStream, Vec<Genera
     if context.input.derives.debug {
         derives.push(quote!(::core::fmt::Debug));
     }
+    let derives = match options.payload_traits {
+        PayloadTraits::Native => quote!(#[derive(#(#derives),*)]),
+        PayloadTraits::Frontend => TokenStream::new(),
+    };
     for version in context.history.versions() {
         let name = context.payload(version.version);
         let mut field_aliases = Vec::new();
@@ -92,7 +99,7 @@ pub(super) fn generate(context: &Context<'_>) -> Result<(TokenStream, Vec<Genera
         declarations.push(quote! {
             #(#field_aliases)*
             #docs
-            #[derive(#(#derives),*)]
+            #derives
             #visibility struct #name { #(#field_declarations),* }
             #schema_impl
             #codecs
@@ -100,15 +107,27 @@ pub(super) fn generate(context: &Context<'_>) -> Result<(TokenStream, Vec<Genera
             #visibility struct #wire_marker;
             impl #support_path::WireNode for #wire_marker {
                 const SHAPE: #support_path::ConstantShape = <#wire_type as #support_path::WireNode>::SHAPE;
-                fn schema() -> #support_path::SchemaShape { <#wire_type as #support_path::WireNode>::schema() }
             }
             impl #support_path::NonOptionalNode for #wire_marker {}
             impl #support_path::ResolvedSchema for #name { type Wire = #wire_marker; }
             #field_contract
         });
+        let contract_fields = fields.iter().map(|field| {
+            let name = &field.name;
+            let ty = &field.ty;
+            let attributes = &field.attributes;
+            let key = name.to_string().trim_start_matches("r#").to_owned();
+            let visibility = &context.input.field_visibility[&key];
+            quote!(#(#attributes)* #visibility #name: #ty)
+        });
+        let contract: DeriveInput = parse_quote! {
+            #visibility struct #name { #(#contract_fields),* }
+        };
         versions.push(GeneratedVersion {
             number: version.version,
             schema_expression: quote!(#support_path::export_json_schema::<#name>()),
+            shape_expression: quote!(<#name as #support_path::ResolvedSchema>::resolved_wire_schema()),
+            contract,
             name,
         });
     }

@@ -57,7 +57,9 @@ pub trait WireNode {
     /// Whether a named field can be absent, independently of value nullability.
     const FIELD_PRESENCE: FieldPresence = FieldPresence::Required;
     /// Build the equivalent runtime schema shape.
-    fn schema() -> SchemaShape;
+    fn schema() -> SchemaShape {
+        Self::SHAPE.schema()
+    }
 }
 
 pub struct Bool;
@@ -82,9 +84,6 @@ macro_rules! primitive_node {
     ($node:ident, $shape:ident, $rust:ty) => {
         impl WireNode for $node {
             const SHAPE: ConstantShape = ConstantShape::$shape;
-            fn schema() -> SchemaShape {
-                SchemaShape::$shape
-            }
         }
 
         impl ResolvedSchema for $rust {
@@ -109,11 +108,6 @@ primitive_node!(StringValue, String, String);
 impl<Value: WireNode> WireNode for Optional<Value> {
     const FIELD_PRESENCE: FieldPresence = FieldPresence::Optional;
     const SHAPE: ConstantShape = ConstantShape::Option(&Value::SHAPE);
-    fn schema() -> SchemaShape {
-        SchemaShape::Option {
-            value: Box::new(Value::schema()),
-        }
-    }
 }
 
 impl<Value: ResolvedSchema> ResolvedSchema for Option<Value>
@@ -164,16 +158,6 @@ impl<Value: WireNode> WireNode for Vector<Value> {
     } else {
         ConstantShape::Sequence(&Value::SHAPE)
     };
-    fn schema() -> SchemaShape {
-        let value = Value::schema();
-        if value == SchemaShape::U8 {
-            SchemaShape::Bytes
-        } else {
-            SchemaShape::Sequence {
-                value: Box::new(value),
-            }
-        }
-    }
 }
 
 impl<Value: ResolvedSchema> ResolvedSchema for Vec<Value> {
@@ -182,12 +166,6 @@ impl<Value: ResolvedSchema> ResolvedSchema for Vec<Value> {
 
 impl<Value: WireNode, const LENGTH: usize> WireNode for FixedArray<Value, LENGTH> {
     const SHAPE: ConstantShape = ConstantShape::Array(&Value::SHAPE, LENGTH);
-    fn schema() -> SchemaShape {
-        SchemaShape::Array {
-            value: Box::new(Value::schema()),
-            length: LENGTH,
-        }
-    }
 }
 
 impl<Value: ResolvedSchema, const LENGTH: usize> ResolvedSchema for [Value; LENGTH] {
@@ -199,23 +177,17 @@ pub struct Item<Head, Tail>(PhantomData<(Head, Tail)>);
 
 pub trait WireItems {
     const ITEMS: ConstantItems;
-    fn schemas() -> Vec<SchemaShape>;
+    fn schemas() -> Vec<SchemaShape> {
+        Self::ITEMS.items()
+    }
 }
 
 impl WireItems for End {
     const ITEMS: ConstantItems = ConstantItems::End;
-    fn schemas() -> Vec<SchemaShape> {
-        Vec::new()
-    }
 }
 
 impl<Head: WireNode, Tail: WireItems> WireItems for Item<Head, Tail> {
     const ITEMS: ConstantItems = ConstantItems::Item(&Head::SHAPE, &Tail::ITEMS);
-    fn schemas() -> Vec<SchemaShape> {
-        let mut output = vec![Head::schema()];
-        output.extend(Tail::schemas());
-        output
-    }
 }
 
 pub struct NameEnd;
@@ -282,14 +254,13 @@ pub struct Field<Name, Value>(PhantomData<(Name, Value)>);
 
 pub trait WireFields {
     const FIELDS: ConstantFields;
-    fn fields() -> Vec<SchemaField>;
+    fn fields() -> Vec<SchemaField> {
+        Self::FIELDS.fields()
+    }
 }
 
 impl WireFields for End {
     const FIELDS: ConstantFields = ConstantFields::End;
-    fn fields() -> Vec<SchemaField> {
-        Vec::new()
-    }
 }
 
 impl<Name: WireName, Value: WireNode, Tail: WireFields> WireFields
@@ -301,25 +272,10 @@ impl<Name: WireName, Value: WireNode, Tail: WireFields> WireFields
         &Value::SHAPE,
         &Tail::FIELDS,
     );
-    fn fields() -> Vec<SchemaField> {
-        let schema = Value::schema();
-        let mut output = vec![SchemaField {
-            name: Name::value(),
-            presence: Value::FIELD_PRESENCE,
-            schema,
-        }];
-        output.extend(Tail::fields());
-        output
-    }
 }
 
 impl<Fields: WireFields> WireNode for Record<Fields> {
     const SHAPE: ConstantShape = ConstantShape::Record(Fields::FIELDS);
-    fn schema() -> SchemaShape {
-        SchemaShape::Record {
-            fields: Fields::fields(),
-        }
-    }
 }
 
 pub struct Variant<Name, Shape>(PhantomData<(Name, Shape)>);
@@ -330,57 +286,36 @@ pub struct RecordVariant<Fields>(PhantomData<Fields>);
 
 pub trait WireVariantNode {
     const SHAPE: ConstantVariant;
-    fn shape() -> SchemaVariantShape;
+    fn shape() -> SchemaVariantShape {
+        Self::SHAPE.shape()
+    }
 }
 
 impl WireVariantNode for UnitVariant {
     const SHAPE: ConstantVariant = ConstantVariant::Unit;
-    fn shape() -> SchemaVariantShape {
-        SchemaVariantShape::Unit
-    }
 }
 
 impl<Value: WireNode> WireVariantNode for NewtypeVariant<Value> {
     const SHAPE: ConstantVariant = ConstantVariant::newtype(&Value::SHAPE);
-    fn shape() -> SchemaVariantShape {
-        match Value::schema() {
-            SchemaShape::Record { fields } => SchemaVariantShape::Record { fields },
-            SchemaShape::Tuple { items } => SchemaVariantShape::Tuple { items },
-            schema => SchemaVariantShape::Newtype {
-                schema: Box::new(schema),
-            },
-        }
-    }
 }
 
 impl<Items: WireItems> WireVariantNode for TupleVariant<Items> {
     const SHAPE: ConstantVariant = ConstantVariant::Tuple(Items::ITEMS);
-    fn shape() -> SchemaVariantShape {
-        SchemaVariantShape::Tuple {
-            items: Items::schemas(),
-        }
-    }
 }
 
 impl<Fields: WireFields> WireVariantNode for RecordVariant<Fields> {
     const SHAPE: ConstantVariant = ConstantVariant::Record(Fields::FIELDS);
-    fn shape() -> SchemaVariantShape {
-        SchemaVariantShape::Record {
-            fields: Fields::fields(),
-        }
-    }
 }
 
 pub trait WireVariants {
     const VARIANTS: ConstantVariants;
-    fn variants() -> Vec<SchemaVariant>;
+    fn variants() -> Vec<SchemaVariant> {
+        Self::VARIANTS.variants()
+    }
 }
 
 impl WireVariants for End {
     const VARIANTS: ConstantVariants = ConstantVariants::End;
-    fn variants() -> Vec<SchemaVariant> {
-        Vec::new()
-    }
 }
 
 impl<Name: WireName, Shape: WireVariantNode, Tail: WireVariants> WireVariants
@@ -388,117 +323,10 @@ impl<Name: WireName, Shape: WireVariantNode, Tail: WireVariants> WireVariants
 {
     const VARIANTS: ConstantVariants =
         ConstantVariants::Variant(Name::NAME, Shape::SHAPE, &Tail::VARIANTS);
-    fn variants() -> Vec<SchemaVariant> {
-        let mut output = vec![SchemaVariant {
-            name: Name::value(),
-            shape: Shape::shape(),
-        }];
-        output.extend(Tail::variants());
-        output
-    }
 }
 
 impl<Variants: WireVariants> WireNode for Enumeration<Variants> {
     const SHAPE: ConstantShape = ConstantShape::Enum(Variants::VARIANTS);
-    fn schema() -> SchemaShape {
-        SchemaShape::Enum {
-            variants: Variants::variants(),
-        }
-    }
-}
-
-/// Implemented only when the two schema types are exactly equal.
-pub trait SameSchema<Expected> {}
-
-macro_rules! same_primitive_schema {
-    ($($node:ty),+ $(,)?) => {
-        $(impl SameSchema<$node> for $node {})+
-    };
-}
-
-same_primitive_schema!(
-    Bool,
-    I8,
-    I16,
-    I32,
-    I64,
-    I128,
-    U8,
-    U16,
-    U32,
-    U64,
-    U128,
-    StringValue
-);
-
-impl<Current, Expected> SameSchema<Optional<Expected>> for Optional<Current> where
-    Current: SameSchema<Expected>
-{
-}
-
-impl<Current, Expected> SameSchema<Vector<Expected>> for Vector<Current> where
-    Current: SameSchema<Expected>
-{
-}
-
-impl<Current, Expected, const LENGTH: usize> SameSchema<FixedArray<Expected, LENGTH>>
-    for FixedArray<Current, LENGTH>
-where
-    Current: SameSchema<Expected>,
-{
-}
-
-impl SameSchema<End> for End {}
-
-impl<CurrentHead, ExpectedHead, CurrentTail, ExpectedTail>
-    SameSchema<Item<ExpectedHead, ExpectedTail>> for Item<CurrentHead, CurrentTail>
-where
-    CurrentHead: SameSchema<ExpectedHead>,
-    CurrentTail: SameSchema<ExpectedTail>,
-{
-}
-
-impl<Name, Current, Expected> SameSchema<Field<Name, Expected>> for Field<Name, Current> where
-    Current: SameSchema<Expected>
-{
-}
-
-impl<CurrentFields, ExpectedFields> SameSchema<Record<ExpectedFields>> for Record<CurrentFields> where
-    CurrentFields: SameSchema<ExpectedFields>
-{
-}
-
-impl SameSchema<UnitVariant> for UnitVariant {}
-
-impl<Current, Expected> SameSchema<NewtypeVariant<Expected>> for NewtypeVariant<Current> where
-    Current: SameSchema<Expected>
-{
-}
-
-impl<CurrentItems, ExpectedItems> SameSchema<TupleVariant<ExpectedItems>>
-    for TupleVariant<CurrentItems>
-where
-    CurrentItems: SameSchema<ExpectedItems>,
-{
-}
-
-impl<CurrentFields, ExpectedFields> SameSchema<RecordVariant<ExpectedFields>>
-    for RecordVariant<CurrentFields>
-where
-    CurrentFields: SameSchema<ExpectedFields>,
-{
-}
-
-impl<Name, Current, Expected> SameSchema<Variant<Name, Expected>> for Variant<Name, Current> where
-    Current: SameSchema<Expected>
-{
-}
-
-impl<CurrentVariants, ExpectedVariants> SameSchema<Enumeration<ExpectedVariants>>
-    for Enumeration<CurrentVariants>
-where
-    CurrentVariants: SameSchema<ExpectedVariants>,
-{
 }
 
 #[cfg(test)]
@@ -507,6 +335,23 @@ mod tests {
 
     type Name = NameByte<b'i', NameByte<b'd', NameEnd>>;
     type Fields = Item<Field<Name, U64>, End>;
+
+    #[test]
+    fn external_nodes_can_use_the_default_or_override_runtime_schema() {
+        struct DefaultNode;
+        impl WireNode for DefaultNode {
+            const SHAPE: ConstantShape = ConstantShape::Bool;
+        }
+        struct CustomNode;
+        impl WireNode for CustomNode {
+            const SHAPE: ConstantShape = ConstantShape::String;
+            fn schema() -> SchemaShape {
+                SchemaShape::String
+            }
+        }
+        assert_eq!(DefaultNode::schema(), SchemaShape::Bool);
+        assert_eq!(CustomNode::schema(), SchemaShape::String);
+    }
 
     #[test]
     fn structural_record_schema_is_exact_and_normalized() {
