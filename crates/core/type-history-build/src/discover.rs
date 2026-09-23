@@ -1,6 +1,7 @@
 //! Complete Type History source inventory.
 
 use std::path::Path;
+use syn::Ident;
 use type_history_codegen::{
     admission::Declaration as AdmittedDeclaration,
     history::HistoryPlan,
@@ -10,7 +11,9 @@ use type_history_codegen::{
 
 use crate::{
     contract::STANDALONE,
-    inventory::{self, Admission, Declaration, PackageInventory},
+    inventory::{
+        self, Admission, Declaration, DeclarationSource, PackageInventory, SourceLocation,
+    },
     package, Result,
 };
 
@@ -43,15 +46,39 @@ pub(crate) fn read_with_admission(
     for declaration in source.declarations {
         let input = declaration.input;
         let plan = HistoryPlan::infer(&input.name, &input.fields)?;
-        declarations.push(Declaration::resolve(
-            input.name.to_string(),
-            declaration.stable_name,
-            RecordMetadata {},
-            plan,
-            &input.name,
-            &input.fields,
-            ledger.as_ref(),
-        )?);
+        let location = |name: &Ident| {
+            let start = name.span().start();
+            SourceLocation {
+                file: package.root.join(&declaration.source_path),
+                line: start.line as u64,
+                column: start.column as u64 + 1,
+            }
+        };
+        let source = DeclarationSource {
+            declaration: location(&input.name),
+            fields: input
+                .fields
+                .iter()
+                .map(|field| {
+                    (
+                        field.name.to_string().trim_start_matches("r#").to_owned(),
+                        location(&field.name),
+                    )
+                })
+                .collect(),
+        };
+        declarations.push(
+            Declaration::resolve(
+                input.name.to_string(),
+                declaration.stable_name,
+                RecordMetadata {},
+                plan,
+                &input.name,
+                &input.fields,
+                ledger.as_ref(),
+            )?
+            .with_source(source),
+        );
     }
     declarations.sort_by(|a, b| a.stable_name.cmp(&b.stable_name));
     let mut tracked_paths = package.tracked_paths;

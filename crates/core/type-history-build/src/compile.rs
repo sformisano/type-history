@@ -98,6 +98,9 @@ fn compile_with_admission<M: Clone + Eq + Serialize + DeserializeOwned>(
         }
         println!("cargo::warning={message}");
     }
+    if export && strict {
+        return Err(format!("{} is unavailable in strict or release builds; schema observation requires a non-strict development test build", contract.export_env).into());
+    }
     if contract.authority_kind == "standalone" {
         let invocations = match invocations {
             Some(invocations) => invocations,

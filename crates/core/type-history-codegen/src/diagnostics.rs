@@ -1,7 +1,6 @@
 //! Stable differences between compiler-resolved wire schemas.
 
 mod compare;
-mod marker;
 #[cfg(test)]
 mod tests;
 
@@ -11,7 +10,6 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 pub use compare::compare_shapes;
-pub use marker::{parse_compiler_marker, DiagnosticDecodeError, FrozenSchemaObservation};
 
 /// Stable v1 schema difference codes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]

@@ -6,6 +6,7 @@ use crate::check_report::{
 use crate::compiler_diagnostics::CompilerFailure;
 use crate::contract::ToolContract;
 use crate::export;
+use crate::inventory::PackageInventory;
 use crate::options::{self, Action, CheckOptions, LifecycleOptions, OutputFormat};
 use crate::snapshot::Snapshot;
 use crate::workspace::{self, CargoMetadata, Package};
@@ -16,7 +17,7 @@ use std::error::Error;
 use std::ffi::OsString;
 use std::fs;
 use std::path::Path;
-use type_history_codegen::diagnostics::compare_shapes;
+use type_history_codegen::diagnostics::{compare_shapes, PathSegment};
 use type_history_codegen::ledger::{HistoryLedger, SchemaIdentity};
 
 #[cfg(test)]
@@ -246,10 +247,16 @@ fn execute_check_in<M: Clone + Eq + Serialize + DeserializeOwned>(
             contract,
             ops,
         )?;
-        result
-            .diagnostics
-            .extend(compare_ledgers(&current, &observed, false, None, None)?);
-        export::validate(snapshot, &package.name, &copied_root, options, contract)?;
+        let mut differences = compare_ledgers(&current, &observed.ledger, false, None, None)?;
+        for difference in &mut differences {
+            difference.location = source_location(difference, &observed.inventory, snapshot);
+        }
+        // A rejected observation needs no second compiler pass. A clean one
+        // still must satisfy ordinary (non-test, non-export) frozen assertions.
+        if differences.is_empty() {
+            export::validate(snapshot, &package.name, &copied_root, options, contract)?;
+        }
+        result.diagnostics.extend(differences);
         Ok(())
     })();
     if let Err(error) = attempt {
@@ -269,6 +276,28 @@ fn execute_check_in<M: Clone + Eq + Serialize + DeserializeOwned>(
     }
     check_report::order(&mut result.diagnostics);
     result
+}
+
+fn source_location<M>(
+    diagnostic: &Diagnostic,
+    inventory: &PackageInventory<M>,
+    snapshot: &Snapshot,
+) -> Option<Location> {
+    let declaration = inventory.declarations.iter().find(|declaration| {
+        Some(declaration.stable_name.as_str()) == diagnostic.stable_name.as_deref()
+    })?;
+    let source = declaration.source.as_ref()?;
+    let location = match diagnostic.path.first() {
+        Some(PathSegment::Field { name }) => source.fields.get(name).unwrap_or(&source.declaration),
+        _ => &source.declaration,
+    };
+    let captured = inventory.root.join(&location.file);
+    let original = snapshot.original(&captured)?;
+    Some(Location {
+        file: original.to_string_lossy().into_owned(),
+        line: Some(location.line),
+        column: Some(location.column),
+    })
 }
 fn aliases_current_ledger(current: &Path, released: &Path) -> bool {
     if current

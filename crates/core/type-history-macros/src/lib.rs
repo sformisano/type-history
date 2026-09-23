@@ -17,7 +17,9 @@ use std::{error::Error as StandardError, path::PathBuf, result::Result as Standa
 use syn::{parse_macro_input, DeriveInput, Error, Ident, ItemStruct, Path, Result};
 use type_history_codegen::{
     admission::{self, Admission, Invocation},
-    generate::{generate_history, generate_versioned, GenerationPaths},
+    generate::{
+        generate_history_with_options, generate_versioned, GenerationOptions, GenerationPaths,
+    },
     history::HistoryPlan,
     ledger::{HistoryLedger, RecordMetadata, SchemaIdentity},
 };
@@ -190,7 +192,12 @@ fn expand(arguments: Arguments, item: ItemStruct) -> Result<Tokens> {
         error: syn::parse2(error.clone())?,
         helper_prefix: helper_prefix(&input.name),
     };
-    let generated = generate_history(&input, &stable_name, &history, &paths)?;
+    let options = GenerationOptions {
+        observation_cfg: Some(syn::parse_quote!(type_history_schema_export)),
+        ..GenerationOptions::default()
+    };
+    let generated =
+        generate_history_with_options(&input, &stable_name, &history, &paths, &options)?;
     let stored_record = generate_versioned(&input, &stable_name, &history, &paths)?;
     let items = generated.items;
     let current = generated.latest;
@@ -205,8 +212,8 @@ fn expand(arguments: Arguments, item: ItemStruct) -> Result<Tokens> {
     let export = format_ident!("{}_schema_export", paths.helper_prefix);
     let schemas = generated.versions.iter().map(|version| {
         let number = version.number;
-        let schema = &version.schema_expression;
-        quote!(#facade::__private::serde_json::json!({ "version": #number, "wire": #schema }))
+        let shape = &version.shape_expression;
+        quote!(#facade::__private::serde_json::json!({ "version": #number, "shape": #shape }))
     });
     let ledger_path = ledger_path
         .to_str()
@@ -239,7 +246,7 @@ fn expand(arguments: Arguments, item: ItemStruct) -> Result<Tokens> {
         #[cfg(all(test, type_history_schema_export))]
         #[test]
         fn #export() {
-            ::std::println!("TYPE_HISTORY_SCHEMA_EXPORT_V1\t{}", #facade::__private::serde_json::json!({"stable_name": #stable_name, "versions": [#(#schemas),*]}));
+            ::std::println!("TYPE_HISTORY_SCHEMA_EXPORT_V2\t{}", #facade::__private::serde_json::json!({"stable_name": #stable_name, "versions": [#(#schemas),*]}));
         }
     })
 }

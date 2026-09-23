@@ -17,6 +17,7 @@ fn inventory() -> PackageInventory<RecordMetadata> {
             version: 2,
             retained_versions: vec![1, 2],
             readiness: HistoryReadiness::Draft,
+            source: None,
         }],
         tracked_paths: Vec::new(),
         declaration_count: 1,
@@ -25,7 +26,7 @@ fn inventory() -> PackageInventory<RecordMetadata> {
 fn row(stable_name: &str, versions: &[u32]) -> Value {
     json!({"stable_name": stable_name, "versions": versions.iter().map(|version| json!({
         "version": version,
-        "wire": {"type":"object", "properties":{"owner":{"type":"string"}}, "required":["owner"], "additionalProperties":false}
+        "shape": {"kind":"record", "fields":[{"name":"owner", "presence":"required", "schema":{"kind":"string"}}]}
     })).collect::<Vec<_>>()})
 }
 fn output(rows: &[Value]) -> Vec<u8> {
@@ -79,4 +80,22 @@ fn missing_duplicate_unexpected_and_incomplete_exports_are_rejected() {
             .to_string();
         assert!(error.contains(expected), "{expected}: {error}");
     }
+}
+
+#[test]
+fn malformed_shapes_and_legacy_rows_never_become_authority() {
+    let field = json!({"name":"owner", "presence":"optional", "schema":{"kind":"string"}});
+    for shape in [
+        json!({"kind":"record", "fields":[{"name":"nested", "presence":"required", "schema":{"kind":"tuple", "items":[]}}]}),
+        json!({"kind":"record", "fields":[field.clone(), field]}),
+    ] {
+        let mut malformed = row(ID, &[1, 2]);
+        malformed["versions"][0]["shape"] = shape;
+        assert!(decode(&inventory(), &output(&[malformed])).is_err());
+    }
+    let legacy = format!("TYPE_HISTORY_SCHEMA_EXPORT_V1\t{}\n", row(ID, &[1, 2]));
+    assert!(decode(&inventory(), legacy.as_bytes())
+        .unwrap_err()
+        .to_string()
+        .contains("incomplete history export"));
 }

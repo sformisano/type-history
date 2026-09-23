@@ -154,10 +154,12 @@ fn public_export_transport_rejects_missing_and_corrupt_rows() {
 
     for (filter, expected) in [
         (
-            "sed '/TYPE_HISTORY_SCHEMA_EXPORT_V1/d'",
+            "sed '/TYPE_HISTORY_SCHEMA_EXPORT_V2/d'",
             "incomplete history export",
         ),
-        ("sed 's/uint32/uint64/g'", "frozen"),
+        ("sed 's/\"kind\":\"u32\"/\"kind\":\"u64\"/g'", "frozen"),
+        ("sed 's/{\"kind\":\"u32\"}/{\"kind\":\"tuple\",\"items\":[]}/g'", "empty"),
+        ("sed 's/{\"name\":\"count\",\"presence\":\"required\",\"schema\":{\"kind\":\"u32\"}}/{\"name\":\"count\",\"presence\":\"required\",\"schema\":{\"kind\":\"u32\"}},{\"name\":\"count\",\"presence\":\"optional\",\"schema\":{\"kind\":\"u32\"}}/g'", "duplicate"),
     ] {
         fs::write(
             &wrapper,

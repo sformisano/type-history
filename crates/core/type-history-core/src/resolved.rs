@@ -17,9 +17,6 @@ pub mod membership;
 mod nodes;
 #[doc(hidden)]
 pub mod profile;
-#[doc(hidden)]
-#[path = "resolved/diagnostic.rs"]
-pub mod schema_diagnostic;
 mod shape;
 mod tuples;
 pub use constant::{

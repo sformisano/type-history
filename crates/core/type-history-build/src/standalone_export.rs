@@ -3,10 +3,10 @@ use crate::contract::STANDALONE;
 use crate::inventory::PackageInventory;
 use crate::Result;
 use serde::Deserialize;
-use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
 use type_history_codegen::json_schema::JsonSchemaDocument;
 use type_history_codegen::ledger::{HistoryLedger, RecordMetadata, SchemaIdentity, Snapshot};
+use type_history_core::SchemaShape;
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -18,7 +18,7 @@ struct ExportRecord {
 #[serde(deny_unknown_fields)]
 struct ExportVersion {
     version: u32,
-    wire: Value,
+    shape: SchemaShape,
 }
 
 /// Decode all generated standalone tests and reject missing, extra, or duplicate rows.
@@ -51,8 +51,8 @@ pub fn decode(
                 )
                 .into());
             }
-            let schema = JsonSchemaDocument::from_export(
-                version.wire,
+            let schema = JsonSchemaDocument::try_from_shape(
+                &version.shape,
                 &schema_identity.schema_id(&record.stable_name),
             )?;
             if versions
