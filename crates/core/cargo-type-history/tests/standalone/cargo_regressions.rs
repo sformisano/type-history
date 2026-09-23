@@ -225,7 +225,7 @@ fn excluded_package_snapshot_keeps_its_own_workspace_boundary() {
     let parent = fixture.root().parent().unwrap();
     fs::write(
         parent.join("Cargo.toml"),
-        "[workspace]\nmembers=[]\nexclude=['consumer', 'vendor']\n",
+        "[workspace]\nmembers=[]\nexclude=['consumer']\n",
     )
     .unwrap();
     let original_manifest = fixture.read("Cargo.toml");

@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Reuse standalone test setup across overlapping fixtures while preserving private consumers, executable copies, and independent source installation checks.
+
 ## 0.2.0
 
 - Add stable field contracts for string-keyed maps, declared-membership sets, tuples through arity 16, supporting tuple structs, and owned wrappers.

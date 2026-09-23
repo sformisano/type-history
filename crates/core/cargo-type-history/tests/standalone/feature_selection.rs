@@ -66,7 +66,7 @@ fn alternative_backend_reaches_every_cargo_stage_without_mutating_failures() {
     let log = fixture_parent.join("cargo-arguments.log");
     for captured_root in [
         fixture.root().to_owned(),
-        fixture_parent.join("vendor"),
+        fixture.family_root().to_owned(),
         fixture_parent.join("default-backend"),
         fixture_parent.join("alternative-backend"),
     ] {

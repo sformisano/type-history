@@ -46,6 +46,8 @@ mod public_snapshot;
 mod public_transaction;
 #[path = "standalone/released_baseline.rs"]
 mod released_baseline;
+#[path = "standalone/resources.rs"]
+mod resources;
 #[path = "standalone/schema_identity.rs"]
 mod schema_identity;
 #[path = "standalone/snapshot_regressions.rs"]

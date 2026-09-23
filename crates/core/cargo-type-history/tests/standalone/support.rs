@@ -1,11 +1,11 @@
+use super::resources::{acquire, copy_tree, repository, Family};
 use serde_json::Value;
 use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
-use std::sync::{Mutex, MutexGuard};
+use std::sync::{Arc, Mutex, MutexGuard};
 use tempfile::{Builder, TempDir};
-use toml::{Table, Value as TomlValue};
 
 // These external consumers reuse the assigned worktree's normal Cargo target.
 static SERIAL: Mutex<()> = Mutex::new(());
@@ -16,9 +16,11 @@ pub const V2: &str = include_str!("fixtures/v2.rs");
 pub const V3: &str = include_str!("fixtures/v3.rs");
 
 pub struct Fixture {
-    owner: TempDir,
+    // Drop private files before the family, and keep SERIAL until both are gone.
+    _owner: TempDir,
     root: PathBuf,
     cli: PathBuf,
+    family: Option<Arc<Family>>,
     _serial: MutexGuard<'static, ()>,
 }
 
@@ -52,49 +54,48 @@ impl Fixture {
             );
         }
         Self {
-            owner,
+            _owner: owner,
             root,
             cli,
+            family: None,
             _serial: serial,
         }
     }
 
     pub fn empty() -> Self {
-        let serial = SERIAL.lock().unwrap_or_else(|error| error.into_inner());
+        // Queued fixtures retain the family while waiting for the shared target.
+        let (family, serial) = acquire(&SERIAL);
         let owner = Builder::new()
             .prefix("history-")
             .tempdir()
             .expect("owned fixture below the configured short TMPDIR");
         let root = owner.path().join("consumer");
-        let vendor = owner.path().join("vendor");
         let cli = owner.path().join("cargo-type-history");
         fs::create_dir_all(&root).expect("consumer root");
         let fixture = Self {
-            owner,
+            _owner: owner,
             root,
             cli,
+            family: Some(family),
             _serial: serial,
         };
-        copy_family(&vendor);
-        let output = fixture.command_at(&vendor, "cargo", &["generate-lockfile", "--offline"], &[]);
-        success(&output);
-        success(&fixture.command_at(
-            &vendor,
-            "cargo",
-            &[
-                "build",
-                "--package",
-                "cargo-type-history",
-                "--locked",
-                "--offline",
-            ],
-            &[],
-        ));
-        fs::copy(
-            repository().join("target/debug/cargo-type-history"),
-            &fixture.cli,
-        )
-        .expect("retain the CLI built from Type History sources");
+        fixture.family().copy_cli(&fixture.cli, |vendor| {
+            success(&fixture.command_at(vendor, "cargo", &["generate-lockfile", "--offline"], &[]));
+            success(&fixture.command_at(
+                vendor,
+                "cargo",
+                &[
+                    "build",
+                    "--package",
+                    "cargo-type-history",
+                    "--locked",
+                    "--offline",
+                ],
+                &[],
+            ));
+            repository().join("target/debug/cargo-type-history")
+        });
+        let vendor = fixture.family_root();
         fixture.write(
             "Cargo.toml",
             &format!(
@@ -133,13 +134,25 @@ opt-level = 2
 
     pub fn frozen() -> Self {
         let fixture = Self::empty();
-        success(&fixture.cli(&["init", "--package", "standalone-history-consumer"]));
-        fixture.write("src/lib.rs", V1);
-        success(&fixture.cargo(&["build", "--locked", "--offline"]));
-        success(&fixture.cli(&["freeze", "--package", "standalone-history-consumer"]));
+        fixture.family().prepare_frozen(
+            &fixture.root,
+            || {
+                success(&fixture.cli(&["init", "--package", "standalone-history-consumer"]));
+                fixture.write("src/lib.rs", V1);
+                success(&fixture.cargo(&["build", "--locked", "--offline"]));
+                success(&fixture.cli(&["freeze", "--package", "standalone-history-consumer"]));
+            },
+            || success(&fixture.cargo(&["build", "--locked", "--offline"])),
+        );
         fixture
     }
 
+    fn family(&self) -> &Family {
+        self.family.as_deref().expect("ordinary consumer family")
+    }
+    pub fn family_root(&self) -> &Path {
+        self.family().root()
+    }
     pub fn root(&self) -> &Path {
         &self.root
     }
@@ -319,106 +332,12 @@ opt-level = 2
             }
         }
         assert!(self
-            .owner
-            .path()
-            .join("vendor/crates/core/type-history-build/src/lib.rs")
+            .family_root()
+            .join("crates/core/type-history-build/src/lib.rs")
             .is_file());
     }
 }
 
-fn copy_family(vendor: &Path) {
-    let repository = repository();
-    copy_tree(&repository.join("crates/core"), &vendor.join("crates/core"));
-    copy_tree(&repository.join("book/src"), &vendor.join("book/src"));
-    fs::copy(repository.join("README.md"), vendor.join("README.md"))
-        .expect("preserve compiled tutorial source");
-    let manifest: TomlValue = toml::from_str(
-        &fs::read_to_string(repository.join("Cargo.toml")).expect("checked root manifest"),
-    )
-    .expect("root TOML");
-    let mut dependencies = Table::new();
-    for name in [
-        "serde",
-        "serde_json",
-        "schemars",
-        "thiserror",
-        "sha2",
-        "typed_floats",
-        "uuid",
-        "rust_decimal",
-        "chrono",
-        "time",
-    ] {
-        dependencies.insert(
-            name.into(),
-            manifest["workspace"]["dependencies"][name].clone(),
-        );
-    }
-    let mut workspace = Table::new();
-    workspace.insert(
-        "members".into(),
-        TomlValue::Array(
-            [
-                "type-history-core",
-                "type-history-codegen",
-                "type-history-macros",
-                "type-history",
-                "type-history-build",
-                "cargo-type-history",
-            ]
-            .into_iter()
-            .map(|name| TomlValue::String(format!("crates/core/{name}")))
-            .collect(),
-        ),
-    );
-    workspace.insert("resolver".into(), "2".into());
-    workspace.insert("package".into(), manifest["workspace"]["package"].clone());
-    workspace.insert("lints".into(), manifest["workspace"]["lints"].clone());
-    workspace.insert("dependencies".into(), dependencies.into());
-    fs::write(
-        vendor.join("Cargo.toml"),
-        toml::to_string(&Table::from_iter([("workspace".into(), workspace.into())]))
-            .expect("minimal workspace"),
-    )
-    .expect("write minimal workspace");
-    fs::copy(
-        repository.join("rust-toolchain.toml"),
-        vendor.join("rust-toolchain.toml"),
-    )
-    .expect("preserve exact compiler");
-}
-
-fn copy_tree(source: &Path, destination: &Path) {
-    fs::create_dir_all(destination).expect("vendor directory");
-    for entry in fs::read_dir(source).expect("checked family source") {
-        let entry = entry.expect("source entry");
-        if ["target", ".git", ".agents"]
-            .iter()
-            .any(|name| entry.file_name() == *name)
-        {
-            continue;
-        }
-        let kind = entry.file_type().expect("source kind");
-        assert!(
-            !kind.is_symlink(),
-            "family sources cannot silently escape the copied tree"
-        );
-        let to = destination.join(entry.file_name());
-        if kind.is_dir() {
-            copy_tree(&entry.path(), &to);
-        } else {
-            fs::copy(entry.path(), to).expect("checked source copy");
-        }
-    }
-}
-
-fn repository() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .ancestors()
-        .nth(3)
-        .expect("repository root")
-        .to_owned()
-}
 pub fn text(output: &Output) -> String {
     format!(
         "{}\n{}",

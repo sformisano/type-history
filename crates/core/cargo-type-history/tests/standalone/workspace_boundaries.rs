@@ -21,11 +21,11 @@ fn excluded_package_detects_ancestor_workspace_changes_during_validation() {
     let workspace = parent.join("Cargo.toml");
     fs::write(
         &workspace,
-        "[workspace]\nmembers=[]\nexclude=['consumer', 'vendor']\n",
+        "[workspace]\nmembers=[]\nexclude=['consumer']\n",
     )
     .unwrap();
     success(&fixture.cargo(&["check", "--lib", "--locked", "--offline"]));
-    let changed = "[workspace]\nmembers=['consumer']\nexclude=['vendor']\n";
+    let changed = "[workspace]\nmembers=['consumer']\n";
     fixture.write("build.rs", &format!(
         "fn main() {{ std::fs::write({workspace:?}, {changed:?}).unwrap(); history_build::compile(); }}"
     ));

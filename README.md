@@ -54,6 +54,10 @@ rustup target add --toolchain 1.97.1 aarch64-unknown-linux-gnu
 cargo fetch --locked
 ```
 
+Standalone test workers share a copied crate family, its separately built CLI, and frozen setup while their fixtures overlap.
+Each consumer keeps private files and an executable copy. Every frozen consumer runs its own ordinary build; production snapshots keep separate targets.
+The last fixture removes the shared resources. Single-threaded and filtered runs remain supported, but can reuse less setup.
+
 ### Connect Type History to Cargo
 
 Create `build.rs` in the project root if you don't already have it, then add the `type-history-build` compile step:
