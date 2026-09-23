@@ -7,9 +7,8 @@ integration with other types and the full field-history rules.
 The book is not published as a hosted site. `.github/workflows/book.yml` builds the
 HTML and link-checks it on every push, and its upload step deliberately does not
 enable or deploy GitHub Pages, so there is no rendered URL to link from another
-repository. A link into `book/src/` reaches raw mdBook source on GitHub. The
-address that answers "which artifact is this?" is
-[the 0.2.0 README](https://github.com/sformisano/type-history/blob/v0.2.0/README.md).
+repository. A link into `book/src/` reaches raw mdBook source on GitHub.
+The [repository README](../README.md) describes this source version.
 
 Start with the [introduction](src/introduction.md), browse the
 [chapters](src/SUMMARY.md), or build a local HTML copy:
