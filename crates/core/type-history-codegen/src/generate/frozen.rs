@@ -1,18 +1,21 @@
-//! Unconditional compiler-resolved comparisons with committed wire shapes.
+//! Compiler-resolved comparisons with committed wire shapes.
 
-use proc_macro2::{Span, TokenStream};
-use quote::{format_ident, quote, quote_spanned};
+use proc_macro2::TokenStream;
+use quote::{quote, quote_spanned};
 use type_history_core::resolved::SchemaShape;
 
-use super::Context;
+use super::{Context, GenerationOptions};
 
 mod contracts;
 use contracts::{presence_tokens, shape_tokens};
 
-pub(super) fn generate(context: &Context<'_>) -> TokenStream {
+pub(super) fn generate(context: &Context<'_>, options: &GenerationOptions) -> TokenStream {
     let support = &context.paths.support;
     let resolved = quote!(#support);
-    let value = format_ident!("__type_history_value", span = Span::mixed_site());
+    let guard = options
+        .observation_cfg
+        .as_ref()
+        .map(|cfg| quote!(#[cfg(not(all(test, #cfg)))]));
     let mut assertions = Vec::new();
     for retained in context.history.versions() {
         let Some(shape) = context.history.frozen_shapes().get(&retained.version) else {
@@ -35,6 +38,7 @@ pub(super) fn generate(context: &Context<'_>) -> TokenStream {
                 context.stable_name, retained.version, expected.name
             );
             assertions.push(quote_spanned! {field.name.span()=>
+                #guard
                 const _: () = ::core::assert!(
                     <<#ty as #resolved::ResolvedSchema>::Wire as #resolved::WireNode>::FIELD_PRESENCE.same(#expected_presence)
                         && <<#ty as #resolved::ResolvedSchema>::Wire as #resolved::WireNode>::SHAPE.same(&#expected_shape),
@@ -44,26 +48,16 @@ pub(super) fn generate(context: &Context<'_>) -> TokenStream {
         }
         let payload = context.payload(retained.version);
         let expected = shape_tokens(shape, &resolved);
-        let stable_name = context.stable_name;
-        let version = retained.version;
+        let message = format!(
+            "{} V{} changed its frozen wire shape; run the frontend history check for details, restore its type/history boundaries and add the next version",
+            context.stable_name, retained.version,
+        );
         assertions.push(quote_spanned! {context.input.name.span()=>
-            const _: () = {
-                const EXPECTED: #resolved::ConstantShape = #expected;
-                const ACTUAL: #resolved::ConstantShape =
-                    <<#payload as #resolved::ResolvedSchema>::Wire as #resolved::WireNode>::SHAPE;
-                const LENGTH: ::core::primitive::usize = #resolved::schema_diagnostic::encoded_len(
-                    #stable_name, #version, &EXPECTED, &ACTUAL,
-                );
-                const BYTES: [::core::primitive::u8; LENGTH] = #resolved::schema_diagnostic::encode(
-                    #stable_name, #version, &EXPECTED, &ACTUAL,
-                );
-                const MESSAGE: &::core::primitive::str = match ::core::str::from_utf8(&BYTES) {
-                    ::core::result::Result::Ok(#value) => #value,
-                    ::core::result::Result::Err(_) =>
-                        ::core::panic!("invalid frozen schema diagnostic UTF-8"),
-                };
-                ::core::assert!(ACTUAL.same(&EXPECTED), "{}", MESSAGE);
-            };
+            #guard
+            const _: () = ::core::assert!(
+                <<#payload as #resolved::ResolvedSchema>::Wire as #resolved::WireNode>::SHAPE.same(&#expected),
+                #message,
+            );
         });
     }
     quote!(#(#assertions)*)

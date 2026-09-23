@@ -1,5 +1,8 @@
 //! Public custom frontends select their own build signals.
 
+#[path = "tool_contract/generation.rs"]
+mod generation;
+
 use std::env;
 use std::fs;
 use std::path::PathBuf;
@@ -37,6 +40,7 @@ fn custom_contract_probe() {
             version: 1,
             retained_versions: vec![1],
             readiness: HistoryReadiness::Draft,
+            source: None,
         }],
         tracked_paths: vec![root.join(CUSTOM.ledger_path)],
         declaration_count: 1,

@@ -86,9 +86,10 @@ impl<T: JsonSchemaField, const LENGTH: usize> JsonSchemaField for [T; LENGTH] {
     }
 }
 
-/// Generate the raw JSON Schema 2020-12 document that the schema export prints.
+/// Generate a descriptive JSON Schema 2020-12 document with inline subschemas.
 ///
-/// The planner normalizes and fingerprints this value; nothing else reads it.
+/// This preserves schema documentation and custom field adapters. Frozen
+/// lifecycle documents derive separately from the resolved structural shape.
 pub fn export_json_schema<T: JsonSchema>() -> Value {
     SchemaSettings::draft2020_12()
         .with(|settings| settings.inline_subschemas = true)

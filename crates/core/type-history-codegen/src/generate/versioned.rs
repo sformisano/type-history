@@ -3,13 +3,12 @@
 use proc_macro2::{Span, TokenStream};
 use quote::{format_ident, quote};
 
-use super::Context;
+use super::{historical, Context};
 
 pub(super) fn generate(context: &Context<'_>) -> TokenStream {
     let support = &context.paths.support;
     let error_type = &context.paths.error;
-    let visibility = &context.input.visibility;
-    let historical = format_ident!("__TypeHistory{}VersionedPayload", context.input.name);
+    let historical = historical::state_type(context);
     let latest = context.payload(context.history.head());
     let final_variant = format_ident!("V{}", context.history.head());
     let stable_name = context.stable_name();
@@ -18,59 +17,19 @@ pub(super) fn generate(context: &Context<'_>) -> TokenStream {
     let source_version = format_ident!("__type_history_source_version", span = Span::mixed_site());
     let deserializer = format_ident!("__type_history_deserializer", span = Span::mixed_site());
     let serializer = format_ident!("__type_history_serializer", span = Span::mixed_site());
-    let variants = context.history.versions().iter().map(|retained| {
-        let variant = format_ident!("V{}", retained.version);
-        let payload = context.payload(retained.version);
-        quote!(#variant(#payload))
-    });
     let serialization = context.history.versions().iter().map(|retained| {
         let variant = format_ident!("V{}", retained.version);
         quote!(Self::#variant(#value) => #support::serde::Serialize::serialize(#value, #serializer))
     });
-    let source_versions = context.history.versions().iter().map(|retained| {
-        let variant = format_ident!("V{}", retained.version);
-        let version = context.version(retained.version);
-        quote!(#historical::#variant(_) => #version)
-    });
-    let decoding = context.history.versions().iter().map(|retained| {
-        let number = retained.version;
-        let variant = format_ident!("V{number}");
-        let payload = context.payload(number);
+    let source_function = context.helper("source_version");
+    let upgrade_function = context.helper("upgrade_history");
+    let decoding = historical::decode_arms(context, |payload, variant| {
         quote! {
-            #number => <#payload as #support::serde::Deserialize<'de>>::deserialize(#deserializer)
-                .map(#historical::#variant)
+            <#payload as #support::serde::Deserialize<'de>>::deserialize(#deserializer)
+                .map(#variant)
         }
     });
-    let upgrade = if context.history.head() == 1 {
-        quote! {
-            let #historical::#final_variant(#value) = #value;
-            ::core::result::Result::Ok(#value)
-        }
-    } else {
-        let state = format_ident!("__type_history_state", span = Span::mixed_site());
-        let advances = context.history.transitions().iter().map(|transition| {
-            let from = format_ident!("V{}", transition.from);
-            let to = format_ident!("V{}", transition.to);
-            let function = context.helper(&format!("upcast_v{}_v{}", transition.from, transition.to));
-            quote!(#historical::#from(#value) => #historical::#to(#function(#value, #source_version)?))
-        });
-        quote! {
-            let #source_version = <Self as #support::VersionedHistory>::source_version(&#value);
-            let mut #state = #value;
-            loop {
-                #state = match #state {
-                    #(#advances,)*
-                    #historical::#final_variant(#value) => return ::core::result::Result::Ok(#value),
-                };
-            }
-        }
-    };
     quote! {
-        #[doc(hidden)]
-        #[derive(::core::clone::Clone)]
-        #[allow(clippy::large_enum_variant)]
-        #visibility enum #historical { #(#variants),* }
-
         impl #support::serde::Serialize for #historical {
             fn serialize<__TypeHistorySerializer: #support::serde::Serializer>(
                 &self,
@@ -91,7 +50,7 @@ pub(super) fn generate(context: &Context<'_>) -> TokenStream {
             }
 
             fn source_version(#value: &Self::Historical) -> #support::PayloadVersion {
-                match #value { #(#source_versions),* }
+                #source_function(#value)
             }
 
             fn deserialize_historical<'de, __TypeHistoryDeserializer: #support::serde::Deserializer<'de>>(
@@ -99,7 +58,7 @@ pub(super) fn generate(context: &Context<'_>) -> TokenStream {
                 #deserializer: __TypeHistoryDeserializer,
             ) -> ::core::result::Result<Self::Historical, __TypeHistoryDeserializer::Error> {
                 match #source_version.get() {
-                    #(#decoding,)*
+                    #decoding
                     _ => ::core::result::Result::Err(
                         <__TypeHistoryDeserializer::Error as #support::serde::de::Error>::custom(
                             #error_type::unsupported(#stable_name, #source_version),
@@ -109,7 +68,7 @@ pub(super) fn generate(context: &Context<'_>) -> TokenStream {
             }
 
             fn upgrade(#value: Self::Historical) -> ::core::result::Result<Self, Self::Error> {
-                #upgrade
+                #upgrade_function(#value)
             }
         }
 

@@ -12,6 +12,7 @@ pub struct Temporal {
     pub nested: Option<(Date, OffsetDateTime)>,
 }
 
+// RUNTIME_TESTS_BEGIN
 #[cfg(test)]
 mod common;
 #[cfg(test)]
@@ -87,3 +88,4 @@ mod tests {
         }
     }
 }
+// RUNTIME_TESTS_END

@@ -1,7 +1,10 @@
 //! Complete package declaration inventories under the shared history authority.
 
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use std::{collections::BTreeSet, path::PathBuf};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    path::PathBuf,
+};
 use syn::Ident;
 use type_history_codegen::{
     history::HistoryPlan,
@@ -20,6 +23,28 @@ pub enum Admission {
     ExplicitSetup,
 }
 
+/// Exact authored location supplied by frontend source discovery.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SourceLocation {
+    /// Containing source file, relative to the inventory root or absolute.
+    pub file: PathBuf,
+    /// One-based authored line.
+    pub line: u64,
+    /// One-based authored column.
+    pub column: u64,
+}
+
+/// Optional source information for a declaration and its retained fields.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct DeclarationSource {
+    /// Declaration location used when no authored field matches a difference.
+    pub declaration: SourceLocation,
+    /// Authored locations keyed by durable field name.
+    pub fields: BTreeMap<String, SourceLocation>,
+}
+
 /// One source declaration with its current authorized retained inventory.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -36,6 +61,9 @@ pub struct Declaration<M> {
     pub retained_versions: Vec<u32>,
     /// Current source readiness under committed authority.
     pub readiness: HistoryReadiness,
+    /// Optional exact source locations; custom frontends may omit them.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<DeclarationSource>,
 }
 
 /// Complete source inventory and tracked paths for one captured package.
@@ -79,7 +107,14 @@ impl<M: Clone + Eq + Serialize + DeserializeOwned> Declaration<M> {
             version: plan.head,
             retained_versions,
             readiness,
+            source: None,
         })
+    }
+
+    /// Attach exact locations already found by the frontend source graph.
+    pub fn with_source(mut self, source: DeclarationSource) -> Self {
+        self.source = Some(source);
+        self
     }
 }
 

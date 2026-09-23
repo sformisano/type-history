@@ -110,7 +110,8 @@ pub fn execute<M: Clone + Eq + Serialize + DeserializeOwned>(
         options,
         contract,
         ops,
-    )?;
+    )?
+    .ledger;
     let candidate = match options.action {
         Action::Freeze => freeze_candidate(&before, &observed, options, contract)?,
         Action::Reset => {

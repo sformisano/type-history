@@ -170,7 +170,7 @@ impl ConstantItems {
             _ => false,
         }
     }
-    fn items(&self) -> Vec<SchemaShape> {
+    pub(super) fn items(&self) -> Vec<SchemaShape> {
         let mut values = Vec::new();
         let mut next = self;
         while let Self::Item(value, tail) = next {
@@ -190,7 +190,7 @@ impl ConstantFields {
             _ => false,
         }
     }
-    fn fields(&self) -> Vec<SchemaField> {
+    pub(super) fn fields(&self) -> Vec<SchemaField> {
         let mut values = Vec::new();
         let mut next = self;
         while let Self::Field(name, presence, value, tail) = next {
@@ -227,7 +227,7 @@ impl ConstantVariant {
             _ => false,
         }
     }
-    fn shape(&self) -> SchemaVariantShape {
+    pub(super) fn shape(&self) -> SchemaVariantShape {
         match self {
             Self::Unit => SchemaVariantShape::Unit,
             Self::Newtype(ConstantShape::Record(fields)) => SchemaVariantShape::Record {
@@ -257,7 +257,7 @@ impl ConstantVariants {
             _ => false,
         }
     }
-    fn variants(&self) -> Vec<SchemaVariant> {
+    pub(super) fn variants(&self) -> Vec<SchemaVariant> {
         let mut values = Vec::new();
         let mut next = self;
         while let Self::Variant(name, value, tail) = next {

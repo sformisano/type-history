@@ -610,7 +610,7 @@ for exact domains, feature flags, set declarations, and codec limits.
 
 ## Documentation
 
-- [The book](https://github.com/sformisano/type-history/blob/v0.2.0/book/README.md) covers the generated types, field changes, conversions, freezing, and integrations.
+- [The book](book/README.md) covers the generated types, field changes, conversions, freezing, and integrations.
 - [The 0.2.0 API reference](https://docs.rs/type-history/0.2.0/type_history/) includes all optional field integrations. Build it locally with `cargo doc --workspace --no-deps --all-features --locked`, then open `target/doc/type_history/index.html`.
 - [The invoice example](https://github.com/sformisano/type-history/blob/v0.2.0/crates/examples/invoice-history/README.md) is a complete runnable package.
 

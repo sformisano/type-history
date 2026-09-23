@@ -4,6 +4,80 @@ use std::env;
 use toml::Value as TomlValue;
 
 #[test]
+fn frozen_drift_is_observable_only_in_non_strict_development_tests() {
+    let fixture = Fixture::frozen();
+    let original = fixture.read(LEDGER);
+    fixture.write("src/lib.rs", &V1.replace("count: u32", "count: u64"));
+    let export = "TYPE_HISTORY_SCHEMA_EXPORT";
+    let strict = "TYPE_HISTORY_REQUIRE_FROZEN";
+    for (arguments, observing, strict_mode, allowed) in [
+        (
+            vec!["test", "--lib", "--locked", "--offline"],
+            false,
+            false,
+            false,
+        ),
+        (
+            vec![
+                "test",
+                "--lib",
+                "--locked",
+                "--offline",
+                "--",
+                "--nocapture",
+            ],
+            true,
+            false,
+            true,
+        ),
+        (vec!["check", "--locked", "--offline"], true, false, false),
+        (
+            vec!["build", "--release", "--locked", "--offline"],
+            true,
+            false,
+            false,
+        ),
+        (
+            vec!["test", "--lib", "--release", "--locked", "--offline"],
+            true,
+            false,
+            false,
+        ),
+        (
+            vec!["test", "--lib", "--locked", "--offline"],
+            true,
+            true,
+            false,
+        ),
+    ] {
+        let output = fixture.cargo_env(
+            &arguments,
+            &[
+                (export, observing.then_some("1")),
+                (strict, strict_mode.then_some("1")),
+            ],
+        );
+        assert_eq!(
+            output.status.success(),
+            allowed,
+            "{arguments:?}: {}",
+            text(&output)
+        );
+        if allowed {
+            assert!(text(&output).contains("TYPE_HISTORY_SCHEMA_EXPORT_V2"));
+            assert!(text(&output).contains("\"kind\":\"u64\""));
+        } else if strict_mode || arguments.contains(&"--release") {
+            assert!(text(&output).contains("unavailable in strict or release builds"));
+        } else {
+            assert!(text(&output).contains("frozen wire shape"));
+        }
+        assert_eq!(fixture.read(LEDGER), original);
+    }
+    fixture.write("src/lib.rs", V1);
+    success(&fixture.cargo(&["check", "--locked", "--offline"]));
+}
+
+#[test]
 fn standalone_frozen_inventory_and_warm_ledger_changes_are_authoritative() {
     let fixture = Fixture::frozen();
     let original = fixture.read(LEDGER);

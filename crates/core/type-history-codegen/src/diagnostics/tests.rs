@@ -4,10 +4,7 @@ use type_history_core::resolved::{
     StorageProfile,
 };
 
-use super::{
-    compare_shapes, parse_compiler_marker, readable_path, DifferenceCode, FrozenSchemaObservation,
-    PathSegment,
-};
+use super::{compare_shapes, readable_path, DifferenceCode, PathSegment};
 
 fn field(name: &str, schema: SchemaShape) -> SchemaField {
     SchemaField {
@@ -335,42 +332,6 @@ fn collection_profile_and_membership_changes_have_precise_paths() {
         readable_path(&differences[1].path),
         "$.map_value.set_item[0]"
     );
-}
-
-#[test]
-fn marker_parsing_preserves_descriptors_and_rejects_malformed_observations() {
-    let observation = FrozenSchemaObservation {
-        stable_name: "name\"\\🦀".into(),
-        version: 1,
-        expected: record(vec![field("a", SchemaShape::Bool)]),
-        actual: record(vec![field("a", SchemaShape::String)]),
-    };
-    let json = serde_json::to_string(&observation).unwrap();
-    assert_eq!(
-        parse_compiler_marker(&format!(
-            "error: TYPE_HISTORY_SCHEMA_DIAGNOSTIC_V1:{json}\nadditional rustc text"
-        ))
-        .unwrap(),
-        Some(observation)
-    );
-    assert_eq!(
-        parse_compiler_marker("ordinary compiler error").unwrap(),
-        None
-    );
-    for payload in [
-        "",
-        "{",
-        "null",
-        "{}",
-        r#"{"stable_name":"a","version":0,"expected":{"kind":"bool"},"actual":{"kind":"bool"}}"#,
-        r#"{"stable_name":"a","version":1,"expected":{"kind":"unknown"},"actual":{"kind":"bool"}}"#,
-        r#"{"stable_name":"a","version":1,"expected":{"kind":"enum","variants":[{"name":"x","kind":"unit","schema":{"kind":"bool"}}]},"actual":{"kind":"bool"}}"#,
-    ] {
-        assert!(
-            parse_compiler_marker(&format!("TYPE_HISTORY_SCHEMA_DIAGNOSTIC_V1:{payload}")).is_err(),
-            "{payload}"
-        );
-    }
 }
 
 #[test]

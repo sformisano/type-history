@@ -10,6 +10,9 @@
 //! [`generate::generate_versioned`] alongside it to support the `Versioned` wrapper.
 //! [`GenerationPaths`] tells both generators where to find runtime support and
 //! how to construct conversion errors.
+//! [`generate_history_with_options`] lets a frontend own payload traits and
+//! select a dedicated observation cfg. [`GeneratedVersion`] exposes typed
+//! payload declarations, structural shapes, and descriptive schema expressions.
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 pub mod admission;
@@ -25,7 +28,10 @@ pub mod lint_attributes;
 pub mod model;
 pub mod record;
 pub mod resolved_schema;
-pub use generate::{generate_history, GeneratedHistory, GeneratedVersion, GenerationPaths};
+pub use generate::{
+    generate_history, generate_history_with_options, GeneratedHistory, GeneratedVersion,
+    GenerationOptions, GenerationPaths, PayloadTraits,
+};
 pub use history::{AuthorizedHistory, HistoryPlan};
 pub use identifier::normalize_rust_identifier;
 pub use model::{NamedField, RecordDerives, RecordInput};

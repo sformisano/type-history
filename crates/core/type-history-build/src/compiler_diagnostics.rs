@@ -5,7 +5,6 @@ use serde_json::Value;
 use std::error::Error;
 use std::fmt::{Display, Formatter, Result as FmtResult};
 use std::path::Path;
-use type_history_codegen::diagnostics::{compare_shapes, parse_compiler_marker};
 
 #[derive(Debug)]
 pub(crate) struct CompilerFailure {
@@ -36,67 +35,15 @@ pub(crate) fn decode(output: &[u8], snapshot: &Snapshot) -> Vec<Diagnostic> {
             continue;
         }
         let location = source_location(message, snapshot, snapshot.workspace_root());
-        if !collect_markers(message, &location, &mut result) {
-            let mut finding = Diagnostic::operational(
-                CheckCode::CompilerFailed,
-                Origin::Compiler,
-                message["message"].as_str().unwrap_or("compiler failed"),
-            );
-            finding.location = location;
-            result.push(finding);
-        }
+        let mut finding = Diagnostic::operational(
+            CheckCode::CompilerFailed,
+            Origin::Compiler,
+            message["message"].as_str().unwrap_or("compiler failed"),
+        );
+        finding.location = location;
+        result.push(finding);
     }
     result
-}
-fn collect_markers(
-    message: &Value,
-    location: &Option<Location>,
-    findings: &mut Vec<Diagnostic>,
-) -> bool {
-    let mut found = false;
-    if let Some(text) = message["message"].as_str() {
-        match parse_compiler_marker(text) {
-            Ok(Some(observation)) => {
-                found = true;
-                let differences = compare_shapes(&observation.expected, &observation.actual);
-                if differences.is_empty() {
-                    let mut finding = Diagnostic::operational(
-                        CheckCode::CompilerFailed,
-                        Origin::Compiler,
-                        "compiler assertion failed despite an equal diagnostic observation; inspect compiler output",
-                    );
-                    finding.location = location.clone();
-                    findings.push(finding);
-                }
-                for difference in differences {
-                    findings.push(Diagnostic::shape(
-                        difference,
-                        Origin::Compiler,
-                        &observation.stable_name,
-                        observation.version,
-                        location.clone(),
-                    ));
-                }
-            }
-            Err(error) => {
-                found = true;
-                let mut finding = Diagnostic::operational(
-                    CheckCode::CompilerFailed,
-                    Origin::Compiler,
-                    format!("invalid compiler schema diagnostic: {error}"),
-                );
-                finding.location = location.clone();
-                findings.push(finding);
-            }
-            Ok(None) => {}
-        }
-    }
-    if let Some(children) = message["children"].as_array() {
-        for child in children {
-            found |= collect_markers(child, location, findings);
-        }
-    }
-    found
 }
 fn source_location(message: &Value, snapshot: &Snapshot, root: &Path) -> Option<Location> {
     let spans = message["spans"].as_array()?;

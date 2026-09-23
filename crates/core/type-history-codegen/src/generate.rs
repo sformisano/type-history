@@ -2,6 +2,9 @@
 
 mod decode;
 mod frozen;
+mod historical;
+#[cfg(test)]
+mod tests;
 mod transitions;
 mod types;
 mod versioned;
@@ -14,7 +17,7 @@ use crate::{
 use proc_macro2::{Span, TokenStream};
 use quote::{format_ident, quote};
 use std::collections::BTreeSet;
-use syn::{Error, Ident, Path, Result, Type};
+use syn::{DeriveInput, Error, Ident, Path, Result, Type};
 
 /// Concrete facade paths used by history generation.
 pub struct GenerationPaths {
@@ -30,6 +33,29 @@ pub struct GenerationPaths {
     pub helper_prefix: String,
 }
 
+/// Trait implementations owned by the shared generator or its frontend.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum PayloadTraits {
+    /// Derive Clone and the native traits selected by [`RecordInput::derives`].
+    #[default]
+    Native,
+    /// The frontend implements traits using [`GeneratedVersion::contract`].
+    Frontend,
+}
+
+/// Optional frontend integration without changing [`GenerationPaths`].
+#[derive(Debug, Clone, Default)]
+pub struct GenerationOptions {
+    /// Owner of generated payload Clone, PartialEq, and Debug implementations.
+    pub payload_traits: PayloadTraits,
+    /// Dedicated test-build cfg that permits observing changed frozen shapes.
+    ///
+    /// Only `all(test, cfg_name)` skips shape assertions. The frontend's build
+    /// admission must withhold this cfg for strict and release builds.
+    /// `None` keeps unconditional shape assertions for external callers.
+    pub observation_cfg: Option<Ident>,
+}
+
 /// One generated version and its compiler-resolved schema export.
 pub struct GeneratedVersion {
     /// Positive retained payload version.
@@ -38,6 +64,12 @@ pub struct GeneratedVersion {
     pub name: Ident,
     /// Expression exporting this record's resolved JSON Schema.
     pub schema_expression: TokenStream,
+    /// Expression exporting this record's resolved structural wire shape.
+    pub shape_expression: TokenStream,
+    /// Typed payload input for frontend-owned traits, including scoped field
+    /// aliases, field visibility, and original authored field attributes.
+    /// These attributes are metadata; they are not emitted on the payload.
+    pub contract: DeriveInput,
 }
 
 /// Shared generated items and the facts needed for frontend integration.
@@ -63,6 +95,23 @@ pub fn generate_history(
     history: &AuthorizedHistory,
     paths: &GenerationPaths,
 ) -> Result<GeneratedHistory> {
+    generate_history_with_options(
+        input,
+        stable_name,
+        history,
+        paths,
+        &GenerationOptions::default(),
+    )
+}
+
+/// Generate an authorized history with explicit frontend integration options.
+pub fn generate_history_with_options(
+    input: &RecordInput,
+    stable_name: &str,
+    history: &AuthorizedHistory,
+    paths: &GenerationPaths,
+    options: &GenerationOptions,
+) -> Result<GeneratedHistory> {
     let expected = input
         .fields
         .iter()
@@ -85,14 +134,15 @@ pub fn generate_history(
         paths,
         stable_name,
     };
-    let (payloads, versions) = types::generate(&context)?;
+    let (payloads, versions) = types::generate(&context, options)?;
+    let historical = historical::generate(&context, options);
     let conversions = transitions::generate(&context);
     let decoder = decode::generate(&context);
-    let assertions = frozen::generate(&context);
+    let assertions = frozen::generate(&context, options);
     Ok(GeneratedHistory {
         items: with_lints(
             &input.attributes,
-            quote!(#payloads #conversions #decoder #assertions),
+            quote!(#payloads #conversions #historical #decoder #assertions),
         )?,
         latest: context.payload(history.head()),
         decoder: context.helper("decode_history"),

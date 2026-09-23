@@ -35,7 +35,7 @@ pub const STANDALONE: ToolContract = ToolContract {
     lock_path: "type-history/.schemas.lock",
     strict_env: "TYPE_HISTORY_REQUIRE_FROZEN",
     export_env: "TYPE_HISTORY_SCHEMA_EXPORT",
-    export_marker: "TYPE_HISTORY_SCHEMA_EXPORT_V1\t",
+    export_marker: "TYPE_HISTORY_SCHEMA_EXPORT_V2\t",
     export_test_filter: "__type_history_",
     export_cfg: "type_history_schema_export",
     // Frozen schema identities outlive package and command names.

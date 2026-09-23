@@ -10,6 +10,7 @@ mod features;
 mod profiles;
 
 use super::support::{success, Fixture, LEDGER};
+use serde_json::Value;
 
 const PACKAGE: &str = "standalone-history-consumer";
 
@@ -61,11 +62,46 @@ fn replace(source: &str, before: &str, after: &str) -> String {
 
 fn frozen_failure(fixture: &Fixture, source: &str, expected: &str) {
     let ledger = fixture.read(LEDGER);
-    fixture.write("src/lib.rs", source);
+    fixture.write("src/lib.rs", &shape_probe(source));
     super::support::failure(
         &fixture.cargo(&["check", "--locked", "--offline"]),
         expected,
     );
-    super::support::failure(&fixture.cli(&["check", "--package", PACKAGE]), expected);
+    let output = fixture.cli(&["check", "--package", PACKAGE, "--format", "json"]);
+    super::support::failure(&output, "history check failed");
+    let report: Value = serde_json::from_slice(&output.stdout).unwrap();
+    let differences = report["packages"][0]["diagnostics"].as_array().unwrap();
+    assert!(!differences.is_empty(), "{report:#}");
+    assert!(
+        differences.iter().all(|difference| {
+            difference["origin"] == "current_ledger"
+                && difference["stable_name"].is_string()
+                && difference["expected"] != difference["actual"]
+        }),
+        "{report:#}"
+    );
     assert_eq!(fixture.read(LEDGER), ledger, "failed check changed ledger");
+}
+
+fn shape_probe(mut source: &str) -> String {
+    // Round-trip bodies exercise the original field types in ordinary tests.
+    // A deliberately changed shape needs only its declarations: stale value
+    // constructors would fail before the export can report the shape drift.
+    const BEGIN: &str = "// RUNTIME_TESTS_BEGIN\n";
+    const END: &str = "// RUNTIME_TESTS_END\n";
+    assert!(
+        source.contains(BEGIN),
+        "fixture must mark its runtime tests"
+    );
+    let mut declarations = String::new();
+    while let Some((before, tests)) = source.split_once(BEGIN) {
+        assert!(!before.contains(END), "unmatched runtime test end marker");
+        declarations.push_str(before);
+        let (body, after) = tests.split_once(END).expect("runtime test end marker");
+        assert!(!body.contains(BEGIN), "nested runtime test markers");
+        source = after;
+    }
+    assert!(!source.contains(END), "unmatched runtime test end marker");
+    declarations.push_str(source);
+    declarations
 }

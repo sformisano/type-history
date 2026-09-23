@@ -138,7 +138,11 @@ Use `--format json` when another tool needs to read the results. The command wri
 
 If a nested address field changes, the report identifies the history, version, and path to that field. Each difference includes a stable code, expected and actual values, a correction hint, and a source location when available. Paths distinguish fields, enum variants, tuple positions, and container elements. Missing values use JSON null. The report includes independent differences in a consistent order.
 
-The command still runs compiler checks. When a frozen schema check fails, the report compares the structures observed by that compiler run. A location may point to the containing declaration when the nested type's location is unavailable. Other compiler or input errors remain failures; the report does not invent a schema for code that could not be resolved.
+The command compiles a dedicated test that records source shapes, then compares them with the committed ledger. This observation build permits frozen-shape drift so the report can describe each difference. Other compiler or input errors remain failures.
+
+Observed source differences use the `current_ledger` origin. A location points to the authored containing field when discovery identifies it, or to the history declaration otherwise. Captured paths map back to the original source. Custom frontends may omit locations.
+
+Ordinary builds still reject frozen-shape drift. A clean comparison also receives ordinary compilation. Every ledger mutation receives ordinary compilation before writing. Release and explicit strict builds reject observation mode.
 
 ### Iterate and discard an ordinary draft
 
@@ -283,6 +287,8 @@ The build hook sets `TYPE_HISTORY_LEDGER_PATH`, `TYPE_HISTORY_SCHEMA_ID_PREFIX`,
 `TYPE_HISTORY_AUTHORITY_KIND`. Do not set them yourself.
 
 `TYPE_HISTORY_SCHEMA_EXPORT` is used by export tooling.
-It must be unset or `1` and cannot relax release or explicit strict checks.
+It must be unset or `1`. Only a non-strict development test build can observe
+changed frozen shapes. Non-test builds retain their shape assertions. Release
+and explicit strict builds reject export, including when every version is frozen.
 Lifecycle export uses a captured copy of development sources. Forced Cargo
 environment settings remain effective; conflicting forced settings fail.

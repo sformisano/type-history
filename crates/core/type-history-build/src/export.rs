@@ -2,7 +2,7 @@
 use crate::check_report::{CheckCode, Diagnostic, Origin};
 use crate::compiler_diagnostics::{self, CompilerFailure};
 use crate::contract::ToolContract;
-use crate::inventory::Admission;
+use crate::inventory::{Admission, PackageInventory};
 use crate::lifecycle::LifecycleOps;
 use crate::options::{Action, FeatureSelection, LifecycleOptions};
 use crate::snapshot::Snapshot;
@@ -12,6 +12,11 @@ use std::path::Path;
 use std::process::{Command, Output};
 use type_history_codegen::ledger::HistoryLedger;
 
+pub(crate) struct Observation<M> {
+    pub ledger: HistoryLedger<M>,
+    pub inventory: PackageInventory<M>,
+}
+
 pub(crate) fn export<M: Clone + Eq + Serialize + DeserializeOwned>(
     snapshot: &Snapshot,
     root: &Path,
@@ -19,12 +24,12 @@ pub(crate) fn export<M: Clone + Eq + Serialize + DeserializeOwned>(
     options: &LifecycleOptions,
     contract: &ToolContract,
     ops: &LifecycleOps<M>,
-) -> Result<HistoryLedger<M>> {
+) -> Result<Observation<M>> {
     let inventory = match (ops.discover)(root, Admission::Ordinary) {
         Ok(inventory) => inventory,
         Err(discovery_error) => {
             if options.action == Action::Check {
-                // A Rust parse failure must still reach the ordinary compiler.
+                // A Rust parse failure must still reach the Rust compiler.
                 // Successful compilation never excuses failed source discovery.
                 cargo(snapshot, package, options, contract, true)?;
             }
@@ -32,7 +37,8 @@ pub(crate) fn export<M: Clone + Eq + Serialize + DeserializeOwned>(
         }
     };
     let output = cargo(snapshot, &inventory.package, options, contract, true)?;
-    (ops.decode_export)(&inventory, &output.stdout)
+    let ledger = (ops.decode_export)(&inventory, &output.stdout)?;
+    Ok(Observation { ledger, inventory })
 }
 
 pub(crate) fn validate(
@@ -87,7 +93,7 @@ fn cargo(
     eprint!("{}", String::from_utf8_lossy(&output.stderr));
     if !output.status.success() {
         let message = format!(
-            "{} failed for package {package}. If Cargo configuration restores {}=1, a draft/reset cannot be exported; adjust the caller configuration deliberately. Source and ledger were not changed.\n{}",
+            "{} failed for package {package}. If Cargo configuration restores {}=1, schema observation is unavailable; adjust the caller configuration deliberately. Source and ledger were not changed.\n{}",
             if export {
                 "schema export"
             } else {

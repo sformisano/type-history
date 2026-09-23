@@ -209,7 +209,7 @@ type Count = u32;
             "--features",
             "wide",
         ]),
-        "frozen wire shape",
+        "shape_kind_changed",
     );
     failure(
         &fixture.cargo_env(

@@ -38,9 +38,13 @@ fn check_json_preserves_workspace_member_source_locations() {
     assert!(findings.iter().any(|d| d["code"] == "shape_kind_changed"));
     for finding in findings {
         assert_eq!(finding["location"]["file"], source.to_str().unwrap());
-        assert!(finding["location"]["line"]
-            .as_u64()
-            .is_some_and(|line| line > 0));
+        let expected_line = NESTED
+            .lines()
+            .position(|line| line.contains("pub payment:"))
+            .unwrap()
+            + 1;
+        assert_eq!(finding["location"]["line"], expected_line);
+        assert_eq!(finding["origin"], "current_ledger");
     }
     let broken = format!("{NESTED}\npub fn broken() {{ let _: u32 = false; }}\n");
     let line = broken
@@ -121,7 +125,7 @@ fn check_json_reports_nested_enum_differences_and_original_locations() {
     assert_eq!(finding["expected"], json!({"kind":"u32"}));
     assert_eq!(finding["actual"], json!({"kind":"u64"}));
     for d in shapes {
-        assert_eq!(d["origin"], "compiler");
+        assert_eq!(d["origin"], "current_ledger");
         assert_eq!(d["stable_name"], "billing.diagnostic");
         assert_eq!(d["version"], 1);
         assert!(d["hint"].as_str().is_some_and(|s| !s.is_empty()));
@@ -129,7 +133,13 @@ fn check_json_reports_nested_enum_differences_and_original_locations() {
             d["location"]["file"],
             fixture.root().join("src/lib.rs").to_str().unwrap()
         );
-        assert!(d["location"]["line"].as_u64().is_some_and(|line| line > 0));
+        let field = d["path"][0]["name"].as_str().unwrap();
+        let expected_line = NESTED
+            .lines()
+            .position(|line| line.contains(&format!("pub {field}:")))
+            .unwrap()
+            + 1;
+        assert_eq!(d["location"]["line"], expected_line);
     }
     assert_eq!(
         report(&fixture.cli(&args), false),

@@ -6,6 +6,7 @@ const NATIVE: &str = include_str!("../fixtures/fields/native_traits.rs");
 const RETAINED: &str = r#"
 #[tracked(stable_name = "fields.retained_tuple", derive_partial_eq = false, derive_debug = false,)]
 pub struct Retained { pub value: T16, pub counter: u32 }
+// RUNTIME_TESTS_BEGIN
 #[cfg(test)]
 mod retained_tests {
     use super::{common, Retained};
@@ -23,6 +24,7 @@ mod retained_tests {
         }
     }
 }
+// RUNTIME_TESTS_END
 "#;
 
 #[test]
