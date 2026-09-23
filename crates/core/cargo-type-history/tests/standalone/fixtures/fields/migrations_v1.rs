@@ -12,6 +12,7 @@ pub struct Record {
     pub required: Nullable,
 }
 
+// RUNTIME_TESTS_BEGIN
 #[cfg(test)]
 mod common;
 #[cfg(test)]
@@ -32,3 +33,4 @@ mod tests {
         fs::write("old.json", json).unwrap(); fs::write("old.msgpack", binary).unwrap();
     }
 }
+// RUNTIME_TESTS_END

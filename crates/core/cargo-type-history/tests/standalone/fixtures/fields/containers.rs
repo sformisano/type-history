@@ -62,6 +62,7 @@ pub struct Collections {
     pub bytes: Vec<u8>,
 }
 
+// RUNTIME_TESTS_BEGIN
 #[cfg(test)]
 mod common;
 
@@ -111,3 +112,4 @@ mod tests {
         }
     }
 }
+// RUNTIME_TESTS_END

@@ -19,6 +19,7 @@ pub struct Logical {
     pub choice: Choice,
 }
 
+// RUNTIME_TESTS_BEGIN
 #[cfg(test)]
 mod common;
 #[cfg(test)]
@@ -97,3 +98,4 @@ mod tests {
         }
     }
 }
+// RUNTIME_TESTS_END

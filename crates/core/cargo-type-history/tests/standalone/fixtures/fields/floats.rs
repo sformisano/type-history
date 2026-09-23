@@ -12,6 +12,7 @@ pub struct Floats {
     pub nested: BTreeMap<String, (Option<Finite32>, Finite64)>,
 }
 
+// RUNTIME_TESTS_BEGIN
 #[cfg(test)]
 mod common;
 #[cfg(test)]
@@ -92,3 +93,4 @@ mod tests {
         }
     }
 }
+// RUNTIME_TESTS_END
