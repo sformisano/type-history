@@ -1,6 +1,6 @@
 [package]
 name = "type-history"
-version = "0.2.0"
+version = "0.3.0"
 description = "Evolve Rust records with generated versioned types and compile-time schema checks"
 edition.workspace = true
 rust-version.workspace = true
@@ -23,13 +23,13 @@ time = ["type-history-core/time"]
 rc = ["type-history-core/rc"]
 
 [dependencies]
-type-history-core = { path = "../type-history-core", version = "0.2.0" }
-type-history-macros = { path = "../type-history-macros", version = "0.2.0" }
+type-history-core = { path = "../type-history-core", version = "0.3.0" }
+type-history-macros = { path = "../type-history-macros", version = "0.3.0" }
 
 [dev-dependencies]
 serde = { workspace = true }
 serde_json = { workspace = true }
-type-history-codegen = { path = "../type-history-codegen", version = "0.2.0" }
+type-history-codegen = { path = "../type-history-codegen", version = "0.3.0" }
 
 [lints]
 workspace = true

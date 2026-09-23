@@ -24,24 +24,24 @@ Type History works through three components:
 
 Type History requires Rust 1.97 or later.
 
-Install the 0.2.0 library, build hook, and CLI from crates.io:
+Install the 0.3.0 library, build hook, and CLI from crates.io:
 
 ```sh
-cargo install cargo-type-history --version '=0.2.0' --locked
+cargo install cargo-type-history --version '=0.3.0' --locked
 ```
 
 Add the library and build hook to your package:
 
 ```toml
 [dependencies]
-type-history = "=0.2.0"
+type-history = "=0.3.0"
 
 [build-dependencies]
-type-history-build = "=0.2.0"
+type-history-build = "=0.3.0"
 ```
 
 Keep the library, build hook, and CLI on the same release.
-The [package setup guide](https://github.com/sformisano/type-history/blob/v0.2.0/book/src/setup.md)
+The [package setup guide](https://github.com/sformisano/type-history/blob/v0.3.0/book/src/setup.md)
 shows the complete configuration and a source checkout alternative.
 
 ### Prepare a Source Checkout for Tests
@@ -556,7 +556,7 @@ let bytes = to_vec(&receipt.into_versioned())?;
 }
 ```
 
-Your application chooses how to save and retrieve the bytes. This example uses JSON; the same API works with other [supported Serde formats](https://github.com/sformisano/type-history/blob/v0.2.0/book/src/decoding.md#choose-a-serde-format).
+Your application chooses how to save and retrieve the bytes. This example uses JSON; the same API works with other [supported Serde formats](https://github.com/sformisano/type-history/blob/v0.3.0/book/src/decoding.md#choose-a-serde-format).
 
 ## Using Type History in a distributed system
 
@@ -609,14 +609,14 @@ participate. Change any of them through a new version and an explicit migration.
 
 The checked adapters own their JSON and named-field MessagePack encodings.
 Enabling native dependency Serde features does not change those encodings.
-See [field integration](https://github.com/sformisano/type-history/blob/v0.2.0/book/src/integration.md#supported-field-contracts)
+See [field integration](https://github.com/sformisano/type-history/blob/v0.3.0/book/src/integration.md#supported-field-contracts)
 for exact domains, feature flags, set declarations, and codec limits.
 
 ## Documentation
 
 - [The book](book/README.md) covers the generated types, field changes, conversions, freezing, and integrations.
-- [The 0.2.0 API reference](https://docs.rs/type-history/0.2.0/type_history/) includes all optional field integrations. Build it locally with `cargo doc --workspace --no-deps --all-features --locked`, then open `target/doc/type_history/index.html`.
-- [The invoice example](https://github.com/sformisano/type-history/blob/v0.2.0/crates/examples/invoice-history/README.md) is a complete runnable package.
+- [The 0.3.0 API reference](https://docs.rs/type-history/0.3.0/type_history/) includes all optional field integrations. Build it locally with `cargo doc --workspace --no-deps --all-features --locked`, then open `target/doc/type_history/index.html`.
+- [The invoice example](https://github.com/sformisano/type-history/blob/v0.3.0/crates/examples/invoice-history/README.md) is a complete runnable package.
 
 Licensed under [MIT
-](https://github.com/sformisano/type-history/blob/v0.2.0/LICENSE-MIT)or [Apache 2.0](https://github.com/sformisano/type-history/blob/v0.2.0/LICENSE-APACHE), at your option.
+](https://github.com/sformisano/type-history/blob/v0.3.0/LICENSE-MIT)or [Apache 2.0](https://github.com/sformisano/type-history/blob/v0.3.0/LICENSE-APACHE), at your option.

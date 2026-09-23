@@ -2,7 +2,7 @@
 
 Before the shop can declare `ReceiptCreated`, its package needs the Type History library, a build hook, and a place to save frozen schemas. This guide creates `my-shop-demo-project`, the Cargo library used by the [receipt walkthrough](quick-start.md).
 
-This guide uses Type History 0.2.0 from crates.io and requires Rust 1.97 or later.
+This guide uses Type History 0.3.0 from crates.io and requires Rust 1.97 or later.
 Linux is the tested host for lifecycle commands. Windows and macOS have not been validated.
 
 ## 1. Install the components
@@ -11,7 +11,7 @@ Install the CLI:
 
 <!-- setup:release-install.sh -->
 ```sh
-cargo install cargo-type-history --version '=0.2.0' --locked
+cargo install cargo-type-history --version '=0.3.0' --locked
 ```
 
 Pin the library, build hook, and CLI to the same release so they agree on the schema format and supported attributes. The Cargo package is `type-history`; Rust imports use `type_history`.
@@ -40,12 +40,12 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-type-history = "=0.2.0"
+type-history = "=0.3.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 
 [build-dependencies]
-type-history-build = "=0.2.0"
+type-history-build = "=0.3.0"
 ```
 
 `serde_json` reads and writes the receipt examples; Serde's derives support the [nested records](integration.md#nested-records) used later.

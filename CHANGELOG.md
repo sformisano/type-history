@@ -1,8 +1,13 @@
 # Changelog
 
-## Unreleased
+## 0.3.0
 
+- Share historical payload generation and adjacent upgrades across frontends. Frameworks can own payload traits through `GenerationOptions` and inspect typed declarations through `GeneratedVersion::contract`.
+- Build frozen schema documents from resolved structural shapes. Dedicated observation builds report drift at authored source locations while ordinary, strict, release, and final candidate checks retain their validation.
+- Reject malformed frontend-provided shapes, including duplicate record field names, before writing schema documents.
+- Breaking framework API changes: remove `SameSchema` and compiler-marker diagnostics; add fields to `GeneratedVersion` and `Declaration`, and add `JsonSchemaErrorReason::DuplicateField`. Update custom frontends for the V2 shape export. See [framework integration](book/src/crates.md#framework-integration) for the supported APIs. Frozen ledgers and stored payload formats remain unchanged.
 - Reuse standalone test setup across overlapping fixtures while preserving private consumers, executable copies, and independent source installation checks.
+- Prepare all six crates at 0.3.0 with matching installation instructions.
 
 ## 0.2.0
 
