@@ -21,7 +21,7 @@ jobs:
       LYCHEE_SHA256: "1f4e0ef7f6554a6ed33dd7ac144fb2e1bbed98598e7af973042fc5cd43951c9a"
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install mdBook
         shell: bash
@@ -54,6 +54,7 @@ jobs:
 
       # Build the deployable artifact without enabling or deploying Pages.
       - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
           path: book/html
+          include-hidden-files: true

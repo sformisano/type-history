@@ -19,7 +19,7 @@ jobs:
       CARGO_PROFILE_TEST_DEBUG: line-tables-only
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install Rust toolchain
         run: rustup toolchain install 1.97.1 --profile minimal --component clippy --component rustfmt --target aarch64-unknown-linux-gnu
@@ -74,7 +74,7 @@ jobs:
       CARGO_TARGET_DIR: ${{ github.workspace }}/target
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install fuzzing tools
         run: |
@@ -98,7 +98,7 @@ jobs:
 
       - name: Retain failing inputs
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: codec-fuzz-failures
           path: crates/tools/type-history-fuzz/artifacts/
