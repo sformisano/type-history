@@ -606,6 +606,7 @@ dependencies = [
  "tempfile",
  "toml",
  "type-history-codegen",
+ "type-history-core",
 ]
 
 [[package]]
