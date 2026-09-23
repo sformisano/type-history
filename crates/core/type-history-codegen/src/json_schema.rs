@@ -1,9 +1,10 @@
 //! Normalized JSON Schema 2020-12 comparison documents for record wire snapshots.
 //!
-//! `schemars` generates a raw document from the current Rust types. Type History
-//! normalizes that document and validates its closed structural [`SchemaShape`].
-//! Development tooling compares these documents under each stable name and
-//! version. Type History never validates business values against a schema document.
+//! Frozen lifecycle exports use resolved [`SchemaShape`] values to construct
+//! validated documents. Raw descriptive exports can also be normalized through
+//! [`JsonSchemaDocument::from_export`]. Development tooling compares documents
+//! under each stable name and version. Type History never validates business
+//! values against a schema document.
 
 use std::fmt::{Display, Formatter, Result as FmtResult};
 

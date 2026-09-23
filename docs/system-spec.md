@@ -17,6 +17,9 @@
 - JSON and named-field MessagePack preserve admitted float bits, decimal scale, temporal nanoseconds, and offsets.
 - `derive_debug` and `derive_partial_eq` control those generated traits for every retained version. Both default to `true`.
 - Lifecycle commands capture local package roots, workspace manifests, lockfiles, effective Cargo configuration, and declared snapshot inputs.
+- Frozen schema documents derive from compiler-resolved structural shapes. Descriptive schema exports retain container, field, and variant documentation.
+- Lifecycle checks observe source shapes in a dedicated development test build, then compare them with committed and released authority.
+- JSON reports identify observed source differences as `current_ledger` and include discovered source locations when available.
 
 ## Repository Layout
 
@@ -33,6 +36,8 @@
 - An unchanged version must keep the complete storage contract.
 - The contract includes representation, admitted domain, field presence, profile, set membership, tuple order, and tuple arity.
 - Existing frozen ledger bytes must remain unchanged.
+- Ordinary builds enforce frozen shapes. Release and explicit strict builds reject schema observation mode.
+- A clean lifecycle comparison also receives ordinary compilation. Every candidate ledger receives ordinary compilation before an atomic write.
 - Retained payloads must remain readable with their original meaning.
 - `HashMap<String, V, S>` and `BTreeMap<String, V>` are equivalent when `V` has the same contract.
 - Sets remain distinct from sequences. Custom set elements must declare stable membership.
@@ -52,6 +57,7 @@
 - `typed-floats` adds direct support for `NonNaNFinite<f32>` and `NonNaNFinite<f64>`.
 - `Versioned` reads and writes generated history envelopes.
 - `cargo type-history` initializes, checks, freezes, imports, resets, and undoes ledger changes.
+- Frameworks can supply payload traits and optional source locations through the shared generator and build interfaces.
 - `package.metadata.type-history.snapshot-inputs` declares relative files or directories that a package needs from outside its root.
 - Declared input snapshots bind every path-resolution component and the resolved contents; adding, removing, or retargeting a symlink invalidates the snapshot even when the resolved bytes are unchanged.
 - A relative source symlink is rejected when its unchanged target would escape the isolated snapshot.

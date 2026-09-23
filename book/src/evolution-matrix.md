@@ -131,7 +131,7 @@ whether a test has run.
 | M134 | Frozen enum variant or nested payload change | R | Preserve the frozen wire shape; changes need a containing field update in the next version |
 | M135 | Independently versioned enum or variant history attribute | R | `#[versioned]` accepts concrete named-field structs; field attributes describe enum changes |
 | M136 | Released baseline compared with edited source and ledger | S | `check --released-baseline FILE` requires a distinct frozen ledger and preserves all released entries |
-| M137 | Machine-readable schema differences | S | `check --format json` reports stable codes, complete nested paths, expected/actual values, and attributable locations while compiler enforcement stays active |
+| M137 | Machine-readable schema differences | S | `check --format json` compares observed shapes with the ledger and reports stable codes, nested paths, values, and locations; ordinary builds retain compiler enforcement |
 | M139 | String-keyed `HashMap` and `BTreeMap` substitution | S | Equal value contracts are compatible. Hasher and iteration order do not enter the storage contract |
 | M140 | Map with a non-`String` key | R | Persisted maps require exact `String` keys |
 | M141 | `HashSet` and `BTreeSet` substitution | S/R | Element encoding and declared membership must match. Actual Rust `Eq`/`Hash`/`Ord` bounds still apply |

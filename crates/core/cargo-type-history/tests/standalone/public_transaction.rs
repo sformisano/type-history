@@ -158,8 +158,8 @@ fn public_export_transport_rejects_missing_and_corrupt_rows() {
             "incomplete history export",
         ),
         ("sed 's/\"kind\":\"u32\"/\"kind\":\"u64\"/g'", "frozen"),
-        ("sed 's/{\"kind\":\"u32\"}/{\"kind\":\"tuple\",\"items\":[]}/g'", "empty"),
-        ("sed 's/{\"name\":\"count\",\"presence\":\"required\",\"schema\":{\"kind\":\"u32\"}}/{\"name\":\"count\",\"presence\":\"required\",\"schema\":{\"kind\":\"u32\"}},{\"name\":\"count\",\"presence\":\"optional\",\"schema\":{\"kind\":\"u32\"}}/g'", "duplicate"),
+        ("sed 's/{\"kind\":\"u32\"}/{\"kind\":\"tuple\",\"items\":[]}/g'", "tuples require"),
+        ("sed 's/{\"name\":\"count\",\"presence\":\"required\",\"schema\":{\"kind\":\"u32\"}}/{\"name\":\"count\",\"presence\":\"optional\",\"schema\":{\"kind\":\"u32\"}},{\"name\":\"count\",\"presence\":\"optional\",\"schema\":{\"kind\":\"u32\"}}/g'", "record fields must have unique names"),
     ] {
         fs::write(
             &wrapper,

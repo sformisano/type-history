@@ -10,6 +10,9 @@
 //! [`generate::generate_versioned`] alongside it to support the `Versioned` wrapper.
 //! [`GenerationPaths`] tells both generators where to find runtime support and
 //! how to construct conversion errors.
+//! [`generate_history_with_options`] lets a frontend own payload traits and
+//! select a dedicated observation cfg. [`GeneratedVersion`] exposes typed
+//! payload declarations, structural shapes, and descriptive schema expressions.
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 pub mod admission;

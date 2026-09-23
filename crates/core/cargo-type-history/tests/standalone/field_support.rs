@@ -10,6 +10,7 @@ mod features;
 mod profiles;
 
 use super::support::{success, Fixture, LEDGER};
+use serde_json::Value;
 
 const PACKAGE: &str = "standalone-history-consumer";
 
@@ -66,6 +67,18 @@ fn frozen_failure(fixture: &Fixture, source: &str, expected: &str) {
         &fixture.cargo(&["check", "--locked", "--offline"]),
         expected,
     );
-    super::support::failure(&fixture.cli(&["check", "--package", PACKAGE]), expected);
+    let output = fixture.cli(&["check", "--package", PACKAGE, "--format", "json"]);
+    super::support::failure(&output, "history check failed");
+    let report: Value = serde_json::from_slice(&output.stdout).unwrap();
+    let differences = report["packages"][0]["diagnostics"].as_array().unwrap();
+    assert!(!differences.is_empty(), "{report:#}");
+    assert!(
+        differences.iter().all(|difference| {
+            difference["origin"] == "current_ledger"
+                && difference["stable_name"].is_string()
+                && difference["expected"] != difference["actual"]
+        }),
+        "{report:#}"
+    );
     assert_eq!(fixture.read(LEDGER), ledger, "failed check changed ledger");
 }
