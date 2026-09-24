@@ -230,12 +230,14 @@ fn excluded_package_snapshot_keeps_its_own_workspace_boundary() {
     .unwrap();
     let original_manifest = fixture.read("Cargo.toml");
     success(&fixture.cargo(&["check", "--lib", "--locked", "--offline"]));
-    success(&fixture.cli_env(&["check"], &[("TMPDIR", Some(parent.to_str().unwrap()))]));
+    // Place a private capture inside the ancestor workspace directory.
+    let private = [
+        ("TMPDIR", Some(parent.to_str().unwrap())),
+        ("TYPE_HISTORY_PRIVATE_SNAPSHOT", Some("1")),
+    ];
+    success(&fixture.cli_env(&["check"], &private));
     assert_eq!(fixture.read("Cargo.toml"), original_manifest);
     assert_eq!(fixture.read(LEDGER), ledger);
     fixture.write("src/lib.rs", &V1.replace("u32", "String"));
-    failure(
-        &fixture.cli_env(&["check"], &[("TMPDIR", Some(parent.to_str().unwrap()))]),
-        "frozen",
-    );
+    failure(&fixture.cli_env(&["check"], &private), "frozen");
 }

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.1
+
+- Reuse compiled dependencies between lifecycle commands through a locked `type-history-snapshot` directory in Cargo's target directory. Every command still copies and rebuilds local packages; a busy directory, a missing target directory, or `TYPE_HISTORY_PRIVATE_SNAPSHOT=1` selects a private temporary snapshot.
+- Prepare all six crates at 0.3.1 with matching installation instructions.
+
 ## 0.3.0
 
 - Share historical payload generation and adjacent upgrades across frontends. Frameworks can own payload traits through `GenerationOptions` and inspect typed declarations through `GeneratedVersion::contract`.

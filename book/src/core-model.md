@@ -28,7 +28,7 @@ enum HistoricalReceiptCreated {
 
 These types serve different purposes:
 
-- `ReceiptCreated` is an ordinary current value. It always has `currency` at V2.
+- `ReceiptCreated` is the ordinary current type. It always has `currency` at V2.
 - `Versioned<ReceiptCreated>` holds one historical payload, conceptually one
   variant of the enum above. It may contain V1 or V2.
 - The stored version tells the deserializer which payload type to read.

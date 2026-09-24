@@ -5,7 +5,7 @@ readable, and freeze each version before storing it. Later chapters cover
 integration with other types and the full field-history rules.
 
 The book is not published as a hosted site. `.github/workflows/book.yml` builds the
-HTML and link-checks it on every push, and its upload step deliberately does not
+HTML and link-checks it for pull requests and pushes to `main`, and its upload step deliberately does not
 enable or deploy GitHub Pages, so there is no rendered URL to link from another
 repository. A link into `book/src/` reaches raw mdBook source on GitHub.
 The [repository README](../README.md) describes this source version.

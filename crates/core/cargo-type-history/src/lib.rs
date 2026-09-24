@@ -3,10 +3,10 @@
 //! Initialize a package's ledger before declaring its first history. As fields
 //! change, use `check` to compare the source with frozen schemas and `freeze` to
 //! record a version before storing data with it. `reset` and `import` handle
-//! explicit corrections and existing schema baselines.
+//! explicit corrections and imported histories.
 //!
 //! The binary passes its arguments to [`run`]. See the
-//! [lifecycle guide](https://github.com/sformisano/type-history/blob/main/book/src/lifecycle.md)
+//! [lifecycle guide](https://github.com/sformisano/type-history/blob/v0.3.1/book/src/lifecycle.md)
 //! for commands, draft rules, and reset limits.
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]

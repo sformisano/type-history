@@ -235,6 +235,7 @@ opt-level = 2
             "TYPE_HISTORY_AUTHORITY_KIND",
             "TYPE_HISTORY_LEDGER_PATH",
             "TYPE_HISTORY_SCHEMA_ID_PREFIX",
+            "TYPE_HISTORY_PRIVATE_SNAPSHOT",
         ] {
             command.env_remove(key);
         }

@@ -7,7 +7,7 @@
 //!
 //! The [`resolved`] module describes serialized field shapes so builds can compare
 //! them with frozen schemas. Most applications use these APIs through the
-//! `type-history` crate, which also reexports the declaration macros. Framework
+//! `type-history` crate, which also re-exports the declaration macros. Framework
 //! and macro authors can use this crate as the runtime for their generated code.
 
 #![forbid(unsafe_code)]

@@ -1,7 +1,7 @@
 # Codec fuzzing
 
 Fuzzing feeds generated inputs into the public decoders to find cases the fixed
-tests may miss. These targets use the generated invoice history. For an accepted
+tests may miss. The `invoice_*` targets use the generated invoice history. For an accepted
 invoice, they also check the converted value against an independently written
 expected result:
 
@@ -21,7 +21,7 @@ error and checks the reported versions.
 Install the development tools without changing the project's default compiler:
 
 ```sh
-rustup toolchain install nightly --profile minimal --component rust-src
+rustup toolchain install nightly-2026-09-12 --profile minimal --component rust-src
 cargo install cargo-fuzz --version 0.13.2 --locked
 ```
 
@@ -39,7 +39,7 @@ starting inputs, called *seeds*, which remain unchanged:
 ```sh
 for target in invoice_json invoice_msgpack invoice_values schema_json; do
   mkdir -p "crates/tools/type-history-fuzz/corpus/$target"
-  cargo +nightly fuzz run "$target" --fuzz-dir crates/tools/type-history-fuzz --target-dir target \
+  cargo +nightly-2026-09-12 fuzz run "$target" --fuzz-dir crates/tools/type-history-fuzz --target-dir target \
     "crates/tools/type-history-fuzz/corpus/$target" "crates/tools/type-history-fuzz/seeds/$target" -- \
     -max_total_time=120 -max_len=65536 -timeout=5 -rss_limit_mb=1024 \
     -seed=1 -print_final_stats=1 || exit "$?"

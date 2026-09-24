@@ -81,7 +81,7 @@ writes V2. Neither operation changes bytes already held in storage.
 
 ## Invalid records
 
-The stored version selects the decoder; the payload must match that version. Adding `currency` to a payload still labelled V1 does not make it V2. This input is rejected:
+The stored version selects the decoder; the payload must match that version. Adding `currency` to a payload still labeled V1 does not make it V2. This input is rejected:
 
 <!-- decoding:invalid.rs -->
 ```rust

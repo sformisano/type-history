@@ -12,7 +12,7 @@ Common examples include:
 - **Saved snapshots:** Restore records written by an earlier application version.
 - **Versioned documents:** Read records with different stored versions.
 
-## Setup Your Project
+## Set Up Your Project
 
 Type History works through three components:
 
@@ -24,24 +24,24 @@ Type History works through three components:
 
 Type History requires Rust 1.97 or later.
 
-Install the 0.3.0 library, build hook, and CLI from crates.io:
+Install the 0.3.1 library, build hook, and CLI from crates.io:
 
 ```sh
-cargo install cargo-type-history --version '=0.3.0' --locked
+cargo install cargo-type-history --version '=0.3.1' --locked
 ```
 
 Add the library and build hook to your package:
 
 ```toml
 [dependencies]
-type-history = "=0.3.0"
+type-history = "=0.3.1"
 
 [build-dependencies]
-type-history-build = "=0.3.0"
+type-history-build = "=0.3.1"
 ```
 
 Keep the library, build hook, and CLI on the same release.
-The [package setup guide](https://github.com/sformisano/type-history/blob/v0.3.0/book/src/setup.md)
+The [package setup guide](https://github.com/sformisano/type-history/blob/v0.3.1/book/src/setup.md)
 shows the complete configuration and a source checkout alternative.
 
 ### Prepare a Source Checkout for Tests
@@ -55,36 +55,37 @@ cargo fetch --locked
 ```
 
 Standalone test workers share a copied crate family, its separately built CLI, and frozen setup while their fixtures overlap.
-Each consumer keeps private files and an executable copy. Every frozen consumer runs its own ordinary build; production snapshots keep separate targets.
+Each consumer keeps private files and an executable copy. Every frozen consumer runs its own ordinary build; lifecycle snapshots reuse compiled dependencies as described in [package setup](https://github.com/sformisano/type-history/blob/v0.3.1/book/src/setup.md#3-initialize-the-schema-file).
 The last fixture removes the shared resources. Single-threaded and filtered runs remain supported, but can reuse less setup.
 
 ### Connect Type History to Cargo
 
 Create `build.rs` in the project root if you don't already have it, then add the `type-history-build` compile step:
 
-```rs
+```rust
 fn main() {
     type_history_build::compile();
 }
 ```
 
-Cargo will now run this  `type-history` compilation step whenever it builds your project.
+Cargo will now run this `type-history-build` step whenever it builds your project.
 
 ### Initialize Type History
 
-Run this cargo command inside your project:
+Lifecycle commands run Cargo with `--locked --offline`, so fetch the new dependencies first. Then run these Cargo commands inside your project:
 
 ```sh
+cargo fetch
 cargo type-history init --package your-cargo-package
 ```
 
-This creates `type-history/schemas.json`, which starts as an empty json.
+This creates `type-history/schemas.json`, which starts as an empty JSON object (`{}`).
 
 ## How to Use
 
 This example follows a shop's `ReceiptCreated` event type as its fields change. The shop initially accepts only US dollars, so the event starts with an amount in cents. Later, the shop adds other currencies and supports refunds.
 
-The example uses a monolith: the application and its types are built and deployed together. The [distributed systems section](#using-type-history-in-a-distributed-system) covers services that upgrade separately.
+The example uses a monolith: the application and its types are built and deployed together. The [distributed systems section](#using-type-history-in-a-distributed-system) covers services that upgrade separately. The commands use the example package name `my-shop-demo-project`.
 
 <!-- ANCHOR: journey -->
 ### 1. Declare V1
@@ -115,11 +116,11 @@ pub type ReceiptCreated = ReceiptCreatedV1;
 
 ### 2. Generate and freeze V1's schema
 
-When Cargo builds your package, it runs `build.rs`. The `type_history_build::compile()` call reads the `ReceiptCreated` declaration and generates V1's **schema**: a description of its field names, field types, and nested fields. For V1, it describes the `amount_cents` field and its `u64` type.
+When Cargo builds your package, it runs `build.rs`. The `type_history_build::compile()` call finds the `ReceiptCreated` declaration, and the compiler resolves V1's **schema**: a description of its field names, field types, and nested fields. For V1, it describes the `amount_cents` field and its `u64` type.
 
 Type History then compares the schemas generated from the versioned types with any schemas saved in `type-history/schemas.json`. This file is the **ledger**: it holds frozen schemas so future builds can check that the corresponding versions have not changed.
 
-Our `schemas.json` ledger is still empty, so our `ReceiptCreatedV1` is a **draft**: a version declared in Rust whose schema has not yet been saved (note: only the first version of new versioned types can be a draft, i.e. if our type is not present in `schemas.json`, it cannot be introduced as `ReceiptCreatedV2` and beyond).
+Our `schemas.json` ledger is still empty, so our `ReceiptCreatedV1` is a **draft**: a version declared in Rust whose schema has not yet been saved. A type that is not yet in `schemas.json` must start at V1; it cannot be introduced as `ReceiptCreatedV2` or later.
 
 You *can* change a draft while developing and testing. Development builds allow drafts with a warning. Release builds require every version to be frozen, i.e. to be present and fully up to date in `schemas.json`.
 
@@ -242,7 +243,7 @@ cargo type-history freeze --package my-shop-demo-project
 
 This time, `ReceiptCreatedV2` is the package's only draft. Freezing adds its `2` entry to the ledger. The `1` entry stays unchanged.
 
-The ledger now contains both versions. V1's entry is unchanged. V2's schema includes `currency` and requires both fields:
+The ledger now contains both versions. V2's schema includes `currency` and requires both fields:
 
 <!-- journey:ledger-v2.json -->
 ```json
@@ -556,7 +557,7 @@ let bytes = to_vec(&receipt.into_versioned())?;
 }
 ```
 
-Your application chooses how to save and retrieve the bytes. This example uses JSON; the same API works with other [supported Serde formats](https://github.com/sformisano/type-history/blob/v0.3.0/book/src/decoding.md#choose-a-serde-format).
+Your application chooses how to save and retrieve the bytes. This example uses JSON; the same API works with other [supported Serde formats][formats].
 
 ## Using Type History in a distributed system
 
@@ -592,6 +593,8 @@ If reporting calculates sales totals after subtracting refunds, it must support 
 
 <!-- ANCHOR_END: journey -->
 
+[formats]: https://github.com/sformisano/type-history/blob/v0.3.1/book/src/decoding.md#choose-a-serde-format
+
 ## Persisted field contracts
 
 Histories remain named-field structs. Their fields can use supporting records,
@@ -609,14 +612,13 @@ participate. Change any of them through a new version and an explicit migration.
 
 The checked adapters own their JSON and named-field MessagePack encodings.
 Enabling native dependency Serde features does not change those encodings.
-See [field integration](https://github.com/sformisano/type-history/blob/v0.3.0/book/src/integration.md#supported-field-contracts)
+See [field integration](https://github.com/sformisano/type-history/blob/v0.3.1/book/src/integration.md#supported-field-contracts)
 for exact domains, feature flags, set declarations, and codec limits.
 
 ## Documentation
 
-- [The book](book/README.md) covers the generated types, field changes, conversions, freezing, and integrations.
-- [The 0.3.0 API reference](https://docs.rs/type-history/0.3.0/type_history/) includes all optional field integrations. Build it locally with `cargo doc --workspace --no-deps --all-features --locked`, then open `target/doc/type_history/index.html`.
-- [The invoice example](https://github.com/sformisano/type-history/blob/v0.3.0/crates/examples/invoice-history/README.md) is a complete runnable package.
+- [The book](https://github.com/sformisano/type-history/blob/v0.3.1/book/README.md) covers the generated types, field changes, conversions, freezing, and integrations.
+- [The 0.3.1 API reference](https://docs.rs/type-history/0.3.1/type_history/) includes all optional field integrations. Build it locally with `cargo doc --workspace --no-deps --all-features --locked`, then open `target/doc/type_history/index.html`.
+- [The invoice example](https://github.com/sformisano/type-history/blob/v0.3.1/crates/examples/invoice-history/README.md) is a complete runnable package.
 
-Licensed under [MIT
-](https://github.com/sformisano/type-history/blob/v0.3.0/LICENSE-MIT)or [Apache 2.0](https://github.com/sformisano/type-history/blob/v0.3.0/LICENSE-APACHE), at your option.
+Licensed under [MIT](https://github.com/sformisano/type-history/blob/v0.3.1/LICENSE-MIT) or [Apache 2.0](https://github.com/sformisano/type-history/blob/v0.3.1/LICENSE-APACHE), at your option.

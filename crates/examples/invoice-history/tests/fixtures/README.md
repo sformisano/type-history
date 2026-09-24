@@ -1,7 +1,7 @@
 # Invoice and payment fixtures
 
-The `.msgpack.hex` files contain stored invoices and payments as space-separated
-hexadecimal bytes. They were written from the MessagePack format, independently
+The `.msgpack.hex` files contain stored invoices and payments as whitespace-separated
+hexadecimal bytes. They were written from the MessagePack specification, independently
 of the project's serializer. This lets a test catch a format change even if the
 new serializer and decoder still agree with each other. The payment fixtures
 also include the corresponding JSON envelopes.

@@ -1,6 +1,6 @@
 [package]
 name = "type-history-macros"
-version = "0.3.0"
+version = "0.3.1"
 description = "Procedural macros for versioned Rust records"
 edition.workspace = true
 rust-version.workspace = true
@@ -14,8 +14,8 @@ documentation = "https://docs.rs/type-history-macros"
 proc-macro = true
 
 [dependencies]
-type-history-codegen = { path = "../type-history-codegen", version = "0.3.0" }
-type-history-core = { path = "../type-history-core", version = "0.3.0" }
+type-history-codegen = { path = "../type-history-codegen", version = "0.3.1" }
+type-history-core = { path = "../type-history-core", version = "0.3.1" }
 syn = { version = "2", features = ["full", "extra-traits"] }
 quote = "1"
 proc-macro2 = "1"

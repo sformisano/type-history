@@ -17,7 +17,7 @@
 //! conversions and returns the latest type. Application code reads and writes
 //! through that alias.
 //!
-//! After [setting up a library package](https://github.com/sformisano/type-history/blob/v0.3.0/book/src/setup.md),
+//! After [setting up a library package](https://github.com/sformisano/type-history/blob/v0.3.1/book/src/setup.md),
 //! start the receipt history with a stable name:
 //!
 //! ```rust,ignore
@@ -37,14 +37,14 @@
 //! Conversions run from older versions to the current version. A consumer built
 //! with only V1 rejects a V2 receipt. Services sharing a types crate must therefore
 //! coordinate which versions they publish and accept; see the
-//! [distributed-system walkthrough](https://github.com/sformisano/type-history/blob/v0.3.0/README.md#using-type-history-in-a-distributed-system).
+//! [distributed-system walkthrough](https://github.com/sformisano/type-history/blob/v0.3.1/README.md#using-type-history-in-a-distributed-system).
 //!
-//! Install the matching 0.3.0 crates from crates.io. The [package setup guide](https://github.com/sformisano/type-history/blob/v0.3.0/book/src/setup.md)
+//! Install the matching 0.3.1 crates from crates.io. The [package setup guide](https://github.com/sformisano/type-history/blob/v0.3.1/book/src/setup.md)
 //! shows the matching runtime, build hook, and CLI configuration.
 //! The guide configures schema checks and initializes the ledger before any history declaration.
 //! The current setup requires Rust 1.97 or later. Linux is the tested lifecycle host.
 //! Windows and macOS have not been validated.
-//! The [book](https://github.com/sformisano/type-history/blob/v0.3.0/book/README.md)
+//! The [book](https://github.com/sformisano/type-history/blob/v0.3.1/book/README.md)
 //! links to field rules, lifecycle commands, and error handling.
 //!
 //! For existing storage that keeps JSON payloads and metadata separately, the
@@ -84,7 +84,7 @@
 //! Optional features `typed-floats`, `uuid`, `rust-decimal`, `chrono`, and `time`
 //! add finite numeric types and checked [`adapters`]. Defaults are empty. Adapters
 //! own their serialization, so native dependencies' Serde features do not change
-//! stored profiles. See the [field integration guide](https://github.com/sformisano/type-history/blob/v0.3.0/book/src/integration.md).
+//! stored profiles. See the [field integration guide](https://github.com/sformisano/type-history/blob/v0.3.1/book/src/integration.md).
 
 extern crate self as type_history;
 

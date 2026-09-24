@@ -71,7 +71,7 @@ pub fn execute<M: Clone + Eq + Serialize + DeserializeOwned>(
     if let Some(path) = &import_path {
         extra.push(path.clone());
     }
-    let snapshot = Snapshot::create(metadata, &extra, contract)?;
+    let snapshot = Snapshot::create_reusable(metadata, &extra, contract)?;
     transaction.verify_capture(&snapshot)?;
     snapshot.verify_graph(metadata, options)?;
     let copied_root = snapshot.mapped(package.root())?;

@@ -61,7 +61,7 @@ cargo type-history freeze --package invoice-history
 
 ## V2: remove, convert, and add fields
 
-The application now calls the invoice's label `label`, needs a wider count, and records a revision. V2 makes those changes together:
+The application now names the invoice's label field `label` instead of `legacy`, needs a wider count, and records a revision. V2 makes those changes together:
 
 - **Rename `legacy` to `label`:** Mark `legacy` as removed and add `label` in V2.
   Keep the `legacy` declaration so Type History can generate `InvoiceV1`.

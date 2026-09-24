@@ -95,7 +95,13 @@ fn symlinked_config_and_workspace_local_tmpdir_preserve_frozen_checks() {
     let temporary = fixture.root().join("scratch");
     fs::create_dir_all(&temporary).unwrap();
     fixture.write("scratch/user-input.txt", "keep this source input");
-    success(&fixture.cli_env(&["check"], &[("TMPDIR", Some(temporary.to_str().unwrap()))]));
+    success(&fixture.cli_env(
+        &["check"],
+        &[
+            ("TMPDIR", Some(temporary.to_str().unwrap())),
+            ("TYPE_HISTORY_PRIVATE_SNAPSHOT", Some("1")),
+        ],
+    ));
     let remaining: Vec<_> = fs::read_dir(&temporary)
         .unwrap()
         .map(|entry| entry.unwrap().file_name())

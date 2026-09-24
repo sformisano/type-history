@@ -7,7 +7,14 @@ fn temporary_directory_configuration_cannot_capture_workspace_lookup() {
     let fixture = Fixture::frozen();
     fixture.write("scratch/.cargo/config.toml", "not valid TOML [");
     let temporary = fixture.root().join("scratch");
-    success(&fixture.cli_env(&["check"], &[("TMPDIR", Some(temporary.to_str().unwrap()))]));
+    // A private snapshot is the capture placed inside this workspace-local TMPDIR.
+    success(&fixture.cli_env(
+        &["check"],
+        &[
+            ("TMPDIR", Some(temporary.to_str().unwrap())),
+            ("TYPE_HISTORY_PRIVATE_SNAPSHOT", Some("1")),
+        ],
+    ));
 }
 
 #[test]
@@ -32,7 +39,13 @@ fn excluded_package_detects_ancestor_workspace_changes_during_validation() {
     // The copied build script mutates only this fixture's live ancestor manifest.
     // Validation must detect that Cargo's captured membership decision is stale.
     failure(
-        &fixture.cli_env(&["check"], &[("TMPDIR", Some(parent.to_str().unwrap()))]),
+        &fixture.cli_env(
+            &["check"],
+            &[
+                ("TMPDIR", Some(parent.to_str().unwrap())),
+                ("TYPE_HISTORY_PRIVATE_SNAPSHOT", Some("1")),
+            ],
+        ),
         "InputsChanged",
     );
     assert_eq!(fixture.read(LEDGER), ledger);

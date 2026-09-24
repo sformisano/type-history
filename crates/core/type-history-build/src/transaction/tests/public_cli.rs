@@ -65,6 +65,8 @@ fn atomic_failures_public_cli_propagates_precommit_and_committed_errors() {
         fs::write(root.path().join("Cargo.toml"),"[package]\nname = \"io-fixture\"\nversion = \"0.0.0\"\nedition = \"2024\"\nbuild = \"build.rs\"\n[workspace]\n").unwrap();
         fs::write(root.path().join("build.rs"), "fn main() {}\n").unwrap();
         fs::write(root.path().join("src/lib.rs"), "").unwrap();
+        // An existing Cargo target directory selects the reusable snapshot.
+        fs::create_dir(root.path().join("target")).unwrap();
         let lock = Command::new(env!("CARGO"))
             .current_dir(root.path())
             .args(["generate-lockfile", "--offline"])
@@ -84,6 +86,8 @@ fn atomic_failures_public_cli_propagates_precommit_and_committed_errors() {
             ])
             .env(SELECTOR, operation)
             .env("TMPDIR", scratch.path())
+            .env("CARGO_TARGET_DIR", root.path().join("target"))
+            .env_remove("TYPE_HISTORY_PRIVATE_SNAPSHOT")
             .env_remove("TYPE_HISTORY_REQUIRE_FROZEN")
             .output()
             .unwrap();
@@ -122,6 +126,16 @@ fn atomic_failures_public_cli_propagates_precommit_and_committed_errors() {
             fs::read_dir(scratch.path()).unwrap().count(),
             0,
             "all child-owned snapshot output must be gone"
+        );
+        let mut reusable: Vec<_> = fs::read_dir(root.path().join("target/type-history-snapshot"))
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name())
+            .collect();
+        reusable.sort();
+        assert_eq!(
+            reusable,
+            ["lock", "target"],
+            "{operation}: captured copies and the isolated Cargo home must be gone"
         );
     }
 }

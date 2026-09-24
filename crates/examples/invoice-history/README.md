@@ -1,7 +1,7 @@
 # Invoice reference application
 
 The shop example in the README follows a type one change at a time. This package
-shows the result in a runnable application: read a stored V1 invoice as the
+shows a completed invoice history in a runnable application: read a stored V1 invoice as the
 current V3 type, then serialize a new invoice with its V3 metadata. It also
 converts a V1 payment's enum field into its current V2 form.
 

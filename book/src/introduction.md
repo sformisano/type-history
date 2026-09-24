@@ -1,6 +1,6 @@
 # Type History
 
-Suppose a shop starts by accepting only US dollars. Its `ReceiptCreated` event stores an amount in cents. Later, the shop accepts other currencies and adds a `currency` field. The old events still have only an amount, but they still mean USD.
+Suppose a shop starts by accepting only US dollars. Its `ReceiptCreated` event stores an amount in cents. Later, the shop accepts other currencies and adds a `currency` field. The old events have only an amount, but they still mean USD.
 
 Type History lets the current application read both versions. You describe when each field changed and how to convert older values. It generates the historical Rust types and the conversions between them. Build checks protect the schemas you have frozen, so a later edit cannot silently change an earlier version's structure.
 
@@ -23,5 +23,5 @@ Your application chooses how to store the bytes and which supported Serde format
    alias can read every supported version.
 
 The remaining chapters cover individual tasks and their rules. The
-[API reference](crates.md) describes
-public types, methods, and traits.
+[crates chapter](crates.md) links to the API reference for public types,
+methods, and traits.

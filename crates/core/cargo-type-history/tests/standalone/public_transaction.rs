@@ -76,7 +76,10 @@ fn public_freeze_detects_live_input_changes_and_cleans_owned_snapshot() {
     failure(
         &fixture.cli_env(
             &["freeze", "--package", PACKAGE],
-            &[("TMPDIR", Some(scratch.path().to_str().unwrap()))],
+            &[
+                ("TMPDIR", Some(scratch.path().to_str().unwrap())),
+                ("TYPE_HISTORY_PRIVATE_SNAPSHOT", Some("1")),
+            ],
         ),
         "InputsChanged",
     );
@@ -94,7 +97,10 @@ fn public_freeze_detects_live_input_changes_and_cleans_owned_snapshot() {
     failure(
         &fixture.cli_env(
             &["freeze", "--package", PACKAGE],
-            &[("TMPDIR", Some(scratch.path().to_str().unwrap()))],
+            &[
+                ("TMPDIR", Some(scratch.path().to_str().unwrap())),
+                ("TYPE_HISTORY_PRIVATE_SNAPSHOT", Some("1")),
+            ],
         ),
         "InputsChanged",
     );

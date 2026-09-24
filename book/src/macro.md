@@ -4,7 +4,7 @@ The shop's [V2 declaration](quick-start.md#3-add-a-field-in-v2) contains `amount
 
 The original name, `ReceiptCreated`, becomes an alias for V2. Application code uses that alias; conversion functions name the earlier type they read.
 
-A new history starts at V1, even when no field has a history attribute. Later version numbers come from field changes. Several fields can change in the same version.
+A new history starts at V1, even when no field has a history attribute. [Imported histories](lifecycle.md#import-a-complete-history) also start at V1. Later version numbers come from field changes. Several fields can change in the same version.
 
 ## Generated items
 
@@ -19,7 +19,6 @@ A new history starts at V1, even when no field has a history attribute. Later ve
 | `History<ReceiptCreated>` | Lists supported versions and decodes their JSON payloads into the current `ReceiptCreated` |
 
 The alias and numbered structs keep the declaration's visibility. A `pub struct ReceiptCreated` produces public numbered types and a public alias.
-[Imported histories](lifecycle.md#import-a-complete-history) also start at V1.
 
 ## Traits and declaration attributes
 

@@ -73,7 +73,7 @@ checksum = "fc652a48c352aef3ea3aed32080501cf3ef6ed5da78602a020c991775b0aff04"
 
 [[package]]
 name = "cargo-type-history"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "rustix",
  "serde_json",
@@ -835,7 +835,7 @@ checksum = "ab16f14aed21ee8bfd8ec22513f7287cd4a91aa92e44edfe2c17ddd004e92607"
 
 [[package]]
 name = "type-history"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -846,7 +846,7 @@ dependencies = [
 
 [[package]]
 name = "type-history-build"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "rustix",
  "serde",
@@ -861,7 +861,7 @@ dependencies = [
 
 [[package]]
 name = "type-history-codegen"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -875,7 +875,7 @@ dependencies = [
 
 [[package]]
 name = "type-history-core"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "chrono",
  "rust_decimal",
@@ -890,7 +890,7 @@ dependencies = [
 
 [[package]]
 name = "type-history-macros"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "proc-macro-crate",
  "proc-macro2",

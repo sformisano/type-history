@@ -68,16 +68,17 @@ pub fn run_with_check<M: Clone + Eq + Serialize + DeserializeOwned>(
         .iter()
         .filter_map(|path| path.canonicalize().ok())
         .collect::<Vec<_>>();
-    let snapshot = match Snapshot::create(&metadata, &extra, contract).and_then(|snapshot| {
-        snapshot.verify_graph(&metadata, &options)?;
-        Ok(snapshot)
-    }) {
-        Ok(snapshot) => snapshot,
-        Err(error) => {
-            report.errors.push(operation_error(error));
-            return emit(report, json);
-        }
-    };
+    let snapshot =
+        match Snapshot::create_reusable(&metadata, &extra, contract).and_then(|snapshot| {
+            snapshot.verify_graph(&metadata, &options)?;
+            Ok(snapshot)
+        }) {
+            Ok(snapshot) => snapshot,
+            Err(error) => {
+                report.errors.push(operation_error(error));
+                return emit(report, json);
+            }
+        };
     let mut packages = match workspace::select_captured(
         &metadata,
         options.package.as_deref(),
@@ -191,16 +192,17 @@ fn execute_check_in<M: Clone + Eq + Serialize + DeserializeOwned>(
     let snapshot = match shared {
         Some(snapshot) => snapshot,
         None => {
-            owned = match Snapshot::create(metadata, &extra, contract).and_then(|snapshot| {
-                snapshot.verify_graph(metadata, options)?;
-                Ok(snapshot)
-            }) {
-                Ok(snapshot) => snapshot,
-                Err(error) => {
-                    result.diagnostics.push(operation_error(error));
-                    return result;
-                }
-            };
+            owned =
+                match Snapshot::create_reusable(metadata, &extra, contract).and_then(|snapshot| {
+                    snapshot.verify_graph(metadata, options)?;
+                    Ok(snapshot)
+                }) {
+                    Ok(snapshot) => snapshot,
+                    Err(error) => {
+                        result.diagnostics.push(operation_error(error));
+                        return result;
+                    }
+                };
             &owned
         }
     };

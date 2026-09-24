@@ -63,11 +63,11 @@ a separate target directory to avoid watching build output. Custom generators
 must report their own input files through Cargo's build-script directives.
 
 Lifecycle snapshots preserve Cargo's resolved workspace boundaries, including
-standalone packages excluded from an ancestor workspace. Temporary output can
-live beneath that ancestor without making the copied package join it.
-Changes to ancestor workspace manifests during validation invalidate the
-snapshot. Workspace lookup ignores unrelated Cargo settings above temporary
-output while preserving the caller's selected toolchain.
+standalone packages excluded from an ancestor workspace. A snapshot can live
+beneath that ancestor, as it does in Cargo's target directory, without making the
+copied package join it. Changes to ancestor workspace manifests during validation
+invalidate the snapshot. Workspace lookup ignores unrelated Cargo settings above
+the snapshot directory while preserving the caller's selected toolchain.
 
 ## Nested records
 
@@ -252,7 +252,7 @@ The facade has no default features. Enable only the integrations a record uses:
 
 ```toml
 [dependencies]
-type-history = { version = "=0.3.0", features = ["uuid", "rust-decimal", "time"] }
+type-history = { version = "=0.3.1", features = ["uuid", "rust-decimal", "time"] }
 ```
 
 These features were introduced in 0.2.0. See

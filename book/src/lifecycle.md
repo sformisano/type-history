@@ -78,8 +78,7 @@ For a package with an alternative `backend-alt` feature:
 cargo type-history check --package my-shop-demo-project --no-default-features --features backend-alt
 ```
 
-Selected features must still preserve every frozen schema. These options select
-consumer features for metadata, schema export, and compilation.
+Selected features must still preserve every frozen schema.
 
 If you call the build library directly, `LifecycleOptions::no_default_features` controls the same choice. Set it to `false` to keep package defaults or `true` to disable them. `workspace::metadata(features)` keeps package defaults; `options::parse` reads the command-line selection.
 
@@ -237,7 +236,7 @@ current before reporting success.
 
 Recovery depends on whether the replacement happened:
 
-- **Before replacement:** A busy lock, changed input, or validation failure leaves
+- **Before replacement:** A busy package lock, changed input, or validation failure leaves
   the ledger unchanged. Temporary candidate files can be discarded.
 - **After replacement:** The error includes `COMMITTED`. Inspect the live ledger
   before retrying because the operation has already changed it.
@@ -275,16 +274,16 @@ output is cached. Builds do not freeze, repair, or rewrite the ledger.
 ### Package configuration
 
 - A consumer needs a library target, the `build.rs` hook, and an initialized ledger.
-  Depending on the runtime alone does not enable ledger checks.
+  Without the hook, history declarations fail to compile.
 - The ledger lives at `type-history/schemas.json`; its location is fixed.
-- No `links` value, manifest metadata, or second declaration file is needed.
+- No `links` value or second declaration file is needed; manifest metadata is needed only for `snapshot-inputs`.
 - `check` without `--package` selects workspace libraries containing the ledger.
   Use `check --package NAME` to check a specific library, including a missing-ledger failure.
 
 ### Variables used by tooling
 
-The build hook sets `TYPE_HISTORY_LEDGER_PATH`, `TYPE_HISTORY_SCHEMA_ID_PREFIX`, and
-`TYPE_HISTORY_AUTHORITY_KIND`. Do not set them yourself.
+The build hook sets `TYPE_HISTORY_LEDGER_PATH`, `TYPE_HISTORY_SCHEMA_ID_PREFIX`,
+`TYPE_HISTORY_AUTHORITY_KIND`, and `TYPE_HISTORY_ADMISSION`. Do not set them yourself.
 
 `TYPE_HISTORY_SCHEMA_EXPORT` is used by export tooling.
 It must be unset or `1`. Only a non-strict development test build can observe
@@ -292,3 +291,8 @@ changed frozen shapes. Non-test builds retain their shape assertions. Release
 and explicit strict builds reject export, including when every version is frozen.
 Lifecycle export uses a captured copy of development sources. Forced Cargo
 environment settings remain effective; conflicting forced settings fail.
+
+`TYPE_HISTORY_PRIVATE_SNAPSHOT` must be unset or `1`. With `1`, each lifecycle
+command builds in a private temporary snapshot instead of reusing
+`type-history-snapshot` in Cargo's target directory; see
+[package setup](setup.md#3-initialize-the-schema-file). Other values fail the command.

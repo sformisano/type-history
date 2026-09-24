@@ -19,13 +19,16 @@ mod cargo_config;
 mod exclusions;
 mod graph;
 mod manifest;
+mod reuse;
 #[cfg(test)]
 mod tests;
 
 /// Owned immutable capture of the Cargo graph and effective configuration.
 pub struct Snapshot {
-    _owner: TempDir,
-    /// Disposable compiled output owned by this capture.
+    _owner: Owner,
+    /// Compiled output for this capture. [`Snapshot::create`] removes it with the
+    /// snapshot. Lifecycle operations normally build in `type-history-snapshot/target`
+    /// inside Cargo's target directory and keep only dependency output between them.
     pub target: PathBuf,
     /// Isolated Cargo configuration sharing only cache data and locks.
     pub cargo_home: PathBuf,
@@ -46,6 +49,28 @@ pub struct Snapshot {
     environment: Vec<(OsString, OsString)>,
     compiler: Vec<u8>,
 }
+
+// Directory holding the mirror, isolated Cargo home, and compiled output.
+enum Owner {
+    Private(TempDir),
+    Reusable(reuse::Reusable),
+}
+impl Owner {
+    fn private() -> Result<Self> {
+        Ok(Self::Private(
+            TempBuilder::new()
+                .prefix("type-history-schema-")
+                .tempdir_in(env::temp_dir().canonicalize()?)?,
+        ))
+    }
+    fn path(&self) -> &Path {
+        match self {
+            Self::Private(owner) => owner.path(),
+            Self::Reusable(owner) => owner.path(),
+        }
+    }
+}
+
 impl Snapshot {
     /// Capture and verify all local Cargo inputs before a candidate is written.
     pub fn create(
@@ -53,9 +78,32 @@ impl Snapshot {
         extra: &[PathBuf],
         contract: &ToolContract,
     ) -> Result<Self> {
-        let owner = TempBuilder::new()
-            .prefix("type-history-schema-")
-            .tempdir_in(env::temp_dir().canonicalize()?)?;
+        Self::capture(metadata, extra, contract, Owner::private()?)
+    }
+
+    /// Capture for a lifecycle operation. Dependencies compiled by earlier
+    /// operations stay reusable; every local input is copied and rebuilt.
+    pub(crate) fn create_reusable(
+        metadata: &CargoMetadata,
+        extra: &[PathBuf],
+        contract: &ToolContract,
+    ) -> Result<Self> {
+        if let Some(owner) = reuse::Reusable::acquire(metadata)? {
+            // A target filesystem the capture cannot use falls back to a private
+            // snapshot; input errors recur there and are reported.
+            if let Ok(snapshot) = Self::capture(metadata, extra, contract, Owner::Reusable(owner)) {
+                return Ok(snapshot);
+            }
+        }
+        Self::capture(metadata, extra, contract, Owner::private()?)
+    }
+
+    fn capture(
+        metadata: &CargoMetadata,
+        extra: &[PathBuf],
+        contract: &ToolContract,
+        owner: Owner,
+    ) -> Result<Self> {
         let mirror = owner.path().join("tree");
         let workspace_root = metadata.workspace_root.canonicalize()?;
         let mut roots = Vec::new();

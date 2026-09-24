@@ -31,15 +31,17 @@ retains descriptive JSON Schema output and custom field adapters.
 A configured `observation_cfg` suppresses shape assertions only when both that
 cfg and `test` are active. The frontend build hook must reject observation in
 strict and release builds. `ToolContract` and `LifecycleOps` keep each frontend's
-configuration, metadata, discovery, and ledger operations separate.
+configuration, metadata, discovery, and ledger operations separate. Lifecycle
+snapshots for every frontend share `type-history-snapshot` and
+`TYPE_HISTORY_PRIVATE_SNAPSHOT`; neither depends on the contract.
 
 `Declaration::with_source` attaches optional `DeclarationSource` metadata.
 Locations use one-based lines and columns from source discovery. Rich differences
 point to the containing authored field, with the declaration as fallback.
 `Declaration::resolve` leaves `source` empty for frontends without this metadata.
 
-The generator support API removes the unused `SameSchema` trait family and the
-const diagnostic encoder and marker parser. `WireNode::schema()` defaults to
+Since 0.3.0, the generator support API no longer includes the `SameSchema` trait
+family, the const diagnostic encoder, or the marker parser. `WireNode::schema()` defaults to
 `Self::SHAPE.schema()`; explicit implementations remain available. The ephemeral
 standalone export uses V2 shape rows. Frozen ledger format, schema identities,
 stored payload meanings, static stable-name access, and canonical serialization

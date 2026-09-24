@@ -6,7 +6,7 @@ This reference explains the attributes used in the [receipt walkthrough](quick-s
 
 - **Additions:** An attribute records which version introduced a field and what
   backfill value to use when reading older records.
-- **Type changes:** An attribute records which version changed a field’s type and
+- **Type changes:** An attribute records which version changed a field's type and
   specifies a conversion from the old type to the new type.
 - **Renames:** You mark the old field as removed and add the new field in the same
   version. A conversion reads the whole previous record and returns the value for
@@ -42,15 +42,16 @@ Every addition or update requires exactly one of these two rules:
 
 | Change | Required rule | Conversion signature |
 | --- | --- | --- |
-| Addition | One backfill value or one record callback | `fn(&InvoiceVn) -> Result<AddedType, E>` for a callback |
-| Update | One backfill value or one record callback, plus `previous_type` | `fn(&InvoiceVn) -> Result<Destination, E>` for a callback |
+| Addition | One backfill value or one record callback | `fn(&InvoiceV{N-1}) -> Result<AddedType, E>` for a callback |
+| Update | One backfill value or one record callback, plus `previous_type` | `fn(&InvoiceV{N-1}) -> Result<Destination, E>` for a callback |
 | Removal | None | None; record callbacks can still read the removed field from the previous version |
 
+A callback for a change in `vN` borrows the previous version, `InvoiceV{N-1}`; a V2 callback reads `InvoiceV1`.
 `E` must implement `std::error::Error + Send + Sync + 'static`.
 Return `Ok(value)` when a conversion cannot fail.
 
 The `ReceiptCreated` event examples on this page are separate changes to the [V2 declaration](quick-start.md#3-add-a-field-in-v2).
-Each demonstrates a possible V3. The invoice fragments use the [invoice guide](guide.md).
+Each demonstrates a possible V3. The invoice fragments come from the [invoice guide](guide.md).
 
 An optional field still needs an explicit value for older data. Adding a reference in V3 could use `None`:
 

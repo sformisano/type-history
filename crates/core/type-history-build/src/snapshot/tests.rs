@@ -1,5 +1,5 @@
 //! Deterministic edit/copy/undo probes do not depend on filesystem timing.
-use super::{cargo_cache_roots, cargo_config, declared_snapshot_inputs, Snapshot};
+use super::{cargo_cache_roots, cargo_config, declared_snapshot_inputs, Owner, Snapshot};
 use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::OsString;
 use std::fs;
@@ -35,7 +35,7 @@ fn fixture() -> Snapshot {
         before: BTreeMap::new(),
         environment: Vec::new(),
         compiler: Vec::new(),
-        _owner: owner,
+        _owner: Owner::Private(owner),
     }
 }
 
@@ -450,7 +450,7 @@ fn workspace_local_snapshot_owner_is_excluded_without_ignoring_neighboring_input
         .tempdir_in(&temporary)
         .unwrap();
     // Retain the fixture source owner separately from the nested snapshot owner.
-    let _source_owner = std::mem::replace(&mut snapshot._owner, owner);
+    let _source_owner = std::mem::replace(&mut snapshot._owner, Owner::Private(owner));
     snapshot.mirror = snapshot._owner.path().join("tree");
     let neighbor = temporary.join("user-input.txt");
     fs::write(&neighbor, "captured").unwrap();

@@ -1,6 +1,7 @@
 //! Public lifecycle coverage for captured Cargo inputs and read-only consumers.
 
-use super::support::{failure, success, Fixture, LEDGER, V2};
+use super::support::{failure, success, Fixture, LEDGER, STABLE_NAME, V1, V2};
+use serde_json::json;
 use std::env;
 use std::ffi::OsString;
 use std::fs::{self, Permissions};
@@ -378,4 +379,104 @@ fn cargo_home() -> PathBuf {
 #[cfg(unix)]
 fn quote(path: &Path) -> String {
     format!("'{}'", path.to_str().unwrap().replace('\'', "'\\''"))
+}
+
+#[test]
+fn lifecycle_snapshots_reuse_a_locked_target_without_hiding_changes() {
+    let fixture = Fixture::frozen();
+    let ledger = fixture.read(LEDGER);
+    // A target inside the workspace isolates this reuse state and its copies.
+    let target = fixture.root().join("reuse-target");
+    let root = target.join("type-history-snapshot");
+    let check = |environment: &[(&str, Option<&str>)]| {
+        let mut all = vec![("CARGO_TARGET_DIR", Some(target.to_str().unwrap()))];
+        all.extend_from_slice(environment);
+        fixture.cli_env(&["check"], &all)
+    };
+    let entries = || {
+        let mut names: Vec<OsString> = fs::read_dir(&root)
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name())
+            .collect();
+        names.sort();
+        names
+    };
+    // Only a target directory that Cargo already created is reused.
+    success(&check(&[]));
+    assert!(!target.exists());
+    // Like the strict switches, the setting only accepts `1`.
+    failure(
+        &check(&[("TYPE_HISTORY_PRIVATE_SNAPSHOT", Some("0"))]),
+        "TYPE_HISTORY_PRIVATE_SNAPSHOT must be unset or exactly 1",
+    );
+    fs::create_dir(&target).unwrap();
+    success(&check(&[]));
+    // Copies and the isolated Cargo home end with the operation; output stays.
+    assert_eq!(entries(), ["lock", "target"]);
+    let state = |package: &str| {
+        fs::read_dir(root.join("target/debug/.fingerprint"))
+            .unwrap()
+            .map(|entry| entry.unwrap().path())
+            .find(|path| {
+                path.file_name()
+                    .and_then(|name| name.to_str())
+                    .and_then(|name| name.rsplit_once('-'))
+                    .is_some_and(|(name, _)| name == package)
+            })
+            .unwrap_or_else(|| panic!("Cargo state for {package}"))
+            .join("reuse-marker")
+    };
+    let local = state(PACKAGE);
+    let dependency = state("serde");
+    fs::write(&local, "").unwrap();
+    fs::write(&dependency, "").unwrap();
+
+    // The warm target still observes edited source and ledger authority.
+    fixture.write("src/lib.rs", &V1.replace("u32", "String"));
+    failure(&check(&[]), "frozen");
+    // Local packages rebuild from every new copy; dependencies are reused.
+    assert!(!local.exists());
+    assert!(dependency.exists());
+    fixture.write("src/lib.rs", V1);
+    success(&check(&[]));
+    let mut changed = fixture.ledger();
+    changed[STABLE_NAME]["1"]["schema"]["properties"]["count"] =
+        json!({"type": "integer", "minimum": 0, "format": "uint64"});
+    fixture.set_ledger(&changed);
+    failure(&check(&[]), "frozen");
+    fixture.write(LEDGER, &ledger);
+    success(&check(&[]));
+
+    // A busy target gives the operation a private snapshot instead of waiting.
+    let lock = fs::File::options()
+        .read(true)
+        .write(true)
+        .open(root.join("lock"))
+        .unwrap();
+    lock.try_lock().unwrap();
+    // Copies left by an interrupted operation stay untouched while locked.
+    for leftover in ["tree", "cargo-home"] {
+        fs::create_dir(root.join(leftover)).unwrap();
+        fs::write(root.join(leftover).join("stale"), "interrupted").unwrap();
+    }
+    let scratch = TempBuilder::new()
+        .prefix("reuse-scratch-")
+        .tempdir()
+        .unwrap();
+    success(&check(&[(
+        "TMPDIR",
+        Some(scratch.path().to_str().unwrap()),
+    )]));
+    assert_eq!(fs::read_dir(scratch.path()).unwrap().count(), 0);
+    for leftover in ["tree", "cargo-home"] {
+        assert_eq!(
+            fs::read_to_string(root.join(leftover).join("stale")).unwrap(),
+            "interrupted"
+        );
+    }
+    drop(lock);
+    // The next holder removes them before capturing again.
+    success(&check(&[]));
+    assert_eq!(entries(), ["lock", "target"]);
+    assert_eq!(fixture.read(LEDGER), ledger);
 }

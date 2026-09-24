@@ -17,6 +17,7 @@
 - JSON and named-field MessagePack preserve admitted float bits, decimal scale, temporal nanoseconds, and offsets.
 - `derive_debug` and `derive_partial_eq` control those generated traits for every retained version. Both default to `true`.
 - Lifecycle commands capture local package roots, workspace manifests, lockfiles, effective Cargo configuration, and declared snapshot inputs.
+- Lifecycle commands copy every local input again for each operation. Under an exclusive lock they build in `type-history-snapshot` inside Cargo's existing target directory and reuse only dependency output; Cargo state for local packages is removed first. Contention, a missing target directory, an unusable `type-history-snapshot` directory, or `TYPE_HISTORY_PRIVATE_SNAPSHOT=1` selects a private temporary snapshot; any other value of that variable fails the command.
 - Frozen schema documents derive from compiler-resolved structural shapes. Descriptive schema exports retain container, field, and variant documentation.
 - Lifecycle checks observe source shapes in a dedicated development test build, then compare them with committed and released authority.
 - JSON reports identify observed source differences as `current_ledger` and include discovered source locations when available.
@@ -27,7 +28,8 @@
 - `crates/core/type-history-core` owns storage contracts, adapters, and versioned decoding.
 - `crates/core/type-history-codegen` owns declaration parsing, frozen checks, diagnostics, and generated code.
 - `crates/core/type-history-macros` exposes `versioned` and `Schema`.
-- `crates/core/cargo-type-history` owns ledger lifecycle commands and standalone consumer coverage.
+- `crates/core/type-history-build` owns the build hook, lifecycle operations, snapshot capture and reuse, and JSON check reports.
+- `crates/core/cargo-type-history` provides the `cargo type-history` command and standalone consumer coverage.
 - `book/src/integration.md` defines supported field contracts and codec limits.
 - `book/src/evolution-matrix.md` records supported and rejected evolution cases.
 

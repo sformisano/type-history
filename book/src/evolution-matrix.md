@@ -27,12 +27,12 @@ whether a test has run.
 | M06 | Added field with no backfill | R | A backfill is required even for `Option<T>` and types that implement `Default` |
 | M07 | Construct the current struct with a field omitted | R | Construction still requires every field; backfills only supply values when converting historical records |
 | M08 | Added field later changes type | S | The addition's backfill returns the field's type when it first appeared, reconstructed from the earliest later update's `previous_type` |
-| M09 | One type update | S | updated_in, previous_type=previous type, exactly one backfill_value or backfill_fn |
+| M09 | One type update | S | Use `updated_in` with `previous_type` set to the previous type and exactly one `backfill_value` or `backfill_fn` |
 | M10 | Repeated updates | S | Newest-first records reconstruct every intermediate type, including multi-version spans |
-| M11 | Update keeps same type | S | Explicit previous_type=same type and callback executes semantic conversion |
+| M11 | Update keeps same type | S | Explicit `previous_type` set to the same type; the callback performs the semantic conversion |
 | M12 | Type alias changes spelling only | S | Resolved same shape passes frozen checks; ordinary Rust checks callback compatibility |
 | M13 | Retained nested/newtype wire shape edited in place | R | Resolved frozen shape fails; preserve old type, introduce new type and field update |
-| M14 | Removed field | S | removed_in exclusive, no callback; declaration retained for older payloads |
+| M14 | Removed field | S | `removed_in` is exclusive and takes no callback; the declaration stays for older payloads |
 | M15 | Last field removed | S | The latest struct is empty; callbacks can still read the old value before it is dropped |
 | M16 | Field added, updated several times, then removed | S | A field has one lifetime; write its history records newest first |
 | M17 | Field rename | S | Old name removed and distinct new name added at same step; payload callback reads/clones old field |
@@ -40,10 +40,10 @@ whether a test has run.
 | M19 | One old field split into two | S | Each destination has payload callback; both see intact predecessor, can call shared pure helper |
 | M20 | Several new fields derived from old values | S | Every callback reads the previous record; none can read another callback's output |
 | M21 | Several backfill functions read the same field | S | Every callback borrows the intact previous record before unchanged fields move |
-| M22 | Fallible contextual addition | S | backfill_fn returns Result; first failure stops this conversion chain |
-| M23 | Fallible update | S | backfill_fn borrows the complete previous struct and returns `Result<destination, E>` |
-| M24 | Infallible contextual update | S | Function returns Ok(value) using supported error type |
-| M25 | Fallible backfill expression | R | backfill_value is destination value, not Result; use payload callback for failure |
+| M22 | Fallible contextual addition | S | `backfill_fn` returns `Result`; the first failure stops this conversion chain |
+| M23 | Fallible update | S | `backfill_fn` borrows the complete previous struct and returns `Result<destination, E>` |
+| M24 | Infallible contextual update | S | The function returns `Ok(value)` with a supported error type |
+| M25 | Fallible backfill expression | R | `backfill_value` is the destination value, not a `Result`; use a payload callback for failure |
 | M85 | Backfill expression uses `return` or `?` | S/R | The expression runs in a closure returning the field type. `return` exits that closure; `?` must be valid for its return type and cannot propagate an error out of the generated conversion |
 | M26 | Callback takes an unknown or wrong previous type | R | Rust rejects the call from the generated conversion |
 | M27 | Wrong callback output or borrowed output | R | Output must be owned exact destination field type |
@@ -70,10 +70,10 @@ whether a test has run.
 | M43 | Removed field later reintroduced with same name | U/R | Reserved historical Rust/wire name; parser rejects repeated birth/duplicate declaration |
 | M44 | Business concept reintroduced under distinct field name | S | New added_in rule; prior field remains removed and readable historically |
 | M45 | Raw identifier clashes with same canonical name | R | Canonicalize r# prefix before uniqueness and JSON key checks |
-| M46 | backfill_value plus backfill_fn | R | Exactly one backfill rule is required per addition or update |
-| M47 | Update assigns a constant | S | previous_type plus backfill_value replaces the predecessor value without reading it |
-| M48 | Removed field supplies a backfill or previous_type | R | Removal is structural only |
-| M49 | Update omits previous_type or a backfill rule | R | Both the predecessor type and one explicit backfill are required |
+| M46 | `backfill_value` plus `backfill_fn` | R | Exactly one backfill rule is required per addition or update |
+| M47 | Update assigns a constant | S | `previous_type` plus `backfill_value` replaces the predecessor value without reading it |
+| M48 | Removed field supplies a backfill or `previous_type` | R | Removal is structural only |
+| M49 | Update omits `previous_type` or a backfill rule | R | Both the predecessor type and one explicit backfill are required |
 | M50 | Unsupported history key or duplicate key | R | The macro reports the invalid key; only documented keys are accepted |
 | M52 | Serde rename/default/flatten/skip/alias/with | R | Historical decoders use the declared field names and generated serialization rules |
 | M53 | Conditional history or field declaration | R | Histories and their fields must remain visible to source discovery |

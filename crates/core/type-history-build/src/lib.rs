@@ -13,7 +13,9 @@
 //! Development builds warn about drafts. Set `TYPE_HISTORY_REQUIRE_FROZEN=1` to
 //! reject them during development too; release-derived profiles always reject
 //! drafts. The [`lifecycle`] module provides the checked operations used by the CLI
-//! to initialize, freeze, reset, and import histories.
+//! to initialize, check, freeze, reset, and import histories. They reuse compiled
+//! dependencies in `type-history-snapshot` inside Cargo's target directory;
+//! `TYPE_HISTORY_PRIVATE_SNAPSHOT=1` selects a private temporary snapshot.
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
