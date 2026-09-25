@@ -1,15 +1,15 @@
-# Field history reference
+# Evolve fields
 
 The shop added `currency` with a backfill of `"USD"`, then changed `amount_cents` from `u64` to `i64`. Both changes belong in `#[history(...)]` attributes because older receipts still need their original fields and types.
 
-This reference explains the attributes used in the [receipt walkthrough](quick-start.md), then applies them to renames and other field changes:
+This chapter explains the attributes used in the [quick start](quick-start.md), then applies them to renames and other field changes:
 
-- **Additions:** An attribute records which version introduced a field and what
-  backfill value to use when reading older records.
+- **Additions:** An attribute records which version introduced a field and how
+  older records get its value.
 - **Type changes:** An attribute records which version changed a field's type and
   specifies a conversion from the old type to the new type.
 - **Renames:** You mark the old field as removed and add the new field in the same
-  version. A conversion reads the whole previous record and returns the value for
+  version. A callback reads the whole previous record and returns the value for
   the new field.
 - **Removals:** The field stays in the history declaration, with an attribute
   recording which version removed it. Earlier versions retain it so older data
@@ -32,9 +32,9 @@ The latest boundary determines the current version; without boundaries, it is V1
 | `removed_in = vN` | Field disappears in N; keep its source declaration for earlier versions |
 | `previous_type = Old` | Required on an update; the field's type in the immediately previous version |
 | `backfill_value = expression` | Addition or update; directly supplies the destination field's value |
-| `backfill_fn = path` | Addition or update; a synchronous function borrows the complete previous record |
+| `backfill_fn = path` | Addition or update; names a callback: a synchronous function that borrows the complete previous record |
 
-## Backfill values and functions
+## Backfill values and callbacks
 
 V1 receipts have no `currency`, so reading them as V2 requires a value for that new field. The shop supplies `"USD"` through `backfill_value`. A `backfill_fn` is useful when the value depends on the previous record or the conversion can fail.
 
@@ -42,13 +42,13 @@ Every addition or update requires exactly one of these two rules:
 
 | Change | Required rule | Conversion signature |
 | --- | --- | --- |
-| Addition | One backfill value or one record callback | `fn(&InvoiceV{N-1}) -> Result<AddedType, E>` for a callback |
-| Update | One backfill value or one record callback, plus `previous_type` | `fn(&InvoiceV{N-1}) -> Result<Destination, E>` for a callback |
-| Removal | None | None; record callbacks can still read the removed field from the previous version |
+| Addition | One backfill value or one callback | `fn(&InvoiceV{N-1}) -> Result<AddedType, E>` for a callback |
+| Update | One backfill value or one callback, plus `previous_type` | `fn(&InvoiceV{N-1}) -> Result<Destination, E>` for a callback |
+| Removal | None | None; callbacks can still read the removed field from the previous version |
 
-A callback for a change in `vN` borrows the previous version, `InvoiceV{N-1}`; a V2 callback reads `InvoiceV1`.
+A callback for a change in `vN` borrows the previous version, `InvoiceV{N-1}`. A V2 callback reads `InvoiceV1`.
 `E` must implement `std::error::Error + Send + Sync + 'static`.
-Return `Ok(value)` when a conversion cannot fail.
+Return `Ok(value)` when a callback cannot fail.
 
 The `ReceiptCreated` event examples on this page are separate changes to the [V2 declaration](quick-start.md#3-add-a-field-in-v2).
 Each demonstrates a possible V3. The invoice fragments come from the [invoice guide](guide.md).
@@ -74,7 +74,7 @@ An update can replace the previous value with an expression:
 pub currency: String,
 ```
 
-This assigns `"USD"` when upgrading V2 to V3, including receipts whose V2 currency was EUR. It demonstrates a replacement expression; it would not preserve the meaning of those EUR amounts. The type author must decide whether a replacement fits the stored data.
+This assigns `"USD"` when converting V2 to V3, including receipts whose V2 currency was EUR. It demonstrates a replacement expression; it would not preserve the meaning of those EUR amounts. Decide whether a replacement fits the stored data.
 
 Both backfill forms run during historical conversion. New records must supply their own field values; a backfill is not a constructor default.
 
@@ -98,12 +98,12 @@ Read the declaration from top to bottom. The field has type `String` in V3. The 
 
 When an added field later changes type, its backfill must produce the type it
 had when first added. The next update's `previous_type` records that earlier type.
-Each backfill function borrows the complete struct from the immediately previous version.
+Each callback borrows the complete record from the immediately previous version.
 
 ## Rename, merge, or split fields
 
 Use `backfill_fn` when a new value depends on other fields.
-The conversion borrows the complete previous record and returns one destination
+The callback borrows the complete previous record and returns one destination
 field's value. For the invoice's rename, the field declarations are:
 
 <!-- reference:rename-fields.rs -->
@@ -130,16 +130,16 @@ so Type History can still read V1.
 
 The same mechanism supports:
 
-- **Merging fields:** Remove the old fields and add a field whose conversion combines their values.
-- **Splitting a field:** Remove the old field and add new fields, each with its own conversion.
-  Each conversion reads the original value from the previous record.
+- **Merging fields:** Remove the old fields and add a field whose callback combines their values.
+- **Splitting a field:** Remove the old field and add new fields, each with its own callback.
+  Each callback reads the original value from the previous record.
 
 For the rename, `label` clones the string because its input is borrowed and the new field needs to own its value. Other callbacks can still read the same V1 string. Type History runs all backfills in field declaration order before moving unchanged fields. Each callback sees the previous record's values and cannot read another callback's result.
 
 ## Changes that keep the same type
 
 A field can change meaning while keeping its Rust type. Record that change with
-`updated_in`, the same type as `previous_type`, and a conversion function. For
+`updated_in`, the same type as `previous_type`, and one backfill rule. For
 example, V3 of `ReceiptCreated` could require uppercase currency codes:
 
 <!-- reference:same-type-field.rs -->
@@ -149,7 +149,7 @@ example, V3 of `ReceiptCreated` could require uppercase currency codes:
 pub currency: String,
 ```
 
-The conversion is an ordinary function. `Infallible` is useful when it always succeeds:
+The callback is an ordinary function. `Infallible` is useful when it always succeeds:
 
 <!-- reference:same-type-callback.rs -->
 ```rust
@@ -172,7 +172,7 @@ for adding a version with no field changes.
 
 The compiler checks both the history attributes and the functions they name.
 For example, it rejects an addition without a value for older records or a
-conversion that accepts the wrong previous type.
+callback that accepts the wrong previous type.
 
 This field says when `revision` appears but leaves its earlier value undefined:
 
@@ -187,11 +187,11 @@ Each edit below applies to the [complete V2 invoice source](guide.md#v2-remove-c
 
 | Rejected edit | Diagnostic excerpt | Correction |
 | --- | --- | --- |
-| Remove `backfill_value = 7_u32` | `a history record requires` | Supply the value for earlier invoices through a backfill or record callback |
+| Remove `backfill_value = 7_u32` | `a history record requires` | Supply the value for earlier invoices through `backfill_value` or a callback |
 | Replace `previous_type = u32` with `from = u32` | `unknown history key` | Use `previous_type` |
-| Remove `backfill_fn = widen` | `a history record requires` | Supply one conversion |
-| Add a record callback beside the backfill | `exactly one of` | Choose either the backfill or the callback |
-| Change `widen(previous: &InvoiceV1)` to `widen(previous: &InvoiceV2)` | `mismatched types` | Borrow the previous struct, `&InvoiceV1` |
+| Remove `backfill_fn = widen` | `a history record requires` | Supply one backfill rule |
+| Add a callback beside the backfill value | `exactly one of` | Choose either the backfill value or the callback |
+| Change `widen(previous: &InvoiceV1)` to `widen(previous: InvoiceV1)` | `mismatched types` | Borrow the previous struct, `&InvoiceV1` |
 | Return `Result<String, ConvertError>` from `widen` | `mismatched types` | Return the V2 field type, `u64` |
 | Change `label` to accept `&InvoiceV2` | `mismatched types` | Borrow the previous version, `&InvoiceV1` |
 | Set `updated_in = v0` | `history versions are positive` | Use the next permitted positive version |

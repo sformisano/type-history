@@ -10,8 +10,8 @@
 
 # Work with histories
 
-- [Evolve fields](field-history.md)
 - [Conversions and failures: an invoice](guide.md)
+- [Evolve fields](field-history.md)
 - [Read and write versioned values](decoding.md)
 - [Freeze and manage histories](lifecycle.md)
 

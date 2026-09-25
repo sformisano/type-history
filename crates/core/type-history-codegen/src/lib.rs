@@ -2,8 +2,9 @@
 //!
 //! A procedural macro or framework that calls this crate is a *frontend*. It
 //! supplies the authored record and the package's frozen ledger. [`HistoryPlan`]
-//! reconstructs the versions from field attributes; checking that plan against
-//! the ledger produces an [`AuthorizedHistory`] ready for generation.
+//! infers the current version from field attributes.
+//! [`HistoryPlan::expand_authorized`] checks that version against the ledger, then
+//! reconstructs every retained version as an [`AuthorizedHistory`].
 //!
 //! [`generate_history`] emits numbered structs, the current alias, adjacent
 //! conversions, a JSON decoder, and frozen schema checks. Use

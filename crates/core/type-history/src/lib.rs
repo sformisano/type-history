@@ -12,10 +12,10 @@
 //!
 //! Use the alias's `into_versioned` method to create a [`Versioned`] containing
 //! the data and its generated metadata.
-//! Serialize that record with your chosen Serde format and storage. After
-//! deserialization, the alias's `from_versioned` method applies the declared
-//! conversions and returns the latest type. Application code reads and writes
-//! through that alias.
+//! Serialize that record with JSON or named-field MessagePack, and store the
+//! bytes where your application chooses. After deserialization, the alias's
+//! `from_versioned` method applies the declared conversions and returns the
+//! latest type. Application code reads and writes through that alias.
 //!
 //! After [setting up a library package](https://github.com/sformisano/type-history/blob/v0.3.1/book/src/setup.md),
 //! start the receipt history with a stable name:
@@ -42,8 +42,8 @@
 //! Install the matching 0.3.1 crates from crates.io. The [package setup guide](https://github.com/sformisano/type-history/blob/v0.3.1/book/src/setup.md)
 //! shows the matching runtime, build hook, and CLI configuration.
 //! The guide configures schema checks and initializes the ledger before any history declaration.
-//! The current setup requires Rust 1.97 or later. Linux is the tested lifecycle host.
-//! Windows and macOS have not been validated.
+//! The current setup requires Rust 1.97 or later. Type History supports Linux and
+//! macOS. Windows is not supported.
 //! The [book](https://github.com/sformisano/type-history/blob/v0.3.1/book/README.md)
 //! links to field rules, lifecycle commands, and error handling.
 //!
@@ -78,8 +78,8 @@
 //! `Eq`, `Hash`, or `Ord`. A membership change requires a versioned field update.
 //! Bare tuples support arities 1 through 16. Owned `Box` values preserve the inner
 //! contract; feature `rc` adds `Rc` and `Arc` by value.
-//! Histories containing tuples above arity 12 can disable generated native traits
-//! with `derive_debug = false` and `derive_partial_eq = false`.
+//! Histories containing tuples above arity 12 must set `derive_debug = false`
+//! and `derive_partial_eq = false`.
 //!
 //! Optional features `typed-floats`, `uuid`, `rust-decimal`, `chrono`, and `time`
 //! add finite numeric types and checked [`adapters`]. Defaults are empty. Adapters

@@ -1,10 +1,10 @@
-# What the macro generates
+# Generated API and stable names
 
 The shop's [V2 declaration](quick-start.md#3-add-a-field-in-v2) contains `amount_cents` and `currency`. Its history attribute says that `currency` was added in V2. From that declaration, the macro generates V1 without `currency`, V2 with both fields, and a conversion that supplies `"USD"` for old receipts.
 
-The original name, `ReceiptCreated`, becomes an alias for V2. Application code uses that alias; conversion functions name the earlier type they read.
+The original name, `ReceiptCreated`, becomes an alias for V2. Application code uses that alias. Callbacks name the earlier type they read.
 
-A new history starts at V1, even when no field has a history attribute. [Imported histories](lifecycle.md#import-a-complete-history) also start at V1. Later version numbers come from field changes. Several fields can change in the same version.
+A new history starts at V1, even when no field has a history attribute. [Imported histories](lifecycle.md#import-a-complete-history) also start at V1. Later version numbers come from field changes. Until V1 is frozen, builds reject a field that declares a later version. Several fields can change in the same version.
 
 ## Generated items
 
@@ -23,8 +23,8 @@ The alias and numbered structs keep the declaration's visibility. A `pub struct 
 ## Traits and declaration attributes
 
 The macro always generates `Clone` for every version, including versions used
-only to read old data. Each retained field type therefore needs `Clone`,
-serialization, and schema support.
+only to read old data. Each retained field type therefore needs `Clone`. It also
+needs Serde's `Serialize` and `Deserialize`, plus schema support.
 
 `Debug` and `PartialEq` are enabled by default. Generated implementations call
 the native field traits, so custom field behavior remains intact.
@@ -54,9 +54,9 @@ Disabling one trait removes its generated implementation and field bound.
 It does not create a fallback implementation. It also does not change schema
 identity, frozen ledgers, payload bytes, codecs, or migrations.
 
-Frontends that construct `type_history_codegen::RecordInput` directly must set
-its `derives: RecordDerives` field. Use `RecordDerives::default()` to keep both
-traits enabled.
+[Frontends](crates.md) that construct `type_history_codegen::RecordInput`
+directly must set its `derives: RecordDerives` field. Use
+`RecordDerives::default()` to keep both traits enabled.
 
 See [supported field contracts](integration.md#supported-field-contracts) for
 tuple, set, adapter, and codec limits.
@@ -64,7 +64,7 @@ tuple, set, adapter, and codec limits.
 The macro owns the generated implementations, so do not add derives to the history
 declaration. You can add documentation and `allow`, `warn`, or `deny` attributes.
 Put field naming lints on the record, following Rust's usual lint scope.
-Other attributes that transform the declaration are unsupported.
+Fields also accept `#[history(...)]`. Every other attribute is rejected.
 
 ## Stable names
 
@@ -98,4 +98,4 @@ Every generated history follows these rules:
   older records. Type History cannot infer that choice from the field's type.
 
 The ledger is needed when building the application. The running application uses
-generated types and conversion functions, so it needs neither the ledger nor Cargo.
+generated types and conversions, so it needs neither the ledger nor Cargo.

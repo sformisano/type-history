@@ -15,7 +15,7 @@ pub struct ToolContract {
     pub strict_env: &'static str,
     /// Compiler export switch.
     pub export_env: &'static str,
-    /// Prefix identifying generated export records.
+    /// Prefix identifying generated export rows.
     pub export_marker: &'static str,
     /// Test-name filter selecting generated exports.
     pub export_test_filter: &'static str,

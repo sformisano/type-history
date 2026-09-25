@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Document Linux and macOS as the supported platforms. Windows is not supported.
+- Correct documentation that disagreed with the code, including the package-root location of `build.rs`, lifecycle recovery steps, and accepted declaration attributes.
+
 ## 0.3.1
 
 - Reuse compiled dependencies between lifecycle commands through a locked `type-history-snapshot` directory in Cargo's target directory. Every command still copies and rebuilds local packages; a busy directory, a missing target directory, or `TYPE_HISTORY_PRIVATE_SNAPSHOT=1` selects a private temporary snapshot.

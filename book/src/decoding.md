@@ -1,8 +1,8 @@
-# Decode stored records and handle failures
+# Read and write versioned values
 
 The shop needs to write new receipts and read receipts already in storage. Both operations use `ReceiptCreated`, the alias for the current type. `Versioned<ReceiptCreated>` keeps each receipt's data together with the information needed to decode it later.
 
-These examples use the shop's [V2 declaration](quick-start.md#3-add-a-field-in-v2), before the walkthrough adds V3. Place snippets containing `?` in a function that returns a compatible `Result`.
+These examples use the shop's [V2 declaration](quick-start.md#3-add-a-field-in-v2), before the walkthrough adds V3. Place snippets containing `?` in a function that returns `Result<(), Box<dyn std::error::Error>>`.
 
 Start with a new receipt for 3000 cents in EUR:
 
@@ -32,7 +32,7 @@ The generated methods need no trait imports or manually assembled metadata. Your
 The stable name is a string. The version is a positive `u32`, written as a number.
 The payload contains the fields from that historical version.
 
-For example, a V1 receipt's payload has `amount_cents` but no `currency`. The version number tells Type History to read that payload as V1. The fields can arrive in any order, including `payload` first. The decoder temporarily holds the payload until it can select the historical type, while retaining enough information to reject duplicate fields.
+For example, a V1 receipt's payload has `amount_cents` but no `currency`. The version number tells Type History to read that payload as V1. The wrapper fields can arrive in any order, including `payload` first. The decoder temporarily holds the payload until it can select the historical type, while retaining enough information to reject duplicate fields.
 
 JSON supports this representation. MessagePack supports it with
 [`to_vec_named`](https://docs.rs/rmp-serde/1.3.1/rmp_serde/encode/fn.to_vec_named.html),
@@ -50,15 +50,15 @@ This fragment assumes a `ReceiptCreated` event named `receipt`, an `rmp-serde`
 dependency, and a function that propagates errors.
 Use `serde_json::to_vec` and `serde_json::from_slice` for the equivalent JSON path.
 
-Use `to_vec_named` for MessagePack because the decoder needs field names. MessagePack's default struct-array encoding omits them and is rejected. Any other Serde format must support both named record maps and the field types in the history.
+Use `to_vec_named` for MessagePack because the decoder needs field names. MessagePack's default struct-array encoding omits them and is rejected. Other Serde formats are outside the [codec guarantees](integration.md#codec-guarantees). A format must at least be self-describing, write records as named maps, and support the history's field types.
 
 Type History enables `serde_json`'s `arbitrary_precision` feature so buffering retains 128-bit integers. That feature has a parsing limitation: `{"$serde_json::private::Number":"42"}` can also be read as an integer field. Serde exposes that object and a buffered JSON number through the same representation.
 
 ## Inspect the stored version before converting
 
 Deserializing selects the historical type but does not run conversions.
-`from_versioned` applies the declared adjacent conversions and returns the current alias.
-You can inspect the source version before choosing to convert:
+`from_versioned` applies the declared adjacent conversions and returns a value of the current type.
+You can inspect the stored version before choosing to convert:
 
 <!-- decoding:source-version.rs -->
 ```rust
@@ -100,7 +100,7 @@ Deserializing a `Versioned` fails for:
 - Malformed input or a sequence in place of a record map.
 - Unknown fields, duplicate fields, or missing required fields.
 
-A missing supported `Option` field may decode as `None`. A required field cannot be omitted. The selected Serde format returns decoding errors; with JSON, their type is `serde_json::Error`.
+An omitted `Option<T>` field decodes as `None`. A required field cannot be omitted. The selected Serde format returns decoding errors; with JSON, their type is `serde_json::Error`.
 
 All these checks finish before a conversion can run. A newer payload is also rejected when its version is absent from the consumer's crate. See [distributed service upgrades](quick-start.md#using-type-history-in-a-distributed-system) for the resulting deployment order.
 
@@ -130,6 +130,9 @@ assert_eq!(cause.0, 13);
 
 The invoice was stored as V1, but it failed while moving from V2 to V3. The error preserves both facts. `Error::source()` also lets the application inspect the original `ConvertError(13)` returned by the callback.
 
+`error.kind()` classifies the failure. Errors from `from_versioned` always have
+the kind `DecodeFailureKind::Upcast`, a failed conversion.
+
 `DecodeError` implements `Debug`, `Display`, and `std::error::Error`.
 It does not implement `Serialize`, `Clone`, or equality traits.
 
@@ -153,6 +156,9 @@ assert_eq!(receipt.currency, "USD");
 
 This API checks the stable name and version before parsing the exact historical payload.
 It then applies adjacent conversions. `ReadError` distinguishes a stable name mismatch from `DecodeError`.
+Besides `Upcast`, that `DecodeError` can have two other kinds.
+`UnsupportedVersion` means the history does not retain the requested version.
+`Decode` means the payload does not match that version.
 The source chain preserves the original JSON or callback error when one exists.
 `ReceiptCreated::history().decode(...)` skips the stable name check; `history()` requires the `HasHistory` trait in scope.
 

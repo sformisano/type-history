@@ -28,7 +28,7 @@ use crate::{
 /// Every expansion must match a discovered module-level declaration. Undiscovered
 /// macro-generated, included, or function-local histories are rejected. Matching
 /// expansions still receive the current ledger, frozen-shape, and strict checks.
-/// Admission also checks the discovered library module and record type, so a
+/// The macro also checks the discovered library module and record type, so a
 /// copied source position cannot authorize a second expansion.
 ///
 /// # Panics
@@ -47,8 +47,9 @@ pub fn compile() {
 /// Custom integrations supply the complete source inventory and command settings.
 /// Applications normally call [`compile()`]. A custom contract whose authority
 /// kind is `standalone` also uses checked standalone source discovery and requires
-/// a matching complete inventory. Both routes publish mandatory compiler admission
-/// in Cargo's `OUT_DIR`; other authority kinds retain their own macro frontend.
+/// a matching complete inventory. Both routes write the declaration list that
+/// the macro requires to Cargo's `OUT_DIR`. Other authority kinds keep their own
+/// macro frontend.
 pub fn compile_package<M: Clone + Eq + Serialize + DeserializeOwned>(
     root: &Path,
     source: &PackageInventory<M>,

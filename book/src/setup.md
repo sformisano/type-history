@@ -1,9 +1,9 @@
 # Set up a package
 
-Before the shop can declare `ReceiptCreated`, its package needs the Type History library, a build hook, and a place to save frozen schemas. This guide creates `my-shop-demo-project`, the Cargo library used by the [receipt walkthrough](quick-start.md).
+Before the shop can declare `ReceiptCreated`, its package needs the Type History library, a build hook, and a place to save frozen schemas. This guide creates `my-shop-demo-project`, the Cargo library used by the [quick start](quick-start.md).
 
 This guide uses Type History 0.3.1 from crates.io and requires Rust 1.97 or later.
-Linux is the tested host for lifecycle commands. Windows and macOS have not been validated.
+Type History supports Linux and macOS. Windows is not supported, and lifecycle commands (`cargo type-history ...`) fail there.
 
 ## 1. Install the components
 
@@ -131,18 +131,29 @@ cargo type-history init --package my-shop-demo-project
 Use your own package's name when running these commands in an existing project.
 
 `init` creates an empty ledger at `type-history/schemas.json`. Run it before adding
-the first history declaration. It refuses to replace an existing ledger.
+the first history declaration. It refuses to replace an existing ledger. It rejects
+a package that already declares a history.
 Cargo builds require this file even when the package has no histories yet.
 The ledger also identifies initialized packages for `cargo type-history check`.
 No separate configuration file is needed. Existing `type-history.toml` files are
 ignored and can be removed.
 
-Commands such as `freeze` build a temporary copy of the package to check its schemas. They run Cargo with `--locked --offline`, so the lockfile and downloaded dependencies must already be ready. After changing dependencies, update the lockfile and fetch them before running these commands again.
+Lifecycle commands build a temporary copy of the package, called a **lifecycle snapshot**, to check its schemas. They run Cargo with `--locked --offline`, so the lockfile and downloaded dependencies must already be ready. After changing dependencies, update the lockfile and fetch them before running these commands again.
 
-Each command makes a fresh copy of the package in `type-history-snapshot` inside Cargo's target directory and removes the copy when it finishes. Compiled registry and Git dependencies stay there, so later commands rebuild only local path packages; `cargo clean` removes them. A command uses a private temporary directory instead while another command is using `type-history-snapshot`, before Cargo has created its target directory, or when `TYPE_HISTORY_PRIVATE_SNAPSHOT=1` is set. Any other value of that variable fails the command.
+Each command copies the package into `type-history-snapshot` inside Cargo's target directory and removes the copy when it finishes. Compiled registry and Git dependencies stay there, so later commands rebuild only local path packages. `cargo clean` removes those compiled dependencies.
 
-Type History captures each local Cargo package, its workspace manifest and lockfile,
-and the effective Cargo configuration. Declare any build input outside a package:
+A command builds in a private temporary directory instead when:
+
+- Another command is using `type-history-snapshot`.
+- Cargo has not created its target directory yet.
+- `type-history-snapshot` cannot be used.
+- `TYPE_HISTORY_PRIVATE_SNAPSHOT=1` is set.
+
+Any other value of `TYPE_HISTORY_PRIVATE_SNAPSHOT` fails the command.
+
+Type History copies each local Cargo package, its workspace manifest and lockfile,
+and the effective Cargo configuration. It copies a build input outside a package
+only when that package declares it:
 
 ```toml
 [package.metadata.type-history]
@@ -167,4 +178,4 @@ Commit `Cargo.toml`, `Cargo.lock`, `build.rs`, your source, and
 `type-history/schemas.json` with your project. The `.schemas.lock` file prevents
 concurrent commands from changing the ledger at the same time. It can be recreated.
 
-Continue with [declaring V1](quick-start.md#1-declare-v1).
+Continue with the [quick start](quick-start.md).

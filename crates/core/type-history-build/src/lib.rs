@@ -5,10 +5,10 @@
 //! readable. Call [`compile()`] from the application's or shared types crate's
 //! `build.rs` to enable those checks.
 //!
-//! Initialize `type-history/schemas.json` with `cargo type-history init` before
-//! declaring histories, and commit it with the source. Builds check the declared
-//! histories against that ledger and configure the macro's schema checks. They
-//! do not rewrite the ledger.
+//! Initialize `type-history/schemas.json` with
+//! `cargo type-history init --package NAME` before declaring histories, and
+//! commit it with the source. Builds check the declared histories against that
+//! ledger and configure the macro's schema checks. They do not rewrite the ledger.
 //!
 //! Development builds warn about drafts. Set `TYPE_HISTORY_REQUIRE_FROZEN=1` to
 //! reject them during development too; release-derived profiles always reject

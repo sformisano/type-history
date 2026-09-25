@@ -31,7 +31,6 @@ These types serve different purposes:
 - `ReceiptCreated` is the ordinary current type. It always has `currency` at V2.
 - `Versioned<ReceiptCreated>` holds one historical payload, conceptually one
   variant of the enum above. It may contain V1 or V2.
-- The stored version tells the deserializer which payload type to read.
 
 The generated history implementation belongs to `ReceiptCreatedV2`. Because
 `ReceiptCreated` aliases that struct, the same implementation is available through

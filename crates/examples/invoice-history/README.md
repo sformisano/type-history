@@ -1,8 +1,8 @@
 # Invoice reference application
 
-The shop example in the README follows a type one change at a time. This package
-shows a completed invoice history in a runnable application: read a stored V1 invoice as the
-current V3 type, then serialize a new invoice with its V3 metadata. It also
+The shop example in the README follows a type one change at a time. This runnable
+package contains a completed invoice history. It reads a stored V1 invoice as the
+current V3 type, then serializes a new invoice with its V3 metadata. It also
 converts a V1 payment's enum field into its current V2 form.
 
 The [declarations](src/lib.rs), [build hook](build.rs), and

@@ -1,4 +1,4 @@
-# Freezing and lifecycle commands
+# Freeze and manage histories
 
 The shop freezes V1 before adding `currency` in V2. That saves V1's schema in `type-history/schemas.json`, the **ledger**. Later builds check that the declaration still produces the same V1 structure.
 
@@ -19,8 +19,8 @@ Freezing protects the serialized structure of earlier records. For example, a fr
 - **Invalid ledger:** A missing or malformed ledger fails the build. Duplicate
   JSON keys, version gaps, and inconsistent metadata are rejected too.
 
-If a nested record or enum needs a new structure, keep its earlier definition and add a
-field update that converts it to the new type.
+If a nested record or enum needs a new structure, keep its earlier definition. Add a
+field update that converts the old value to the new type.
 
 ### What conversion tests must check
 
@@ -70,8 +70,8 @@ from your application's workspace.
   Custom target files are unsupported.
 
 `--features LIST` adds features to the package defaults. Use `--no-default-features`
-to disable those defaults. Both selections apply to Cargo metadata, schema export,
-and ordinary compilation during each lifecycle command.
+to disable those defaults. Both selections apply to Cargo metadata and to every build
+of the lifecycle snapshot.
 For a package with an alternative `backend-alt` feature:
 
 ```sh
@@ -93,60 +93,15 @@ The remaining commands handle experimental resets or imported histories.
 | `cargo type-history init --package invoice-history` | Create the ledger before any history declaration exists |
 | `cargo type-history check` | Check initialized workspace libraries without writing package files |
 | `cargo type-history check --package invoice-history` | Check one selected library |
-| `cargo type-history check --package invoice-history --released-baseline released-schemas.json` | Also preserve every history frozen in a separately supplied release ledger |
+| `cargo type-history check --package invoice-history --released-baseline released-schemas.json` | Also preserve every history frozen in a separately supplied [released ledger](#compare-with-a-released-ledger) |
 | `cargo type-history check --format json` | Report workspace checks as one JSON document |
-| `cargo type-history freeze --package invoice-history` | Freeze all ordinary drafts after validating the complete package |
-| `cargo type-history freeze --package invoice-history --type billing.invoice.issued --version 3` | Freeze exactly one ordinary draft or reset reservation |
-
-### Compare with a released ledger
-
-Ordinary builds compare source against the working ledger. To protect released
-history in CI, obtain `type-history/schemas.json` from the release you trust and
-save it separately. Supply that file when checking its package:
-
-```sh
-cargo type-history check --package invoice-history --released-baseline released-schemas.json
-```
-
-The command requires one exact package and a file distinct from its current
-ledger. It rejects missing released histories or versions, changed metadata or
-schemas, and reset reservations for released versions. The released file itself
-must contain only frozen versions. New histories and later versions are allowed.
-
-The check takes a copy of both ledgers and the source, then compares the release ledger before compiling. Editing the source and working ledger together therefore cannot hide a change to a released schema. It does not rewrite either ledger or the source, on success or failure.
-
-Workspace checks select initialized packages from one shared source copy. The
-command verifies Cargo's package graph against that copy before validation and
-checks the original inputs again after all selected packages have been checked.
-A changed package graph or input fails the command. Source files remain included
-even inside directories named `node_modules`, `.next`, `.git`, or `.schemas.lock`;
-only identified Cargo caches, Git metadata, and package lock paths are excluded.
-
-These checks detect changes by comparing inputs at specific points. They do not
-lock source files against editors, and an edit after the final comparison cannot
-be detected. Avoid editing inputs during a command; use an immutable source
-checkout when another process could change them.
-
-Your CI job chooses the trusted release file. Type History does not fetch or
-authenticate it. Ordinary builds and running applications need no release
-registry or baseline file.
-
-### Structured diagnostics
-
-Use `--format json` when another tool needs to read the results. The command writes one JSON document to stdout. A successful check exits with status 0; a failed check exits with status 2. Both `--format` and `--released-baseline` apply only to `check`.
-
-If a nested address field changes, the report identifies the history, version, and path to that field. Each difference includes a stable code, expected and actual values, a correction hint, and a source location when available. Paths distinguish fields, enum variants, tuple positions, and container elements. Missing values use JSON null. The report includes independent differences in a consistent order.
-
-The command compiles a dedicated test that records source shapes, then compares them with the committed ledger. This observation build permits frozen-shape drift so the report can describe each difference. Other compiler or input errors remain failures.
-
-Observed source differences use the `current_ledger` origin. A location points to the authored containing field when discovery identifies it, or to the history declaration otherwise. Captured paths map back to the original source. Custom frontends may omit locations.
-
-Ordinary builds still reject frozen-shape drift. A clean comparison also receives ordinary compilation. Every ledger mutation receives ordinary compilation before writing. Release and explicit strict builds reject observation mode.
+| `cargo type-history freeze --package invoice-history` | Freeze all [ordinary drafts](#iterate-and-discard-an-ordinary-draft) after validating the complete package |
+| `cargo type-history freeze --package invoice-history --type billing.invoice.issued --version 3` | Freeze exactly one ordinary draft or [reset reservation](#reset-and-undo) |
 
 ### Iterate and discard an ordinary draft
 
-WARNING: Draft edits can make development records unreadable. Freeze a version
-before relying on its representation for data you must retain.
+WARNING: Editing a draft can make records written with it unreadable. Freeze a
+version before storing data you must keep.
 
 After freezing V2, you can edit V3 repeatedly while developing its conversion.
 Each history allows one new draft at a time. Freeze V3 before adding V4.
@@ -170,7 +125,8 @@ only for disposable experimental data. Add a successor version for durable recor
 
 Reset lets you replace the highest frozen version during experiments. It is
 allowed only when there is no newer draft. The ledger keeps the original schema
-and marks that version as open for replacement, called a **reset reservation**.
+and adds `"reset_draft": true` to that version. This marker is a **reset reservation**.
+Build messages call the version a reset draft.
 
 ```sh
 cargo type-history reset --package invoice-history \
@@ -225,23 +181,86 @@ cargo type-history import --package invoice-history \
   --from imported.json
 ```
 
+### Compare with a released ledger
+
+Ordinary builds compare source against the working ledger. A reset followed by a
+freeze can change a released version's schema, and those builds still pass. To
+protect released history in CI, obtain `type-history/schemas.json` from the release
+you trust and save it as a separate file. Supply that file when checking its package:
+
+```sh
+cargo type-history check --package invoice-history --released-baseline released-schemas.json
+```
+
+The command requires one exact package and a file distinct from its working
+ledger. It rejects missing released histories or versions, changed metadata or
+schemas, and reset reservations for released versions. The released ledger itself
+must contain only frozen versions. New histories and later versions are allowed.
+
+The check copies both ledgers and the source. It compares the released ledger with the working ledger, then the working ledger with the compiled source. A change to a released schema therefore fails the first comparison, even when the source and working ledger are edited together. The check does not rewrite either ledger or the source, on success or failure.
+
+Your CI job chooses the trusted released ledger. Type History does not fetch or
+authenticate it. Ordinary builds and running applications need no released ledger.
+
+### Structured diagnostics
+
+Use `--format json` when another tool needs to read the results. The command writes one JSON document to stdout. A successful check exits with status 0; a failed check exits with status 2. Both `--format` and `--released-baseline` apply only to `check`.
+
+Each diagnostic has a stable `code` and an `origin`. It names the affected `stable_name`, `version`, and `path`, so a change inside a nested record points to that field. It also gives the `expected` and `actual` values, a correction `hint`, and a source `location` when available. The top level has `schema_version`, `command`, `ok`, `packages`, and `errors`. Each `packages` entry has `package` and `diagnostics`. Paths distinguish fields, enum variants, tuple positions, and container elements. Missing values use JSON null. The report includes independent differences in a consistent order.
+
+The command runs a dedicated test build, the **schema export build**, that records source shapes. It then compares them with the ledger. The schema export build permits frozen-shape drift so the report can describe each difference. Other compiler or input errors remain failures.
+
+Observed source differences use the `current_ledger` origin, which means the working ledger. A location points to the authored containing field when discovery identifies it, or to the history declaration otherwise. Captured paths map back to the original source. [Custom frontends](crates.md) may omit locations.
+
+Ordinary builds still reject frozen-shape drift. When the comparison finds no differences, `check` also runs `cargo check` on the lifecycle snapshot. Every command that writes the ledger runs that `cargo check` first. Release and explicit strict builds reject the schema export build.
+
+### Copied inputs
+
+Commands copy and fingerprint every file under each local package root and
+declared input, including files in `node_modules` and `.next`. They skip only:
+
+- The workspace's Cargo target directory.
+- A `target` directory created by Cargo at the top of a package or declared input.
+- Git metadata in a `.git` entry at the top of a package or declared input.
+- Each package's `type-history/.schemas.lock`.
+
+Other `target` and `.git` directories are copied.
+
+Workspace checks select initialized packages from one shared lifecycle snapshot.
+The command verifies Cargo's package graph against that snapshot before validation
+and checks the original inputs again after all selected packages have been checked.
+A changed package graph or input fails the command.
+
+Commands detect changes by comparing fingerprints at specific points. They do not
+lock source files against editors, and an edit after the final comparison cannot
+be detected. Do not edit inputs while a command runs. If another process could
+change them, use an immutable source checkout.
+
 ### Failed commands and recovery
 
-Before `freeze`, `reset`, or `import` replaces a ledger, it validates the proposed contents against a captured copy of the package. A package lock prevents another command from writing the same ledger at the same time. The command also checks that its inputs have not changed, then reads back the result before releasing the lock.
+Each `init`, `freeze`, `reset`, or `import` holds a package lock while it runs. Another of these commands for the same package fails at once with `is busy`. `check` does not take the lock. Before `freeze`, `reset`, or `import` replaces a ledger, it validates the proposed contents against its lifecycle snapshot. It also checks that its inputs have not changed, then reads back the result before releasing the lock.
 
-The lock must be a regular file; a symlink is rejected without opening its target.
-The captured ledger must match the ledger read under that lock. Commands that
-leave the ledger unchanged also verify that this original authority is still
-current before reporting success.
+The lock must be a regular file. A symlink is rejected without opening its target.
+The captured ledger must match the ledger read under that lock. Commands that leave
+the ledger unchanged also check, before reporting success, that the ledger still
+matches what they read under the lock.
 
 Recovery depends on whether the replacement happened:
 
 - **Before replacement:** A busy package lock, changed input, or validation failure leaves
-  the ledger unchanged. Temporary candidate files can be discarded.
-- **After replacement:** The error includes `COMMITTED`. Inspect the live ledger
-  before retrying because the operation has already changed it.
+  the ledger unchanged. Resolve the reported cause, then run the command again.
+- **After replacement:** The error includes `COMMITTED`. The command has already replaced
+  the ledger. Review the ledger's diff before running another command. If it holds the
+  intended change, rerunning `freeze` or `import` reports `no-op`.
 
-Each package is updated separately. These commands do not modify stored record bytes.
+An interrupted command prints no `COMMITTED` error, even when it has already replaced
+the ledger. Review the ledger's diff before running another command. An interrupted
+command can also leave a `type-history/.history-candidate-*` file, or a
+`type-history-schema-*` directory in the system temporary directory. When no command
+is running, delete them. The next command that uses `type-history-snapshot` removes
+copies left there.
+
+Each command updates one package's ledger. These commands do not modify stored record bytes.
 
 ## Build profiles and environment
 
@@ -266,7 +285,7 @@ Custom profiles follow their inherited family, regardless of optimization or `de
 
 ### When checks run
 
-Cargo builds check source and configuration against the committed ledger.
+Cargo builds check source and configuration against the ledger.
 Changes to the ledger, relevant modules, manifests, or strict settings rerun the
 checks. Compiler assertions also check changed nested dependencies when build
 output is cached. Builds do not freeze, repair, or rewrite the ledger.
@@ -285,12 +304,16 @@ output is cached. Builds do not freeze, repair, or rewrite the ledger.
 The build hook sets `TYPE_HISTORY_LEDGER_PATH`, `TYPE_HISTORY_SCHEMA_ID_PREFIX`,
 `TYPE_HISTORY_AUTHORITY_KIND`, and `TYPE_HISTORY_ADMISSION`. Do not set them yourself.
 
-`TYPE_HISTORY_SCHEMA_EXPORT` is used by export tooling.
+`TYPE_HISTORY_SCHEMA_EXPORT` selects the schema export build.
 It must be unset or `1`. Only a non-strict development test build can observe
 changed frozen shapes. Non-test builds retain their shape assertions. Release
-and explicit strict builds reject export, including when every version is frozen.
-Lifecycle export uses a captured copy of development sources. Forced Cargo
-environment settings remain effective; conflicting forced settings fail.
+and explicit strict builds reject the schema export build, including when every
+version is frozen.
+
+Lifecycle commands build the lifecycle snapshot with the `dev` profile. Cargo
+`[env]` entries still apply. An entry such as
+`TYPE_HISTORY_REQUIRE_FROZEN = { value = "1", force = true }` makes the schema
+export build fail, so `check`, `freeze`, `reset`, and `import` fail.
 
 `TYPE_HISTORY_PRIVATE_SNAPSHOT` must be unset or `1`. With `1`, each lifecycle
 command builds in a private temporary snapshot instead of reusing

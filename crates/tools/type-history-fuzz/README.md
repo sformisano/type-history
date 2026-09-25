@@ -10,7 +10,7 @@ expected result:
 | `invoice_json` | Arbitrary JSON; accepted records retain their version and values through both codecs and produce the independently expected conversion result. |
 | `invoice_msgpack` | Arbitrary MessagePack with the same checks, including binary lengths and nesting. |
 | `invoice_values` | Generated counts, strings, and revisions; all three invoice versions must decode correctly, while unsupported versions must fail. |
-| `schema_json` | Arbitrary public schema JSON; accepted shapes survive serialization and decoding, and normalizing twice gives the same result as normalizing once. |
+| `schema_json` | Arbitrary `SchemaShape` JSON; accepted shapes survive serialization and decoding, and normalizing twice gives the same result as normalizing once. |
 
 Ordinary decoding errors are expected. Panics, sanitizer findings, failed
 assertions, timeouts, and memory-limit failures stop the run and require
@@ -46,9 +46,11 @@ for target in invoice_json invoice_msgpack invoice_values schema_json; do
 done
 ```
 
-Retain any failure input and add a deterministic regression when correcting its
-cause. Replay one saved input by passing its file path in place of the corpus
-directories. Do not replace fixed historical fixtures when a serializer changes.
+When a target fails, cargo-fuzz saves the input under
+`crates/tools/type-history-fuzz/artifacts/TARGET/`. Retain it and add a
+deterministic regression when correcting its cause. Replay one saved input by
+passing its file path in place of the corpus directories. Do not replace fixed
+historical fixtures when a serializer changes.
 
 The input, time, and memory caps bound this campaign; they are not application
 support limits. A completed finite run is evidence about its explored inputs,

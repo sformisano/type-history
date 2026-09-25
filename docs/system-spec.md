@@ -13,13 +13,13 @@
 - Supported containers include vectors, fixed arrays, options, string-keyed maps, declared-membership sets, and bare tuples with 1–16 items.
 - `Box` persists its inner value. `Rc` and `Arc` do the same when the `rc` feature is enabled.
 - Optional adapters provide finite floats, UUID text, exact decimal text, and five shared temporal profiles.
-- Checked adapters expose `TryFrom`, `as_inner`, and `into_inner`. They expose no mutable native access.
+- The UUID, decimal, and temporal adapters expose `TryFrom`, `as_inner`, and `into_inner`. They expose no mutable native access.
 - JSON and named-field MessagePack preserve admitted float bits, decimal scale, temporal nanoseconds, and offsets.
 - `derive_debug` and `derive_partial_eq` control those generated traits for every retained version. Both default to `true`.
 - Lifecycle commands capture local package roots, workspace manifests, lockfiles, effective Cargo configuration, and declared snapshot inputs.
-- Lifecycle commands copy every local input again for each operation. Under an exclusive lock they build in `type-history-snapshot` inside Cargo's existing target directory and reuse only dependency output; Cargo state for local packages is removed first. Contention, a missing target directory, an unusable `type-history-snapshot` directory, or `TYPE_HISTORY_PRIVATE_SNAPSHOT=1` selects a private temporary snapshot; any other value of that variable fails the command.
+- Each lifecycle command copies every local input again. Under an exclusive lock, it builds in `type-history-snapshot` inside Cargo's existing target directory. It first removes Cargo's state for local packages, so they always rebuild from the new copy. Only dependency output is reused. Contention, a missing target directory, or an unusable `type-history-snapshot` directory selects a private temporary snapshot. `TYPE_HISTORY_PRIVATE_SNAPSHOT=1` also selects one. Any other value fails the command.
 - Frozen schema documents derive from compiler-resolved structural shapes. Descriptive schema exports retain container, field, and variant documentation.
-- Lifecycle checks observe source shapes in a dedicated development test build, then compare them with committed and released authority.
+- Lifecycle commands observe source shapes in the schema export build, a dedicated development test build. They compare those shapes with the ledger. With `--released-baseline`, `check` first compares the released ledger with the package's ledger.
 - JSON reports identify observed source differences as `current_ledger` and include discovered source locations when available.
 
 ## Repository Layout
@@ -37,10 +37,10 @@
 
 - An unchanged version must keep the complete storage contract.
 - The contract includes representation, admitted domain, field presence, profile, set membership, tuple order, and tuple arity.
-- Existing frozen ledger bytes must remain unchanged.
-- Ordinary builds enforce frozen shapes. Release and explicit strict builds reject schema observation mode.
-- A clean lifecycle comparison also receives ordinary compilation. Every candidate ledger receives ordinary compilation before an atomic write.
-- Retained payloads must remain readable with their original meaning.
+- Only an exact `reset`, and the `freeze` or `reset --undo` that closes it, may change a frozen ledger entry. Other commands and new Type History releases must leave existing entries unchanged. In a ledger written by Type History, they stay byte-for-byte identical.
+- Ordinary builds enforce frozen shapes. Release and explicit strict builds reject the schema export build.
+- After a clean comparison, `check` also runs `cargo check` on the lifecycle snapshot. Every command that writes the ledger runs that `cargo check` before its atomic write.
+- Retained payloads must remain readable. Frozen checks protect their structure. Conversion tests must protect their meaning.
 - `HashMap<String, V, S>` and `BTreeMap<String, V>` are equivalent when `V` has the same contract.
 - Sets remain distinct from sequences. Custom set elements must declare stable membership.
 - Type History trusts membership declarations. It does not prove custom equality or scan collections for duplicates.
@@ -55,14 +55,14 @@
 - `derive_debug` and `derive_partial_eq` are optional boolean `versioned` arguments.
 - `Schema` declares supporting field structure.
 - `SetMembership` and `ConstantMembership::custom` declare custom set membership.
-- `type_history::adapters` exposes checked UUID, decimal, Chrono, and Time wrappers behind features.
+- `type_history::adapters` exposes checked UUID, decimal, Chrono, and Time adapters behind features.
 - `typed-floats` adds direct support for `NonNaNFinite<f32>` and `NonNaNFinite<f64>`.
-- `Versioned` reads and writes generated history envelopes.
+- `Versioned` wraps each stored payload with its stable name and version.
 - `cargo type-history` initializes, checks, freezes, imports, resets, and undoes ledger changes.
 - Frameworks can supply payload traits and optional source locations through the shared generator and build interfaces.
 - `package.metadata.type-history.snapshot-inputs` declares relative files or directories that a package needs from outside its root.
 - Declared input snapshots bind every path-resolution component and the resolved contents; adding, removing, or retargeting a symlink invalidates the snapshot even when the resolved bytes are unchanged.
-- A relative source symlink is rejected when its unchanged target would escape the isolated snapshot.
+- A relative source symlink is rejected when its unchanged target would escape the lifecycle snapshot.
 
 ## Known Gaps / Deferred
 

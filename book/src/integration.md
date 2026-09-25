@@ -1,4 +1,4 @@
-# Integrating Type History
+# Integration and supported types
 
 The shop's receipt starts with integers and strings. Other events may need an address, a delivery status, or types declared in another module. This chapter shows how those types participate in the same historical schema checks.
 
@@ -7,7 +7,7 @@ Start with [package setup](setup.md) if the build hook and ledger are not config
 ## Modules and dependency names
 
 Put histories in ordinary Rust modules and import the macro explicitly.
-Types, conversion functions, and expressions resolve where the declaration
+Types, callbacks, and backfill expressions resolve where the declaration
 appears, including supported `self`, `super`, and `crate` paths.
 Each expansion must match the source position, library module, and record type
 discovered by the build hook. Copying a discovered declaration through `include!`
@@ -124,7 +124,8 @@ Nested types follow these additional rules:
 - Public supporting records may contain private nested field types.
 - Generated history versions and current aliases can also be nested fields,
   including through `Option`. Their schema is the selected version's structure.
-- Other Serde or Schemars attributes that change the representation are rejected.
+- The `Schema` derive accepts `#[serde(deny_unknown_fields)]` on the type. It rejects
+  every other Serde or Schemars attribute on the type, its fields, and its variants.
 - If a supporting type uses Schemars directly, use `schemars = "=1.2.2"`.
 
 ## Enum fields
@@ -189,11 +190,11 @@ fields. These supporting types do not own separate histories.
 | Kind | Supported types and contract |
 | --- | --- |
 | Scalars | `bool`, `String`, and signed or unsigned integers from 8 to 128 bits |
-| Existing containers | `Vec<T>`, arrays of lengths 0–32, and `Option<T>` |
+| Sequences and options | `Vec<T>`, arrays of lengths 0–32, and `Option<T>` |
 | Maps | `HashMap<String, V, S>` and `BTreeMap<String, V>` |
 | Sets | `HashSet<T, S>` and `BTreeSet<T>` when `T` declares stable membership |
 | Tuples | Bare tuples with 1–16 items and supporting tuple structs with at least one field |
-| Owned wrappers | `Box<T>`, plus `Rc<T>` and `Arc<T>` with the `rc` feature |
+| Owned pointers | `Box<T>`, plus `Rc<T>` and `Arc<T>` with the `rc` feature |
 | Supporting types | Named records, externally tagged enums, and nonempty tuple structs with `Schema` and matching Serde support |
 
 Array length, tuple length, and tuple position are part of the storage contract.
@@ -264,8 +265,8 @@ and CLI versions.
 | `typed-floats` | `typed_floats::NonNaNFinite<f32>` and `NonNaNFinite<f64>` | Finite JSON numbers with distinct 32-bit and 64-bit profiles |
 | `uuid` | `type_history::adapters::UuidText` | Lowercase hyphenated UUID text; all UUID bit patterns |
 | `rust-decimal` | `type_history::adapters::DecimalText` | Signed decimal text with a 96-bit coefficient and scale 0–28 |
-| `chrono` | Five wrappers in `type_history::adapters::chrono` | Shared checked date and time text profiles |
-| `time` | Five wrappers in `type_history::adapters::time` | The same checked profiles as `chrono` |
+| `chrono` | Five adapters in `type_history::adapters::chrono` | Shared checked date and time text profiles |
+| `time` | Five adapters in `type_history::adapters::time` | The same checked profiles as `chrono` |
 | `rc` | `Rc<T>` and `Arc<T>` | The inner value by value |
 
 The temporal modules expose `Date`, `LocalTime`, `LocalDateTime`, `UtcInstant`,
@@ -286,9 +287,10 @@ Its membership follows numeric equality, so `1.0` and `1.00` are equal set
 members. `OffsetDateTime` membership follows instant equality and ignores the
 retained offset. The bytes still retain scale and offset.
 
-Each wrapper provides checked `TryFrom<Native>`, `as_inner()`, and `into_inner()`.
+Each UUID, decimal, and temporal adapter provides checked `TryFrom<Native>`,
+`as_inner()`, and `into_inner()`.
 It provides no mutable native access. Native values outside the profile fail
-conversion. Native dependency Serde features cannot change the wrapper's domain,
+conversion. Native dependency Serde features cannot change the adapter's domain,
 schema, or encoding.
 
 Each profile is distinct from unrestricted `String`. The finite `f32` and `f64`
@@ -333,8 +335,8 @@ traits for their chosen collection.
 ## Codec guarantees
 
 The storage guarantees cover JSON and MessagePack with named struct fields.
-Use `rmp_serde::to_vec_named` for MessagePack. Wrapper and payload object fields
-can appear in any order when decoding.
+Use `rmp_serde::to_vec_named` for MessagePack. The three `Versioned` fields and the
+payload fields can appear in any order when decoding.
 
 Supported `Versioned` writing and decoding preserve finite float width and bits,
 including signed zero and subnormal values. They also preserve decimal
@@ -363,8 +365,8 @@ For example, these substitutions require a new version:
 Keep the previous field type in the retained version. Add an `updated_in` record
 with `previous_type` and an explicit conversion. Frozen checks do not certify
 custom conversion meaning, `Eq`, `Hash`, `Ord`, or serialization behavior.
-Existing frozen ledger bytes remain unchanged. New contract vocabulary appears
-only when a new field uses it.
+Existing frozen ledger bytes remain unchanged. Schema keywords such as
+`x-type-history-membership` appear only in entries whose fields use them.
 
 ## Unsupported scope
 

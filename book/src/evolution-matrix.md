@@ -1,9 +1,9 @@
-# Field-history evolution matrix
+# Evolution matrix
 
 Use this page to check whether a particular field change is supported. For
 example, a rename removes the old field and adds a new one whose backfill reads
-the old value. The [field history guide](field-history.md) walks through those
-changes; the [lifecycle guide](lifecycle.md) explains how to freeze them.
+the old value. [Evolve fields](field-history.md) walks through those changes.
+[Freeze and manage histories](lifecycle.md) explains how to freeze them.
 
 Supporting enums can be fields, including in supported containers. Their changes
 use the containing struct's field history rules; `#[versioned]` remains restricted
@@ -35,20 +35,20 @@ whether a test has run.
 | M14 | Removed field | S | `removed_in` is exclusive and takes no callback; the declaration stays for older payloads |
 | M15 | Last field removed | S | The latest struct is empty; callbacks can still read the old value before it is dropped |
 | M16 | Field added, updated several times, then removed | S | A field has one lifetime; write its history records newest first |
-| M17 | Field rename | S | Old name removed and distinct new name added at same step; payload callback reads/clones old field |
-| M18 | Two old fields merged | S | New destination added from payload; both old fields may be removed at same boundary |
-| M19 | One old field split into two | S | Each destination has payload callback; both see intact predecessor, can call shared pure helper |
+| M17 | Field rename | S | Old name removed and distinct new name added at same step; callback reads or clones the old field |
+| M18 | Two old fields merged | S | New destination added with a callback that combines the old values; both old fields may be removed at the same boundary |
+| M19 | One old field split into two | S | Each destination has its own callback; both see the intact predecessor and can call a shared pure helper |
 | M20 | Several new fields derived from old values | S | Every callback reads the previous record; none can read another callback's output |
-| M21 | Several backfill functions read the same field | S | Every callback borrows the intact previous record before unchanged fields move |
-| M22 | Fallible contextual addition | S | `backfill_fn` returns `Result`; the first failure stops this conversion chain |
-| M23 | Fallible update | S | `backfill_fn` borrows the complete previous struct and returns `Result<destination, E>` |
-| M24 | Infallible contextual update | S | The function returns `Ok(value)` with a supported error type |
-| M25 | Fallible backfill expression | R | `backfill_value` is the destination value, not a `Result`; use a payload callback for failure |
+| M21 | Several callbacks read the same field | S | Every callback borrows the intact previous record before unchanged fields move |
+| M22 | Fallible addition with `backfill_fn` | S | The callback returns `Result`; the first failure stops this conversion chain |
+| M23 | Fallible update | S | The callback borrows the complete previous record and returns `Result<destination, E>` |
+| M24 | Infallible update with `backfill_fn` | S | The callback returns `Ok(value)` with a supported error type |
+| M25 | Fallible backfill expression | R | `backfill_value` is the destination value, not a `Result`; use a callback for failure |
 | M85 | Backfill expression uses `return` or `?` | S/R | The expression runs in a closure returning the field type. `return` exits that closure; `?` must be valid for its return type and cannot propagate an error out of the generated conversion |
 | M26 | Callback takes an unknown or wrong previous type | R | Rust rejects the call from the generated conversion |
 | M27 | Wrong callback output or borrowed output | R | Output must be owned exact destination field type |
 | M28 | Callback error lacks required traits | R | Errors require `Error + Send + Sync + 'static` |
-| M29 | Non-Copy field | S | Unchanged fields move; backfill functions clone borrowed fields when ownership is needed |
+| M29 | Non-Copy field | S | Unchanged fields move; callbacks clone borrowed fields when ownership is needed |
 | M30 | Field lacks a trait needed by the generated struct | S/R | Retained fields always require `Clone`. They require `PartialEq` or `Debug` only when that per-history derive remains enabled |
 | M31 | Consume one old value to produce several fields without cloning | U | Callbacks borrow the previous record. There is no callback that consumes it once and returns the whole next record; helpers may clone explicitly |
 | M32 | Several outputs require one shared side effect | U | Write deterministic callbacks without side effects. Type History provides no shared callback cache, external transaction, or exactly-once guarantee |
@@ -81,7 +81,7 @@ whether a test has run.
 | M54 | Supported alias selected by a feature | S | The compiler-resolved schema for the selected features must match the frozen ledger |
 | M55 | self/super type, callback, expression, array length | S | Original invocation module and spans retained |
 | M56 | Author field names that resemble helpers (`previous`, `value`, `json`, or `__type_history_*`) | S | Generated identifiers hygienic; field names cannot shadow transition input/local bindings |
-| M57 | Unsupported field attributes | R | Accept history, documentation, and lint attributes; reject other attributes |
+| M57 | Unsupported field attributes | R | Accept `#[history(...)]`, documentation, `allow`, `warn`, and `deny`; reject every other attribute, including `expect` and `forbid` |
 | M58 | Per-version derives or Serde customization | U/R | Derive options apply to the complete history. Per-version traits and Serde customization remain unsupported |
 | M59 | Asynchronous or capturing-closure callback | R | Ordinary synchronous function path required |
 
@@ -104,7 +104,7 @@ whether a test has run.
 | M72 | Delete reset declaration or skip its version | R | Retained reservation blocks build/release; exact undo/refreeze required |
 | M73 | Dev draft vs release draft | S/R | Warning in dev; hard error in release family and strict dev |
 | M75 | Decode an old record that needs a backfill | S | Decode its historical type first, then run adjacent conversions; the current type's decoder is not tried first |
-| M76 | Omitted `Option<T>` key versus explicit `null` | S | The selected historical type follows Serde's behavior; an omitted optional field may deserialize as `None` |
+| M76 | Omitted `Option<T>` key versus explicit `null` | S | An omitted key and an explicit `null` both decode as `None` in the selected historical type |
 | M77 | Missing required field/unknown JSON key/invalid newtype | R | Exact historical decoder fails; `Versioned` returns the format's error, while low-level ordinary JSON errors retain their source |
 | M78 | Duplicate JSON object key | R | Historical decoders reject duplicates; `Versioned` rejects duplicate payload fields while buffering |
 | M79 | Requested zero/future version | R | Unsupported version, no speculative current decode |
@@ -119,11 +119,11 @@ whether a test has run.
 | M121 | Unknown struct argument | R | Only documented history argument keys are accepted |
 | M122 | Current value serialized as `Versioned<T>` | S | `into_versioned` supplies the stable name and current version; callers cannot replace metadata independently |
 | M123 | Historical `Versioned<T>` converted through current alias | S | Deserialization selects the exact retained payload; `from_versioned` applies adjacent conversions with source context |
-| M124 | Historical envelope serialized without conversion | S | Keep its historical version and matching data; wrap the converted current value to emit the latest version |
+| M124 | Historical `Versioned<T>` serialized without conversion | S | Keep its historical version and matching data; wrap the converted current value to emit the latest version |
 | M125 | Missing, duplicate, or unknown wrapper fields, wrong stable name, or invalid version | R | Require exactly `stable_name`, a positive numeric `u32` `version`, and `payload`; validate the complete wrapper and historical payload before conversion |
 | M126 | JSON or MessagePack with named fields | S | Accept wrapper fields in any order; buffer payload values without losing duplicate fields or integer precision, then use the exact historical decoder |
 | M127 | Format using payload struct arrays | U | The generated payload decoder requires maps; support depends on the format and field types |
-| M129 | Raw payload JSON supplied as a versioned envelope | R | Use the low-level decoder with separately stored metadata |
+| M129 | Raw payload JSON supplied as a `Versioned` wrapper | R | Use the low-level decoder with separately stored metadata |
 | M130 | Simple or namespaced stable name | S | `receipt_created`, `shop.receipt`, and longer dotted names are valid; each segment starts with a lowercase ASCII letter and uses only lowercase letters, digits, or underscores, within 255 bytes total |
 | M131 | Empty stable name, empty segment, or invalid characters | R | Declaration and deserialization reject invalid stable name syntax |
 | M132 | Supporting enum field, including `Option`, `Vec`, or fixed array | S | Derive `Schema` and matching Serde traits; use externally tagged unit, newtype, tuple, or named-field variants |
@@ -135,7 +135,7 @@ whether a test has run.
 | M139 | String-keyed `HashMap` and `BTreeMap` substitution | S | Equal value contracts are compatible. Hasher and iteration order do not enter the storage contract |
 | M140 | Map with a non-`String` key | R | Persisted maps require exact `String` keys |
 | M141 | `HashSet` and `BTreeSet` substitution | S/R | Element encoding and declared membership must match. Actual Rust `Eq`/`Hash`/`Ord` bounds still apply |
-| M142 | Sequence-to-set or changed custom membership | R | An unchanged version rejects the change. Add a new version and explicit migration |
+| M142 | Sequence-to-set or changed custom membership | R | An unchanged version rejects the change. Add a new version with an explicit conversion |
 | M143 | Custom set element derives only `Schema` | R | Implement `SetMembership` with a stable nonempty ID. The declaration is trusted and no duplicate scan occurs |
 | M144 | Bare tuple with 1–16 elements | S | Order and arity are durable. Rust provides standard `Debug` and `PartialEq` only through arity 12 |
 | M145 | Nonempty supporting tuple struct | S | One field keeps newtype encoding. Multiple fields keep tuple order. Unit and empty tuple structs remain unsupported |
@@ -157,10 +157,10 @@ demonstrates a current consumer with its frozen ledger.
 Generated records always require `Clone` for their fields. `Debug` and
 `PartialEq` default to enabled and delegate to native field implementations.
 Per-history options can disable either trait for every retained version.
-Backfill expressions and functions run in field declaration order.
-Functions borrow the intact predecessor before unchanged fields move into the destination.
+Backfill values and callbacks run in field declaration order.
+Callbacks borrow the intact predecessor before unchanged fields move into the destination.
 A callback may explicitly clone a value; transitions add no cloning pass.
 
-A field has one lifetime. A retired wire name cannot be reused. Contextual
-callbacks read the immediate predecessor; they cannot read partially computed
-output or consume the whole payload once for several destination fields.
+A field has one lifetime. A removed field name cannot be reused. Callbacks read
+the immediate predecessor; they cannot read partially computed output or consume
+the whole payload once for several destination fields.

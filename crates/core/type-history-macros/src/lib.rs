@@ -32,12 +32,6 @@ use type_history_codegen::{
 ///
 /// Initialize the package's ledger and call `type_history_build::compile()` from
 /// `build.rs` before declaring a history. Then give the type a stable name:
-/// Declare histories directly at module scope, including ordinary nested modules.
-/// Undiscovered macro-generated, included, and function-local declarations fail
-/// explicitly in every build profile. Each matching expansion still receives
-/// the current ledger, frozen-shape, and strict checks.
-/// Matching includes the discovered library module and record type; copying a
-/// declaration's source position does not authorize a second expansion.
 ///
 /// ```rust,ignore
 /// use type_history::versioned;
@@ -47,6 +41,13 @@ use type_history_codegen::{
 ///     pub amount_cents: u64,
 /// }
 /// ```
+///
+/// Declare histories directly at module scope, including ordinary nested modules.
+/// Undiscovered macro-generated, included, and function-local declarations fail
+/// explicitly in every build profile. Each matching expansion still receives
+/// the current ledger, frozen-shape, and strict checks.
+/// Matching includes the discovered library module and record type. Copying a
+/// declaration's source position does not authorize a second expansion.
 ///
 /// Every history starts at V1. When fields change, write `#[history(...)]`
 /// attributes for additions, updates, and removals, newest first. Additions and
@@ -98,10 +99,10 @@ pub fn versioned(arguments: TokenStream, item: TokenStream) -> TokenStream {
 /// can be unit, newtype, tuple with at least two fields, or named-field variants.
 /// A one-field tuple struct has transparent newtype value encoding; multiple
 /// fields retain their positional order. This derive adds schema traits only.
-/// Other wire-shaping attributes, generics, empty enums, zero-field tuple variants,
-/// empty tuple structs, and unit structs are rejected. Enums and tuple structs
-/// evolve as fields of their containing versioned structs, without their own
-/// history attributes.
+/// Other Serde and Schemars attributes, generics, empty enums, zero-field tuple
+/// variants, empty tuple structs, and unit structs are rejected. Enums and tuple
+/// structs evolve as fields of their containing versioned structs, without their
+/// own history attributes.
 #[proc_macro_derive(Schema)]
 pub fn schema(item: TokenStream) -> TokenStream {
     match schema::expand(parse_macro_input!(item as DeriveInput)) {

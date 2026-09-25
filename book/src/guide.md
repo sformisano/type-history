@@ -1,8 +1,8 @@
-# Evolve an invoice through V1, V2, and V3
+# Conversions and failures: an invoice
 
 The shop's receipts showed how to add a currency and change an amount's type. This example follows an invoice that renames a field and changes its count twice. It also shows how a failure in the second conversion keeps the original stored version in its error.
 
-The invoice changes in three ways:
+This example covers three topics:
 
 - **Type changes:** Convert a count from `u32` to `u64`, then to `String`.
 - **Renames:** Read `legacy` from the previous record to populate the new `label` field.
@@ -61,7 +61,7 @@ cargo type-history freeze --package invoice-history
 
 ## V2: remove, convert, and add fields
 
-The application now names the invoice's label field `label` instead of `legacy`, needs a wider count, and records a revision. V2 makes those changes together:
+The application now calls the `legacy` field `label`, needs a wider count, and records a revision. V2 makes those changes together:
 
 - **Rename `legacy` to `label`:** Mark `legacy` as removed and add `label` in V2.
   Keep the `legacy` declaration so Type History can generate `InvoiceV1`.
@@ -111,17 +111,17 @@ impl Display for ConvertError {
 impl Error for ConvertError {}
 ```
 
-Both backfill functions borrow `&InvoiceV1`:
+`widen` and `label` are **callbacks**: functions named by `backfill_fn`. Both borrow `&InvoiceV1`:
 
 - **`widen` reads `previous.count`** and returns the count as `u64`.
 - **`label` clones `previous.legacy`** to produce the new label.
 
-Type History runs the backfills before moving unchanged fields into V2. Both functions can read the complete V1 record, including `legacy`. Removing that field from V2 does not remove it from the source passed to `label`.
+Both callbacks receive the complete V1 record, including `legacy`. Removing that field from V2 does not remove it from the record passed to `label`.
 
-Backfills run in field declaration order. They read the previous record, so one backfill cannot read another backfill's result.
+Backfills run in field declaration order. Callbacks read the previous record, so one callback cannot read another callback's result.
 
-Conversion functions, also called callbacks, return `Result`. These two always
-return `Ok`; V3 introduces a conversion that can fail.
+Callbacks return `Result`. These two always return `Ok`. V3 introduces a callback
+that can fail.
 
 Build and freeze V2:
 
