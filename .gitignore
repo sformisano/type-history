@@ -6,4 +6,7 @@
 .agents/
 .claude/
 .cursor/
-.skillcatalog/
+!.skillcatalog/
+.skillcatalog/*
+!.skillcatalog/README.md
+!.skillcatalog/catalog/

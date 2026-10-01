@@ -1,0 +1,11 @@
+---
+name: Type History
+description: Choices about historical meaning, compatibility evidence, and releases.
+author: Salvatore Formisano
+created_at: "2026-10-01T00:00:00Z"
+updated_at: "2026-10-01T00:00:00Z"
+---
+skills:
+  - type-history-evolution-decisions
+  - type-history-compatibility-evidence
+  - type-history-release-boundaries
