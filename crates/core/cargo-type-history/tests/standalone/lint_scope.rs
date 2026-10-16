@@ -1,56 +1,6 @@
+//! Generated records and schema helpers preserve container and field lint scopes.
+
 use super::support::{failure, success, Fixture};
-
-#[test]
-fn generated_traits_preserve_authored_field_types_and_values() {
-    let fixture = Fixture::empty();
-    success(&fixture.cli(&["init", "--package", "standalone-history-consumer"]));
-    fixture.write(
-        "src/lib.rs",
-        r##"
-#![deny(non_camel_case_types)]
-
-type M = String;
-
-#[history_api::versioned(stable_name = "example.field.alias")]
-pub struct Record {
-    pub value: M,
-    pub count: u32,
-}
-
-#[test]
-fn generated_records_use_ordinary_traits_and_preserve_decoder_errors() {
-    use history_api::{decode, DecodeFailureKind, HasHistory, PayloadVersion, ReadError};
-    use serde_json::Error as JsonError;
-    use std::error::Error;
-
-    let source = decode::<Record>(
-        &Record::STABLE_NAME,
-        PayloadVersion::INITIAL,
-        br#"{"value":"INV-7","count":7}"#,
-    ).unwrap();
-    let copied = source.clone();
-    assert_eq!(source, copied);
-    assert_eq!(copied.value, "INV-7");
-    assert_eq!(copied.count, 7);
-    let text = format!("{source:?}");
-    assert!(text.contains("value: \"INV-7\""));
-    assert!(text.contains("count: 7"));
-
-    let ReadError::Decode(error) = decode::<Record>(
-        &Record::STABLE_NAME,
-        PayloadVersion::INITIAL,
-        br#"{"value":"INV-7","count":"wrong"}"#,
-    ).unwrap_err() else { panic!("expected a decoder error") };
-    assert_eq!(error.kind(), DecodeFailureKind::Decode);
-    assert_eq!(error.source_version(), PayloadVersion::INITIAL);
-    assert!(error.source().unwrap().is::<JsonError>());
-}
-"##,
-    );
-    success(&fixture.cargo(&["test", "--lib", "--locked", "--offline"]));
-    success(&fixture.cli(&["freeze", "--package", "standalone-history-consumer"]));
-    success(&fixture.cargo(&["build", "--locked", "--offline"]));
-}
 
 #[test]
 fn generated_records_and_schema_helpers_keep_authored_lint_scope() {

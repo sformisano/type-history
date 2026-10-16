@@ -139,23 +139,23 @@ fn optional_missing_input_tracks_linked_prefix_and_file_parent_is_rejected() {
     fs::create_dir_all(&second).unwrap();
     symlink(&first, root.join("linked")).unwrap();
     let (resolved, route) =
-        super::resolve_snapshot_route(&root, Path::new("linked/Cargo.lock"), true).unwrap();
+        super::inputs::resolve_snapshot_route(&root, Path::new("linked/Cargo.lock"), true).unwrap();
     assert!(resolved.is_none());
     let before: BTreeMap<_, _> = route
         .iter()
-        .map(|path| (path.clone(), super::entry_fingerprint(path).unwrap()))
+        .map(|path| (path.clone(), super::files::entry_fingerprint(path).unwrap()))
         .collect();
     fs::remove_file(root.join("linked")).unwrap();
     symlink(&second, root.join("linked")).unwrap();
     let after: BTreeMap<_, _> = route
         .iter()
-        .map(|path| (path.clone(), super::entry_fingerprint(path).unwrap()))
+        .map(|path| (path.clone(), super::files::entry_fingerprint(path).unwrap()))
         .collect();
     assert_ne!(before, after);
 
     fs::write(root.join("file"), "not a directory").unwrap();
     assert!(
-        super::resolve_snapshot_route(&root, Path::new("file/../Cargo.lock"), true,)
+        super::inputs::resolve_snapshot_route(&root, Path::new("file/../Cargo.lock"), true,)
             .unwrap_err()
             .to_string()
             .contains("non-directory")

@@ -1,38 +1,57 @@
-use super::support::{failure, success, Fixture, LEDGER, V1, V2};
-use std::fs;
-use std::path::Path;
+//! Generated traits and schema helpers preserve authored field types and Self projections.
+
+use super::support::{failure, success, Fixture, LEDGER};
 
 #[test]
-fn caller_macros_cannot_replace_generated_builtins_or_frozen_checks() {
-    let fixture = Fixture::frozen();
-    let frozen = fixture.read(LEDGER);
-    let source = format!(
-        r#"#![allow(unused_macros)]
-macro_rules! assert {{ ($($tokens:tt)*) => {{ () }}; }}
-macro_rules! include_str {{ ($($tokens:tt)*) => {{ ::core::compile_error!("caller include_str") }}; }}
-macro_rules! panic {{ ($($tokens:tt)*) => {{ ::core::compile_error!("caller panic") }}; }}
-macro_rules! stringify {{ ($($tokens:tt)*) => {{ ::core::compile_error!("caller stringify") }}; }}
-{V1}
-#[derive(history_api::Schema)]
-pub struct Details {{ pub value: u32 }}
-"#
-    );
-    fixture.write("src/lib.rs", &source);
-    for profile in [None, Some("--release")] {
-        let mut arguments = vec!["build", "--locked", "--offline"];
-        arguments.extend(profile);
-        success(&fixture.cargo(&arguments));
-    }
+fn generated_traits_preserve_authored_field_types_and_values() {
+    let fixture = Fixture::empty();
+    success(&fixture.cli(&["init", "--package", "standalone-history-consumer"]));
     fixture.write(
         "src/lib.rs",
-        &source.replace("pub count: u32", "pub count: String"),
+        r##"
+#![deny(non_camel_case_types)]
+
+type M = String;
+
+#[history_api::versioned(stable_name = "example.field.alias")]
+pub struct Record {
+    pub value: M,
+    pub count: u32,
+}
+
+#[test]
+fn generated_records_use_ordinary_traits_and_preserve_decoder_errors() {
+    use history_api::{decode, DecodeFailureKind, HasHistory, PayloadVersion, ReadError};
+    use serde_json::Error as JsonError;
+    use std::error::Error;
+
+    let source = decode::<Record>(
+        &Record::STABLE_NAME,
+        PayloadVersion::INITIAL,
+        br#"{"value":"INV-7","count":7}"#,
+    ).unwrap();
+    let copied = source.clone();
+    assert_eq!(source, copied);
+    assert_eq!(copied.value, "INV-7");
+    assert_eq!(copied.count, 7);
+    let text = format!("{source:?}");
+    assert!(text.contains("value: \"INV-7\""));
+    assert!(text.contains("count: 7"));
+
+    let ReadError::Decode(error) = decode::<Record>(
+        &Record::STABLE_NAME,
+        PayloadVersion::INITIAL,
+        br#"{"value":"INV-7","count":"wrong"}"#,
+    ).unwrap_err() else { panic!("expected a decoder error") };
+    assert_eq!(error.kind(), DecodeFailureKind::Decode);
+    assert_eq!(error.source_version(), PayloadVersion::INITIAL);
+    assert!(error.source().unwrap().is::<JsonError>());
+}
+"##,
     );
-    for profile in [None, Some("--release")] {
-        let mut arguments = vec!["build", "--locked", "--offline"];
-        arguments.extend(profile);
-        failure(&fixture.cargo(&arguments), "changed its frozen wire shape");
-        assert_eq!(fixture.read(LEDGER), frozen);
-    }
+    success(&fixture.cargo(&["test", "--lib", "--locked", "--offline"]));
+    success(&fixture.cli(&["freeze", "--package", "standalone-history-consumer"]));
+    success(&fixture.cargo(&["build", "--locked", "--offline"]));
 }
 
 #[test]
@@ -140,46 +159,4 @@ fn current_self_projections_still_decode_frozen_v1() {{
             .len(),
         2
     );
-}
-
-#[test]
-fn current_alias_links_to_documented_public_fields_methods_and_traits() {
-    let fixture = Fixture::frozen();
-    let source = V2
-        .replace(
-            "pub struct Invoice",
-            "/// Current invoice documentation.\npub struct Invoice",
-        )
-        .replace(
-            "pub count: u64",
-            "/// Number of billed units.\n    pub count: u64",
-        );
-    fixture.write("src/lib.rs", &source);
-    success(&fixture.cargo_env(
-        &["doc", "--no-deps", "--locked", "--offline"],
-        &[("RUSTDOCFLAGS", Some("-Dwarnings"))],
-    ));
-    let docs = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .ancestors()
-        .nth(3)
-        .expect("repository root")
-        .join("target/doc/standalone_history_consumer");
-    let alias = fs::read_to_string(docs.join("type.Invoice.html")).expect("current alias page");
-    assert!(alias.contains("Current invoice documentation."));
-    assert!(alias.contains("struct.InvoiceV2.html"));
-    assert!(alias.contains("pub count:"));
-    let current = fs::read_to_string(docs.join("struct.InvoiceV2.html"))
-        .expect("current numbered record page");
-    for visible in [
-        "Current invoice documentation.",
-        "Number of billed units.",
-        "id=\"structfield.count\"",
-        "id=\"method.from_versioned\"",
-        "id=\"method.into_versioned\"",
-        "id=\"trait-implementations\"",
-    ] {
-        assert!(current.contains(visible), "missing rendered API: {visible}");
-    }
-    let index = fs::read_to_string(docs.join("index.html")).expect("consumer documentation index");
-    assert!(!index.contains("struct.InvoiceV1.html"));
 }

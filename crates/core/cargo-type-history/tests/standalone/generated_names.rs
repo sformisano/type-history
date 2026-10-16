@@ -1,4 +1,6 @@
-use super::support::{success, Fixture};
+//! Caller macros, constants, and type aliases cannot capture generated names.
+
+use super::support::{failure, success, Fixture, LEDGER, V1};
 
 #[test]
 fn caller_constants_and_primitive_aliases_preserve_authored_types() {
@@ -79,4 +81,37 @@ fn roundtrip() {
         &["test", "--locked", "--offline"],
         &[("TYPE_HISTORY_REQUIRE_FROZEN", Some("1"))],
     ));
+}
+
+#[test]
+fn caller_macros_cannot_replace_generated_builtins_or_frozen_checks() {
+    let fixture = Fixture::frozen();
+    let frozen = fixture.read(LEDGER);
+    let source = format!(
+        r#"#![allow(unused_macros)]
+macro_rules! assert {{ ($($tokens:tt)*) => {{ () }}; }}
+macro_rules! include_str {{ ($($tokens:tt)*) => {{ ::core::compile_error!("caller include_str") }}; }}
+macro_rules! panic {{ ($($tokens:tt)*) => {{ ::core::compile_error!("caller panic") }}; }}
+macro_rules! stringify {{ ($($tokens:tt)*) => {{ ::core::compile_error!("caller stringify") }}; }}
+{V1}
+#[derive(history_api::Schema)]
+pub struct Details {{ pub value: u32 }}
+"#
+    );
+    fixture.write("src/lib.rs", &source);
+    for profile in [None, Some("--release")] {
+        let mut arguments = vec!["build", "--locked", "--offline"];
+        arguments.extend(profile);
+        success(&fixture.cargo(&arguments));
+    }
+    fixture.write(
+        "src/lib.rs",
+        &source.replace("pub count: u32", "pub count: String"),
+    );
+    for profile in [None, Some("--release")] {
+        let mut arguments = vec!["build", "--locked", "--offline"];
+        arguments.extend(profile);
+        failure(&fixture.cargo(&arguments), "changed its frozen wire shape");
+        assert_eq!(fixture.read(LEDGER), frozen);
+    }
 }

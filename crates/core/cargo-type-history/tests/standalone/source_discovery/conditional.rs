@@ -1,4 +1,4 @@
-//! Discovery preserves Rust path roots and rejects conditional history selection.
+//! Ordinary conditional imports preserve history; conditional facade selection is rejected.
 
 use super::support::{failure, success, Fixture, LEDGER, V1};
 use toml::{Table, Value};
@@ -33,29 +33,6 @@ fn disabled_ordinary_instrumentation_preserves_frozen_history() {
         success(&fixture.cargo(&["build", "--locked", "--offline"]));
         success(&fixture.cli(&["check"]));
         success(&fixture.cli(&["freeze", "--package", "standalone-history-consumer"]));
-        assert_eq!(fixture.read(LEDGER), frozen);
-    }
-}
-
-#[test]
-fn absolute_facade_paths_preserve_frozen_history_with_local_name_collisions() {
-    let fixture = Fixture::frozen();
-    let frozen = fixture.read(LEDGER);
-    for source in [
-        V1.replace("use history_api::versioned;", "mod history_api {}")
-            .replace("#[versioned", "#[::history_api::versioned"),
-        V1.replace(
-            "use history_api::versioned;",
-            "mod history_api {} use ::history_api::versioned;",
-        ),
-        V1.replace(
-            "use history_api::versioned;",
-            "#[cfg(any())] mod history_api {} use ::history_api::versioned;",
-        ),
-    ] {
-        fixture.write("src/lib.rs", &source);
-        success(&fixture.cargo(&["build", "--locked", "--offline"]));
-        success(&fixture.cli(&["check"]));
         assert_eq!(fixture.read(LEDGER), frozen);
     }
 }

@@ -4,6 +4,8 @@
 mod admission;
 #[path = "standalone/admission_large.rs"]
 mod admission_large;
+#[path = "standalone/authored_types.rs"]
+mod authored_types;
 #[path = "standalone/authoring.rs"]
 mod authoring;
 #[path = "standalone/authority.rs"]
@@ -16,8 +18,6 @@ mod cargo_regressions;
 mod compiler;
 #[path = "standalone/diagnostics.rs"]
 mod diagnostics;
-#[path = "standalone/discovery_regressions.rs"]
-mod discovery_regressions;
 #[path = "standalone/distributed.rs"]
 mod distributed;
 #[path = "standalone/enums.rs"]
@@ -28,18 +28,18 @@ mod feature_selection;
 mod field_diagnostics;
 #[path = "standalone/field_support.rs"]
 mod field_support;
-#[path = "standalone/generated_hygiene.rs"]
-mod generated_hygiene;
+#[path = "standalone/generated_names.rs"]
+mod generated_names;
 #[path = "standalone/growth.rs"]
 mod growth;
-#[path = "standalone/hygiene.rs"]
-mod hygiene;
 #[path = "standalone/lifecycle.rs"]
 mod lifecycle;
-#[path = "standalone/macro_regressions.rs"]
-mod macro_regressions;
+#[path = "standalone/lint_scope.rs"]
+mod lint_scope;
 #[path = "standalone/nested.rs"]
 mod nested;
+#[path = "standalone/public_documentation.rs"]
+mod public_documentation;
 #[path = "standalone/public_snapshot.rs"]
 mod public_snapshot;
 #[path = "standalone/public_transaction.rs"]

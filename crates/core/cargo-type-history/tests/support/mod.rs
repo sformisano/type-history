@@ -4,7 +4,6 @@ use std::collections::BTreeMap;
 use std::env;
 use std::fs;
 use std::io::{ErrorKind, Read, Write};
-use std::os::unix::fs::symlink;
 use std::os::unix::net::UnixListener;
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
@@ -13,130 +12,19 @@ use std::thread;
 use std::time::{Duration, Instant};
 use tempfile::{Builder, TempDir};
 
-const LEDGER: &str = "type-history/schemas.json";
+pub(super) const LEDGER: &str = "type-history/schemas.json";
 
-pub fn run() {
-    let fixture = Fixture::new();
-    fixture.package("a");
-    fixture.package("b");
-    fixture.workspace(false);
-    fixture.lock();
-    fixture.cli(&["freeze", "-p", "a"], true);
-
-    let original = fixture.read("a/type-history/schemas.json");
-    let stale = fixture.interleave(&["freeze", "-p", "a"], "locate", || {
-        fixture.write("a/type-history/schemas.json", "MALFORMED\n");
-    });
-    assert!(!stale.status.success(), "stale no-op: {}", text(&stale));
-    assert_eq!(fixture.read("a/type-history/schemas.json"), "MALFORMED\n");
-    fixture.write("a/type-history/schemas.json", &original);
-
-    fixture.write(
-        "b/src/lib.rs",
-        "compile_error!(\"new member must be checked\");\n",
-    );
-    fixture.cli(&["check"], true);
-    let membership = fixture.interleave(&["check", "--format", "json"], "metadata", || {
-        fixture.workspace(true);
-        fixture.lock();
-    });
-    assert!(
-        !membership.status.success(),
-        "stale selection: {}",
-        text(&membership)
-    );
-    fixture.cli(&["check"], false);
-    fixture.write("b/src/lib.rs", "");
-    fixture.cli(&["check"], true);
-
-    let aggregate = fixture.interleave(&["check", "--format", "json"], "second-package", || {
-        fixture.write(
-            "a/src/lib.rs",
-            "compile_error!(\"earlier package changed\");\n",
-        );
-    });
-    assert!(
-        !aggregate.status.success(),
-        "stale aggregate: {}",
-        text(&aggregate)
-    );
-    fixture.cli(&["check"], false);
-    fixture.write("a/src/lib.rs", "");
-
-    fixture.write(
-        "a/build.rs",
-        "use std::path::Path; fn main() { println!(\"cargo::rustc-check-cfg=cfg(input_present)\"); if Path::new(\"inputs/node_modules/flag\").exists() { println!(\"cargo::rustc-cfg=input_present\"); } }\n",
-    );
-    fixture.write(
-        "a/src/lib.rs",
-        "#[cfg(input_present)] compile_error!(\"required build input must be captured\");\n",
-    );
-    fixture.cli(&["check", "-p", "a"], true);
-    fixture.write("a/inputs/node_modules/flag", "present");
-    fixture.cargo(
-        &["check", "--lib", "-p", "a", "--locked", "--offline"],
-        false,
-    );
-    fixture.cli(&["check", "-p", "a"], false);
-    fixture.write("a/build.rs", "fn main() {}\n");
-    fixture.write("a/src/lib.rs", "");
-
-    // Initialization after the initial metadata response must enter selection.
-    fs::remove_file(fixture.root.join("b").join(LEDGER)).unwrap();
-    fixture.cli(&["check"], true);
-    let initialized = fixture.interleave(&["check"], "metadata", || {
-        fixture.write("b/type-history/schemas.json", "MALFORMED\n");
-    });
-    assert!(
-        !initialized.status.success(),
-        "omitted ledger: {}",
-        text(&initialized)
-    );
-    fixture.write("b/type-history/schemas.json", "{}\n");
-
-    for directory in ["ordinary", "node_modules", ".next", ".git", ".schemas.lock"] {
-        fixture.write(
-            "a/src/lib.rs",
-            &format!("#[path = \"{directory}/mod.rs\"] pub mod input;\n"),
-        );
-        fixture.write(
-            &format!("a/src/{directory}/mod.rs"),
-            "pub const INPUT: u32 = 1;\n",
-        );
-        fixture.cargo(
-            &["check", "--lib", "-p", "a", "--locked", "--offline"],
-            true,
-        );
-        fixture.cli(&["check", "-p", "a"], true);
-    }
-    fixture.write("a/src/lib.rs", "");
-
-    let lock = fixture.root.join("a/type-history/.schemas.lock");
-    fs::remove_file(&lock).unwrap();
-    symlink("../unowned-file", &lock).unwrap();
-    fixture.cli(&["freeze", "-p", "a"], false);
-    assert!(!fixture.root.join("a/unowned-file").exists());
-    fixture.write("a/type-history/schemas.json", "MALFORMED\n");
-    fixture.cli(&["freeze", "-p", "a"], false);
-    assert!(!fixture.root.join("a/unowned-file").exists());
-    fs::remove_file(lock).unwrap();
-    fixture.write("a/type-history/schemas.json", &original);
-    fixture.cli(&["freeze", "-p", "a"], true);
-    assert_eq!(fixture.read("a/type-history/schemas.json"), original);
-    assert_eq!(fs::read_dir(&fixture.scratch).unwrap().count(), 0);
-}
-
-struct Fixture {
+pub(super) struct Fixture {
     owner: TempDir,
-    root: PathBuf,
-    scratch: PathBuf,
+    pub(super) root: PathBuf,
+    pub(super) scratch: PathBuf,
     proxy: PathBuf,
     cargo: PathBuf,
     target: PathBuf,
 }
 
 impl Fixture {
-    fn new() -> Self {
+    pub(super) fn new() -> Self {
         let owner = Builder::new().prefix("ledger-").tempdir().unwrap();
         let root = owner.path().join("source");
         let scratch = owner.path().join("scratch");
@@ -167,15 +55,15 @@ impl Fixture {
                 .join("target"),
         }
     }
-    fn write(&self, path: &str, text: &str) {
+    pub(super) fn write(&self, path: &str, text: &str) {
         let path = self.root.join(path);
         fs::create_dir_all(path.parent().unwrap()).unwrap();
         fs::write(path, text).unwrap();
     }
-    fn read(&self, path: &str) -> String {
+    pub(super) fn read(&self, path: &str) -> String {
         fs::read_to_string(self.root.join(path)).unwrap()
     }
-    fn package(&self, name: &str) {
+    pub(super) fn package(&self, name: &str) {
         self.write(
             &format!("{name}/Cargo.toml"),
             &format!(
@@ -186,7 +74,7 @@ impl Fixture {
         self.write(&format!("{name}/src/lib.rs"), "");
         self.write(&format!("{name}/{LEDGER}"), "{}\n");
     }
-    fn workspace(&self, both: bool) {
+    pub(super) fn workspace(&self, both: bool) {
         self.write(
             "Cargo.toml",
             if both {
@@ -207,14 +95,14 @@ impl Fixture {
             .env_remove("TYPE_HISTORY_SCHEMA_EXPORT");
         command
     }
-    fn cargo(&self, args: &[&str], success: bool) {
+    pub(super) fn cargo(&self, args: &[&str], success: bool) {
         let output = self.command(&self.cargo).args(args).output().unwrap();
         assert_eq!(output.status.success(), success, "{}", text(&output));
     }
-    fn lock(&self) {
+    pub(super) fn lock(&self) {
         self.cargo(&["generate-lockfile", "--offline"], true);
     }
-    fn cli(&self, args: &[&str], success: bool) {
+    pub(super) fn cli(&self, args: &[&str], success: bool) {
         let before = inputs(&self.root);
         let output = self
             .command(Path::new(env!("CARGO_BIN_EXE_cargo-type-history")))
@@ -224,7 +112,7 @@ impl Fixture {
         assert_eq!(output.status.success(), success, "{}", text(&output));
         assert_eq!(before, inputs(&self.root), "CLI changed source inputs");
     }
-    fn interleave(&self, args: &[&str], boundary: &str, edit: impl FnOnce()) -> Output {
+    pub(super) fn interleave(&self, args: &[&str], boundary: &str, edit: impl FnOnce()) -> Output {
         let socket = self.owner.path().join("gate.sock");
         if socket.exists() {
             fs::remove_file(&socket).unwrap();
@@ -331,7 +219,7 @@ fn inputs(root: &Path) -> BTreeMap<PathBuf, Input> {
     walk(root, root, &mut result);
     result
 }
-fn text(output: &Output) -> String {
+pub(super) fn text(output: &Output) -> String {
     format!(
         "{}\n{}",
         String::from_utf8_lossy(&output.stdout),
