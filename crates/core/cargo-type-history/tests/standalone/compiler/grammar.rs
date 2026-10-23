@@ -14,7 +14,7 @@ fn history_grammar_rejects_invalid_lifetimes_before_expansion() {
     for (attributes, expected) in [
         (
             "#[history::typo(added_in = v2, backfill_value = 0)]",
-            "record fields support only documentation, lints, and `#[history(...)]`",
+            "record fields support documentation, lints, history, and Redactable policies",
         ),
         ("#[history(added_in = v0, backfill_value = 0)]", "positive"),
         (

@@ -59,12 +59,21 @@ use type_history_codegen::{
 /// current type. Conversions only run forward. Builds reject changes to the
 /// frozen stable name even when the Rust type or its module is renamed.
 ///
-/// The macro supplies the generated structs' traits; additional derives on the
-/// declaration are rejected. Generated records always implement `Clone`.
+/// Additional derives below `#[versioned]` apply to each generated version.
+/// Their field bounds must hold on historical types too. Rust rejects duplicate
+/// implementations; do not repeat traits supplied by this macro.
+/// Generated records always implement `Clone`, Serde codecs, and schema support.
 /// Standard `PartialEq` and field-wise `Debug` are enabled by default and keep
 /// each field's native behavior. Set `derive_partial_eq = false` or
 /// `derive_debug = false` to omit the respective trait on every retained version.
 /// These choices do not change schemas, stored values, or version numbers.
+/// Redactable derives receive `sensitive`, `not_sensitive`, `redactable`, and
+/// record `error` helpers on each retained version. Set `derive_debug = false`
+/// with `Sensitive`, `SensitiveDisplay`, or `SensitiveDual`. Templates must work
+/// for every version. Policies come from the current source; the schema ledger
+/// does not freeze their behavior. Raw storage codecs preserve sensitive values.
+/// See the [integration guide](https://github.com/sformisano/type-history/blob/main/book/src/integration.md#redactable-integration)
+/// for derive choices and diagnostic boundaries.
 ///
 /// Tuples with 13 through 16 elements have supported schemas and codecs but lack
 /// native `Debug` and `PartialEq`. Disable both derives when such tuples occur

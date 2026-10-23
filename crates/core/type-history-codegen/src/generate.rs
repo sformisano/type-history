@@ -68,7 +68,8 @@ pub struct GeneratedVersion {
     pub shape_expression: TokenStream,
     /// Typed payload input for frontend-owned traits, including scoped field
     /// aliases, field visibility, and original authored field attributes.
-    /// These attributes are metadata; they are not emitted on the payload.
+    /// Frontend mode keeps field attributes as metadata without emitting them
+    /// on the payload. Native mode emits supported Redactable field helpers.
     pub contract: DeriveInput,
 }
 

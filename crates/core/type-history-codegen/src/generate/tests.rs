@@ -225,3 +225,94 @@ fn observation_only_gates_frozen_assertions_under_test_and_the_selected_cfg() {
         }
     }
 }
+
+#[test]
+fn native_derives_and_helpers_belong_only_to_retained_payloads() {
+    let (input, stable_name) = crate::input::parse(
+        parse_quote!(stable_name = "fixture.changed", derive_debug = false),
+        parse_quote! {
+            /// Account {secret}
+            #[error("Account {secret}")]
+            #[derive(privacy::SensitiveDual, Eq)]
+            pub struct Changed {
+                #[sensitive(Secret)]
+                pub secret: String,
+                #[history(added_in = v2, backfill_value = String::new())]
+                #[not_sensitive]
+                pub public: String,
+            }
+        },
+    )
+    .unwrap();
+    let history = HistoryPlan::infer(&input.name, &input.fields)
+        .unwrap()
+        .expand_authorized(
+            &input.name,
+            &input.fields,
+            &stable_name,
+            &ledger(true),
+            &RecordMetadata {},
+        )
+        .unwrap();
+    let generated = generate_history(&input, &stable_name, &history, &paths()).unwrap();
+    let file = syn::parse2::<File>(generated.items).unwrap();
+    let mut payloads = 0;
+    for item in &file.items {
+        let Item::Struct(record) = item else {
+            if let Item::Type(alias) = item {
+                assert!(alias
+                    .attrs
+                    .iter()
+                    .all(|attribute| !crate::input::payload_attribute(attribute)));
+            }
+            continue;
+        };
+        if !generated
+            .versions
+            .iter()
+            .any(|version| version.name == record.ident)
+        {
+            assert!(record
+                .attrs
+                .iter()
+                .all(|attribute| !crate::input::payload_attribute(attribute)));
+            continue;
+        }
+        payloads += 1;
+        let derives = record
+            .attrs
+            .iter()
+            .position(|attribute| {
+                attribute.path().is_ident("derive")
+                    && attribute
+                        .to_token_stream()
+                        .to_string()
+                        .contains("SensitiveDual")
+            })
+            .unwrap();
+        let template = record
+            .attrs
+            .iter()
+            .position(|attribute| attribute.path().is_ident("error"))
+            .unwrap();
+        assert!(
+            derives < template,
+            "derive helpers must follow their derive"
+        );
+        assert!(record.attrs.iter().any(|attribute| attribute
+            .to_token_stream()
+            .to_string()
+            .contains("Account {secret}")));
+        for field in &record.fields {
+            assert!(field
+                .attrs
+                .iter()
+                .any(crate::input::redaction_field_attribute));
+        }
+        assert_eq!(
+            record.fields.len(),
+            if record.ident == "ChangedV1" { 1 } else { 2 }
+        );
+    }
+    assert_eq!(payloads, 2);
+}

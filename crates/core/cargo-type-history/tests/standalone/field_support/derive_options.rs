@@ -175,7 +175,11 @@ fn field_support_documented_tuple_options_compile_and_freeze() {
             .split("```rust\n")
             .skip(1)
             .map(|block| block.split_once("```").unwrap().0)
-            .filter(|block| block.contains("derive_debug = false"))
+            .filter(|block| {
+                ["example.long_tuple", "mapping.coordinates"]
+                    .iter()
+                    .any(|stable_name| block.contains(stable_name))
+            })
             .collect();
         assert_eq!(snippets.len(), 1, "one complete tuple example in {module}");
         let snippet = replace(

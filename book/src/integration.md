@@ -332,6 +332,99 @@ These options do not change schemas, payload bytes, frozen ledgers, migrations,
 or set membership. Sets still require the standard equality, hash, or ordering
 traits for their chosen collection.
 
+## Redactable integration
+
+Type History supports direct Redactable derives on concrete history records.
+The [declaration attribute contract](macro.md#traits-and-declaration-attributes)
+explains derive ordering and ownership of generated traits.
+Add `redactable = "=0.15.0"` to the consuming package's dependencies.
+Type History's runtime crates do not depend on Redactable.
+
+<!-- example:redactable.rs -->
+```rust
+use redactable::{Secret, Sensitive};
+use type_history::versioned;
+
+#[versioned(stable_name = "account.created", derive_debug = false)]
+#[derive(Sensitive)]
+pub struct AccountCreated {
+    #[sensitive(Secret)]
+    pub owner_name: String,
+}
+```
+
+Choose one Redactable derive for each declaration:
+
+| Derive | Diagnostic output | Type History options and requirements |
+| --- | --- | --- |
+| `Sensitive` | Redacted structure and `Debug` | Set `derive_debug = false`. |
+| `SensitiveDisplay` | Redacted template text and `Debug` | Set `derive_debug = false`. Supply a template. |
+| `SensitiveDual` | Redacted structure, template text, and `Debug` | Set `derive_debug = false`. Supply a template. |
+| `NotSensitive` | Raw serialized structure declared public | Native `Debug` can stay enabled. Audit every serialized field. |
+| `NotSensitiveDisplay` | Existing `Display` text declared public | Native `Debug` can stay enabled. Implement `Display` for every retained numbered type. |
+
+Combining these derives produces overlapping trait implementations.
+Use `SensitiveDual` when both structural and template output are required.
+Renamed dependencies, qualified paths, and renamed derive imports follow Rust's
+normal resolution rules. Type History forwards derive paths without resolving
+their identity.
+
+Type History forwards field `sensitive`, `not_sensitive`, and `redactable`
+helpers to each generated payload containing that field.
+It forwards record helpers, including `error`, to the generated payload structs.
+Redactable validates their syntax, placement, and policy bounds.
+Derives and helpers never attach to the current alias or schema helpers.
+Supporting records and enums combine their own Redactable, Serde, and
+`Schema` derives using the [nested record rules](#nested-records).
+An unannotated nested field uses its type's redaction behavior.
+Declaring it `not_sensitive` bypasses that behavior.
+
+### Historical policies and templates
+
+Every retained version uses the policies in the current declaration.
+Added fields receive their policies starting with their declared version.
+Removed fields retain their current annotations on versions containing them.
+A policy on a type-changed field must compile for every retained field type.
+For example, a string-only policy cannot also redact an earlier numeric field.
+Compilation fails for incompatible policies, even when application code never
+constructs the old type.
+
+Display templates come from `#[error("...")]` or doc comments.
+The same template applies to every version, including historical structs.
+Every referenced field must exist in every version using that template.
+A template referencing an added or removed field fails compilation on versions
+where that field is absent. Type History does not rewrite templates or supply
+missing fields. Display-only redaction checks the fields referenced by the
+template; `SensitiveDual` also checks the complete structure.
+
+Policies and templates do not change storage schemas or require new schema
+versions by themselves. The frozen ledger does not preserve historical privacy
+semantics. Editing an annotation or policy implementation can change diagnostics
+for previously stored records. Test these outputs alongside conversion behavior.
+
+### Persistence and diagnostic boundaries
+
+Raw Serde serialization preserves business values, including sensitive fields.
+Use `ToRedacted::to_redacted` for the diagnostic projection.
+Redactable's sensitive derives own the payload's redacted `Debug` implementation.
+Neither deriving redaction nor disabling Type History's `Debug` creates a
+redacted `Display` or `std::error::Error` implementation.
+`#[error(...)]` supplies Redactable's template; it does not implement either trait.
+Conversion error display text and source chains retain their own contracts.
+Inspect those contracts before logging errors or raw serialized values.
+
+The [reference declarations](https://github.com/sformisano/type-history/blob/main/crates/examples/invoice-history/src/redaction.rs)
+and [compatibility tests](https://github.com/sformisano/type-history/blob/main/crates/examples/invoice-history/tests/redactable.rs)
+exercise all five derives, retained field changes, nested types, and raw codecs.
+The [compiler tests](https://github.com/sformisano/type-history/blob/main/crates/core/cargo-type-history/tests/standalone/compiler/redaction.rs)
+compile the exact example above and reject incompatible derives, policies, and templates.
+Run these checks from the repository root:
+
+```sh
+cargo test -p invoice-history --test redactable --locked
+cargo test -p cargo-type-history --test standalone compiler::redaction --locked
+```
+
 ## Codec guarantees
 
 The storage guarantees cover JSON and MessagePack with named struct fields.

@@ -75,10 +75,14 @@ pub fn parse(arguments: Arguments, item: ItemStruct) -> Result<(RecordInput, Str
                 "history records belong on fields",
             ));
         }
-        if !allowed(attribute) {
+        if attribute.path().is_ident("derive") {
+            attribute.parse_args_with(
+                syn::punctuated::Punctuated::<syn::Path, Token![,]>::parse_terminated,
+            )?;
+        } else if !allowed(attribute) && !attribute.path().is_ident("error") {
             return Err(Error::new_spanned(
                 attribute,
-                "history owns record derives and wire contracts; only documentation and lints are supported on the record",
+                "history owns wire contracts; record attributes support documentation, lints, derives, and Redactable helpers",
             ));
         }
     }
@@ -89,7 +93,7 @@ pub fn parse(arguments: Arguments, item: ItemStruct) -> Result<(RecordInput, Str
             if !allowed(attribute) {
                 return Err(Error::new_spanned(
                     attribute,
-                    "record fields support only documentation, lints, and `#[history(...)]`",
+                    "record fields support documentation, lints, history, and Redactable policies",
                 ));
             }
         }
@@ -119,6 +123,19 @@ fn allowed(attribute: &Attribute) -> bool {
     ["doc", "allow", "warn", "deny", "history"]
         .iter()
         .any(|name| attribute.path().is_ident(name))
+        || redaction_field_attribute(attribute)
+}
+
+pub(crate) fn redaction_field_attribute(attribute: &Attribute) -> bool {
+    ["sensitive", "not_sensitive", "redactable"]
+        .iter()
+        .any(|name| attribute.path().is_ident(name))
+}
+
+pub(crate) fn payload_attribute(attribute: &Attribute) -> bool {
+    attribute.path().is_ident("derive")
+        || attribute.path().is_ident("error")
+        || redaction_field_attribute(attribute)
 }
 
 /// Reject generic records outside the supported structural history subset.
@@ -136,7 +153,7 @@ pub fn reject_generics(generics: &Generics) -> Result<()> {
 mod tests {
     use super::{parse, Arguments};
     use crate::model::RecordDerives;
-    use syn::parse_quote;
+    use syn::{parse_quote, Attribute, ItemStruct};
 
     fn argument_error(source: &str) -> String {
         let Err(error) = syn::parse_str::<Arguments>(source) else {
@@ -292,7 +309,93 @@ mod tests {
         };
         assert_eq!(
             error.to_string(),
-            "record fields support only documentation, lints, and `#[history(...)]`"
+            "record fields support documentation, lints, history, and Redactable policies"
         );
+    }
+
+    #[test]
+    fn redaction_derives_do_not_admit_wire_overrides() {
+        let overrides: [Attribute; 3] = [
+            parse_quote!(#[serde(rename = "other")]),
+            parse_quote!(#[schemars(with = "String")]),
+            parse_quote!(#[cfg(feature = "other")]),
+        ];
+        for attribute in overrides {
+            let mut record: ItemStruct = parse_quote! {
+                #[derive(redactable::Sensitive)]
+                struct Account {
+                    #[sensitive(Secret)]
+                    owner: String,
+                }
+            };
+            record
+                .fields
+                .iter_mut()
+                .next()
+                .unwrap()
+                .attrs
+                .push(attribute.clone());
+            assert!(parse(parse_quote!(stable_name = "account.data"), record).is_err());
+            let record: ItemStruct = parse_quote! {
+                #attribute
+                #[derive(redactable::Sensitive)]
+                struct Account { owner: String }
+            };
+            assert!(parse(parse_quote!(stable_name = "account.data"), record).is_err());
+        }
+    }
+
+    #[test]
+    fn direct_redaction_keeps_record_and_field_attributes() {
+        let (input, _) = parse(
+            parse_quote!(stable_name = "account.data", derive_debug = false),
+            parse_quote! {
+                #[derive(redactable::Sensitive, Eq)]
+                struct Account {
+                    #[sensitive(Secret)]
+                    owner: String,
+                    #[not_sensitive]
+                    kind: String,
+                }
+            },
+        )
+        .unwrap();
+        assert!(!input.derives.debug);
+        assert!(input.attributes[0].path().is_ident("derive"));
+        assert!(input.fields[0].attributes[0].path().is_ident("sensitive"));
+        assert!(input.fields[1].attributes[0]
+            .path()
+            .is_ident("not_sensitive"));
+    }
+
+    #[test]
+    fn derive_syntax_and_helper_placement_are_checked_without_resolving_macros() {
+        let malformed: [Attribute; 2] = [
+            parse_quote!(#[derive = "Sensitive"]),
+            parse_quote!(#[derive(Sensitive = true)]),
+        ];
+        for attribute in malformed {
+            let record = parse_quote! {
+                #attribute
+                struct Account { owner: String }
+            };
+            assert!(parse(parse_quote!(stable_name = "account.data"), record).is_err());
+        }
+        assert!(parse(
+            parse_quote!(stable_name = "account.data"),
+            parse_quote! {
+                struct Account { #[error("owner")] owner: String }
+            }
+        )
+        .is_err());
+        assert!(parse(
+            parse_quote!(stable_name = "account.data"),
+            parse_quote! {
+                #[error("owner {owner}")]
+                #[derive(HiddenDerive, Eq)]
+                struct Account { #[redactable(recursive)] owner: String }
+            }
+        )
+        .is_ok());
     }
 }

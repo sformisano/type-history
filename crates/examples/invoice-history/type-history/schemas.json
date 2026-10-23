@@ -1,4 +1,79 @@
 {
+  "account.created": {
+    "1": {
+      "metadata": {},
+      "schema": {
+        "$id": "urn:typehistory:schema:account.created",
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "owner_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "owner_name"
+        ],
+        "type": "object"
+      }
+    }
+  },
+  "account.data": {
+    "1": {
+      "metadata": {},
+      "schema": {
+        "$id": "urn:typehistory:schema:account.data",
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "balance_minor": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "legacy_note": {
+            "type": "string"
+          },
+          "owner_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "balance_minor",
+          "legacy_note",
+          "owner_name"
+        ],
+        "type": "object"
+      }
+    },
+    "2": {
+      "metadata": {},
+      "schema": {
+        "$id": "urn:typehistory:schema:account.data",
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "balance_minor": {
+            "format": "uint128",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "owner_name": {
+            "type": "string"
+          },
+          "record_kind": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "balance_minor",
+          "owner_name",
+          "record_kind"
+        ],
+        "type": "object"
+      }
+    }
+  },
   "billing.invoice.issued": {
     "1": {
       "metadata": {},
@@ -176,6 +251,210 @@
         "required": [
           "reference",
           "status"
+        ],
+        "type": "object"
+      }
+    }
+  },
+  "redaction.contacts": {
+    "1": {
+      "metadata": {},
+      "schema": {
+        "$id": "urn:typehistory:schema:redaction.contacts",
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "contacts": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "email": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "email"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "contacts"
+        ],
+        "type": "object"
+      }
+    },
+    "2": {
+      "metadata": {},
+      "schema": {
+        "$id": "urn:typehistory:schema:redaction.contacts",
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "contacts": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "email": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "email"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "preferred": {
+            "oneOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "Email": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "address": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "address"
+                    ],
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "Email"
+                ],
+                "type": "object"
+              }
+            ]
+          }
+        },
+        "required": [
+          "contacts",
+          "preferred"
+        ],
+        "type": "object"
+      }
+    }
+  },
+  "redaction.dual": {
+    "1": {
+      "metadata": {},
+      "schema": {
+        "$id": "urn:typehistory:schema:redaction.dual",
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "owner_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "owner_name"
+        ],
+        "type": "object"
+      }
+    },
+    "2": {
+      "metadata": {},
+      "schema": {
+        "$id": "urn:typehistory:schema:redaction.dual",
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "owner_name": {
+            "type": "string"
+          },
+          "token": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "owner_name",
+          "token"
+        ],
+        "type": "object"
+      }
+    }
+  },
+  "redaction.message": {
+    "1": {
+      "metadata": {},
+      "schema": {
+        "$id": "urn:typehistory:schema:redaction.message",
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "owner_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "owner_name"
+        ],
+        "type": "object"
+      }
+    },
+    "2": {
+      "metadata": {},
+      "schema": {
+        "$id": "urn:typehistory:schema:redaction.message",
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "owner_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "owner_name"
+        ],
+        "type": "object"
+      }
+    }
+  },
+  "redaction.public": {
+    "1": {
+      "metadata": {},
+      "schema": {
+        "$id": "urn:typehistory:schema:redaction.public",
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "type": "object"
+      }
+    }
+  },
+  "redaction.public_display": {
+    "1": {
+      "metadata": {},
+      "schema": {
+        "$id": "urn:typehistory:schema:redaction.public_display",
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind"
         ],
         "type": "object"
       }

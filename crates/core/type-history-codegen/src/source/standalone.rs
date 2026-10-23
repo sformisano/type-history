@@ -65,6 +65,14 @@ pub fn discover(
                 }
             }
             let Some(position) = selected else { continue };
+            if let Some(attribute) = attributes[..position]
+                .iter()
+                .find(|attribute| attribute.path().is_ident("derive"))
+            {
+                return Err(declaration_error(&graph, unit, Error::new_spanned(
+                    attribute, "place `#[versioned]` before `#[derive(...)]` so derives receive generated records",
+                )));
+            }
             if unit.conditional {
                 return Err(SourceDiagnostic::ConditionalSchema {
                     construct: "history module",

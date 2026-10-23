@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Forward additional derives to retained payload structs and support Redactable helpers directly. Raw storage codecs and frozen schema checks retain their contracts. See [Redactable integration](book/src/integration.md#redactable-integration) for derive choices and historical policy limits.
 - Document Linux and macOS as the supported platforms. Windows is not supported.
 - Correct documentation that disagreed with the code, including the package-root location of `build.rs`, lifecycle recovery steps, and accepted declaration attributes.
 

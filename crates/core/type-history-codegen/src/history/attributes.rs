@@ -80,7 +80,7 @@ impl FieldHistory {
 
 /// Parse every `#[history(...)]` attribute on a payload field.
 ///
-/// Documentation and lint attributes are left untouched for generation.
+/// Non-history attributes are left untouched for generation.
 pub fn parse_field_history(attributes: &[Attribute]) -> Result<FieldHistory> {
     let mut records = Vec::new();
     for attribute in attributes {

@@ -79,3 +79,35 @@ fn conditional_glob_duplicate_and_unsupported_declarations_fail() {
         Err(SourceDiagnostic::ReservedGeneratedName { .. })
     ));
 }
+
+#[test]
+fn derives_follow_versioned_and_keep_rust_paths_for_resolution() {
+    let root = tempfile::tempdir().expect("package");
+    let library = root.path().join("lib.rs");
+    for derive in [
+        "privacy::Sensitive",
+        "HiddenDerive",
+        "Eq",
+        "serde::Serialize",
+    ] {
+        fs::write(&library, format!(
+            "#[history_api::versioned(stable_name=\"account.data\", derive_debug=false)] #[derive({derive})] struct Account {{ #[sensitive(Secret)] owner: String }}"
+        )).unwrap();
+        assert_eq!(
+            discover(root.path(), &library, &["history_api".to_owned()])
+                .unwrap()
+                .declarations
+                .len(),
+            1
+        );
+        fs::write(&library, format!(
+            "#[derive({derive})] #[history_api::versioned(stable_name=\"account.data\", derive_debug=false)] struct Account {{ owner: String }}"
+        )).unwrap();
+        let error = discover(root.path(), &library, &["history_api".to_owned()])
+            .err()
+            .expect("derive before versioned");
+        assert!(error
+            .to_string()
+            .contains("place `#[versioned]` before `#[derive(...)]`"));
+    }
+}

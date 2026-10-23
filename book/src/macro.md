@@ -61,10 +61,27 @@ directly must set its `derives: RecordDerives` field. Use
 See [supported field contracts](integration.md#supported-field-contracts) for
 tuple, set, adapter, and codec limits.
 
-The macro owns the generated implementations, so do not add derives to the history
-declaration. You can add documentation and `allow`, `warn`, or `deny` attributes.
+Place additional `#[derive(...)]` attributes below `#[versioned]`.
+The build hook rejects the reverse order because Rust can expand those derives
+before Type History generates the numbered structs.
+Additional derives apply to every retained numbered struct, including historical
+versions. Their field bounds must hold for each version.
+Rust checks trait resolution and rejects conflicting implementations.
+
+Do not derive `Clone`, `Serialize`, `Deserialize`, or schema traits already
+supplied by Type History. To supply `Debug` or `PartialEq` separately, disable
+the corresponding Type History option first. Additive derives such as `Eq` may
+use the generated traits. Type History does not support arbitrary attribute
+macros or custom derive helpers.
+
+Records and fields accept documentation and `allow`, `warn`, or `deny` attributes.
 Put field naming lints on the record, following Rust's usual lint scope.
-Fields also accept `#[history(...)]`. Every other attribute is rejected.
+Fields also accept `#[history(...)]` and Redactable's `sensitive`,
+`not_sensitive`, and `redactable` helpers. Records accept those Redactable helpers
+and `error`; Redactable validates their placement and contents.
+See [Redactable integration](integration.md#redactable-integration) for supported
+derives, historical policy behavior, and persistence boundaries.
+Other attributes, including Serde, Schemars, `cfg`, and `cfg_attr`, remain rejected.
 
 ## Stable names
 

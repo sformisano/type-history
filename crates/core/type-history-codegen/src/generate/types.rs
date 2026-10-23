@@ -3,6 +3,7 @@
 //! Native mode derives Clone and the selected PartialEq and Debug traits.
 
 use crate::{
+    input::{payload_attribute, redaction_field_attribute},
     lint_attributes::{lint_attributes, scoped_field_type_for_owner},
     model::NamedField,
 };
@@ -32,6 +33,21 @@ pub(super) fn generate(
         PayloadTraits::Native => quote!(#[derive(#(#derives),*)]),
         PayloadTraits::Frontend => TokenStream::new(),
     };
+    let native = matches!(options.payload_traits, PayloadTraits::Native);
+    let authored_derives = context
+        .input
+        .attributes
+        .iter()
+        .filter(|attribute| native && attribute.path().is_ident("derive"))
+        .collect::<Vec<_>>();
+    let helpers = context
+        .input
+        .attributes
+        .iter()
+        .filter(|attribute| {
+            native && !attribute.path().is_ident("derive") && payload_attribute(attribute)
+        })
+        .collect::<Vec<_>>();
     for version in context.history.versions() {
         let name = context.payload(version.version);
         let mut field_aliases = Vec::new();
@@ -65,7 +81,11 @@ pub(super) fn generate(
                 .iter()
                 .filter(|attribute| attribute.path().is_ident("doc"));
             let lints = lint_attributes(&field.attributes);
-            quote!(#(#docs)* #(#lints)* #field_visibility #name: #ty)
+            let policies = field
+                .attributes
+                .iter()
+                .filter(|attribute| native && redaction_field_attribute(attribute));
+            quote!(#(#docs)* #(#lints)* #(#policies)* #field_visibility #name: #ty)
         });
         let codecs = crate::record::record(&name, &fields, &support);
         let schema_docs = if version.version == context.history.head() {
@@ -86,20 +106,18 @@ pub(super) fn generate(
         )?;
         let field_contract = crate::json_schema_derive::field_impl_for_derived(&name, &support);
         let wire_marker = format_ident!("__TypeHistory{}Wire", name);
-        let docs = if version.version == context.history.head() {
-            let attributes = context
-                .input
-                .attributes
-                .iter()
-                .filter(|attribute| attribute.path().is_ident("doc"));
-            quote!(#(#attributes)*)
-        } else {
-            quote!(#[doc(hidden)])
-        };
+        let attributes = context.input.attributes.iter().filter(|attribute| {
+            attribute.path().is_ident("doc")
+                && (native || version.version == context.history.head())
+        });
+        let hidden = (version.version != context.history.head()).then(|| quote!(#[doc(hidden)]));
         declarations.push(quote! {
             #(#field_aliases)*
-            #docs
+            #(#attributes)*
+            #hidden
             #derives
+            #(#authored_derives)*
+            #(#helpers)*
             #visibility struct #name { #(#field_declarations),* }
             #schema_impl
             #codecs
@@ -133,7 +151,11 @@ pub(super) fn generate(
     }
     let current = context.payload(context.history.head());
     let alias = &context.input.name;
-    let attributes = &context.input.attributes;
+    let attributes = context
+        .input
+        .attributes
+        .iter()
+        .filter(|attribute| !native || !payload_attribute(attribute));
     Ok((
         quote! {
             #(#declarations)*

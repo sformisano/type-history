@@ -2,7 +2,7 @@
 use std::collections::BTreeMap;
 use syn::{Attribute, Ident, Type, Visibility};
 
-/// One authored field and its history, documentation, and lint attributes.
+/// One authored field and its history, documentation, lint, and derive helpers.
 #[derive(Clone)]
 pub struct NamedField {
     /// Authored field name.

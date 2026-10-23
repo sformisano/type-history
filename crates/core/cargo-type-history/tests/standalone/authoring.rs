@@ -17,7 +17,7 @@ fn unknown_arguments_and_field_attributes_are_rejected() {
         ),
         (
             V1.replace("pub count", "#[unknown] pub count"),
-            "record fields support only documentation, lints, and `#[history(...)]`",
+            "record fields support documentation, lints, history, and Redactable policies",
         ),
     ] {
         assert_ne!(source, V1);

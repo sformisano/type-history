@@ -5,6 +5,7 @@ use std::{
 use type_history::versioned;
 
 pub mod payment;
+pub mod redaction;
 
 #[derive(Debug)]
 pub struct ConvertError(pub u64);

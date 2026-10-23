@@ -11,6 +11,7 @@ description = "Reference application for reading and writing versioned invoices"
 type-history = { path = "../../core/type-history" }
 serde.workspace = true
 serde_json.workspace = true
+redactable = "=0.15.0"
 
 [dev-dependencies]
 rmp-serde = "1.3.1"

@@ -26,6 +26,13 @@ historical conversion, metadata validation, and preserved callback errors.
 The [raw JSON tests](tests/history.rs) cover the low-level API for
 applications that already keep metadata separately.
 
+The [redaction declarations](src/redaction.rs) use Redactable directly on
+versioned accounts and diagnostic records. Their [tests](tests/redactable.rs)
+check historical policies, all five derives, nested records and enums, and raw
+JSON and MessagePack storage. See the
+[integration contract](../../../book/src/integration.md#redactable-integration)
+for trait ownership, template limits, and diagnostic boundaries.
+
 The [payment declaration](src/payment.rs) preserves `PaymentStatusV1` and updates
 the containing `Payment` struct to use `PaymentStatus`. Its backfill reads the
 old status and currency code from the complete previous struct. A paid amount

@@ -10,6 +10,8 @@ mod frozen_history;
 mod grammar;
 #[path = "compiler/initializers.rs"]
 mod initializers;
+#[path = "compiler/redaction.rs"]
+mod redaction;
 #[path = "compiler/schemas.rs"]
 mod schemas;
 #[path = "compiler/timeline.rs"]
