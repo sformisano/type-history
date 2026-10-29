@@ -253,7 +253,7 @@ The facade has no default features. Enable only the integrations a record uses:
 
 ```toml
 [dependencies]
-type-history = { version = "=0.3.2", features = ["uuid", "rust-decimal", "time"] }
+type-history = { version = "=0.3.3", features = ["uuid", "rust-decimal", "time"] }
 ```
 
 These features were introduced in 0.2.0. See

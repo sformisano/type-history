@@ -639,7 +639,7 @@ checksum = "ab16f14aed21ee8bfd8ec22513f7287cd4a91aa92e44edfe2c17ddd004e92607"
 
 [[package]]
 name = "type-history"
-version = "0.3.2"
+version = "0.3.3"
 dependencies = [
  "type-history-core",
  "type-history-macros",
@@ -647,7 +647,7 @@ dependencies = [
 
 [[package]]
 name = "type-history-build"
-version = "0.3.2"
+version = "0.3.3"
 dependencies = [
  "rustix",
  "serde",
@@ -662,7 +662,7 @@ dependencies = [
 
 [[package]]
 name = "type-history-codegen"
-version = "0.3.2"
+version = "0.3.3"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -675,7 +675,7 @@ dependencies = [
 
 [[package]]
 name = "type-history-core"
-version = "0.3.2"
+version = "0.3.3"
 dependencies = [
  "schemars",
  "serde",
@@ -698,7 +698,7 @@ dependencies = [
 
 [[package]]
 name = "type-history-macros"
-version = "0.3.2"
+version = "0.3.3"
 dependencies = [
  "proc-macro-crate 3.5.0",
  "proc-macro2",
