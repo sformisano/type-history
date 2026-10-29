@@ -40,10 +40,10 @@ jobs:
           TMPDIR: ${{ runner.temp }}
         run: cargo test --workspace --lib --locked
 
-      - name: Unit and integration tests
+      - name: Unit and integration tests outside the standalone suite
         env:
           TMPDIR: ${{ runner.temp }}
-        run: cargo test --workspace --all-targets --all-features --locked
+        run: python3 .github/scripts/test-partition.py rest
 
       - name: Documentation tests
         env:
@@ -65,6 +65,34 @@ jobs:
         env:
           TMPDIR: ${{ runner.temp }}
         run: cargo run -p cargo-type-history --locked -- check --package invoice-history
+
+  standalone:
+    name: Standalone tests (${{ matrix.share }}/${{ strategy.job-total }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        share: [1, 2, 3, 4, 5, 6, 7, 8]
+    env:
+      CARGO_TERM_COLOR: always
+      CARGO_INCREMENTAL: "0"
+      CARGO_PROFILE_DEV_DEBUG: line-tables-only
+      CARGO_PROFILE_TEST_DEBUG: line-tables-only
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install Rust toolchain
+        run: rustup toolchain install 1.97.1 --profile minimal --component clippy --component rustfmt --target aarch64-unknown-linux-gnu
+
+      - name: Fetch dependencies
+        run: cargo fetch --locked
+
+      - name: Standalone consumer tests
+        env:
+          TMPDIR: ${{ runner.temp }}
+        run: python3 .github/scripts/test-partition.py standalone ${{ strategy.job-index }} ${{ strategy.job-total }}
 
   fuzz:
     name: Codec fuzz smoke
