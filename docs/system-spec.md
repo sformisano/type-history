@@ -16,6 +16,8 @@
 - The UUID, decimal, and temporal adapters expose `TryFrom`, `as_inner`, and `into_inner`. They expose no mutable native access.
 - JSON and named-field MessagePack preserve admitted float bits, decimal scale, temporal nanoseconds, and offsets.
 - `derive_debug` and `derive_partial_eq` control those generated traits for every retained version. Both default to `true`.
+- Additional derives placed below `#[versioned]` apply to every retained version. The build hook rejects a derive placed above `#[versioned]`.
+- Each retained version that contains a field receives that field's Redactable `sensitive`, `not_sensitive`, and `redactable` helpers. Record-level Redactable helpers and `error` apply to every retained version. Every version uses the current policies; the ledger does not record them.
 - With additional derives, every retained version carries the record documentation. Otherwise only the current version does.
 - The six published crates require each other at exactly the same release.
 - Lifecycle commands capture local package roots, workspace manifests, lockfiles, effective Cargo configuration, and declared snapshot inputs.
@@ -55,6 +57,7 @@
 
 - `#[versioned(stable_name = "...")]` declares a history.
 - `derive_debug` and `derive_partial_eq` are optional boolean `versioned` arguments.
+- A `versioned` record accepts additional `#[derive(...)]` attributes and Redactable helpers.
 - `Schema` declares supporting field structure.
 - `SetMembership` and `ConstantMembership::custom` declare custom set membership.
 - `type_history::adapters` exposes checked UUID, decimal, Chrono, and Time adapters behind features.

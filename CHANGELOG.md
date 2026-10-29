@@ -4,6 +4,7 @@
 
 - Require exactly matching versions between the six crates, so pinning `type-history` and `type-history-build` also selects the matching macros, generator, and core crates.
 - Copy record documentation to historical versions only when the declaration has additional derives. Doc examples on records without derives no longer repeat for each historical version.
+- Document Redactable field helpers in the evolution matrix and the derive and helper contract in the system specification. Fix the agent skills link on crates.io.
 
 ## 0.3.2
 

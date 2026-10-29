@@ -624,7 +624,7 @@ The `cargo type-history` commands in these tests reuse compiled dependencies, as
 
 ## Documentation
 
-- [Agent skills](.skillcatalog/README.md) guide evolution choices, compatibility evidence, and release decisions. API mechanics remain in the book and Rustdoc.
+- [Agent skills](https://github.com/sformisano/type-history/blob/v0.3.2/.skillcatalog/README.md) guide evolution choices, compatibility evidence, and release decisions. API mechanics remain in the book and Rustdoc.
 - [The book](https://github.com/sformisano/type-history/blob/v0.3.2/book/README.md) covers the generated types, field changes, conversions, freezing, and integrations.
 - [The 0.3.2 API reference](https://docs.rs/type-history/0.3.2/type_history/) includes all optional field integrations. Build it locally with `cargo doc --workspace --no-deps --all-features --locked`, then open `target/doc/type_history/index.html`.
 - [The invoice example](https://github.com/sformisano/type-history/blob/v0.3.2/crates/examples/invoice-history/README.md) is a complete runnable package.

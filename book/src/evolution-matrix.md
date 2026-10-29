@@ -81,7 +81,7 @@ whether a test has run.
 | M54 | Supported alias selected by a feature | S | The compiler-resolved schema for the selected features must match the frozen ledger |
 | M55 | self/super type, callback, expression, array length | S | Original invocation module and spans retained |
 | M56 | Author field names that resemble helpers (`previous`, `value`, `json`, or `__type_history_*`) | S | Generated identifiers hygienic; field names cannot shadow transition input/local bindings |
-| M57 | Unsupported field attributes | R | Accept `#[history(...)]`, documentation, `allow`, `warn`, and `deny`; reject every other attribute, including `expect` and `forbid` |
+| M57 | Unsupported field attributes | R | Accept `#[history(...)]`, documentation, `allow`, `warn`, `deny`, and Redactable's `sensitive`, `not_sensitive`, and `redactable` helpers; reject every other attribute, including `expect` and `forbid` |
 | M58 | Per-version derives or Serde customization | U/R | Derive options apply to the complete history. Per-version traits and Serde customization remain unsupported |
 | M59 | Asynchronous or capturing-closure callback | R | Ordinary synchronous function path required |
 
