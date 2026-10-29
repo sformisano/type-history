@@ -14,8 +14,8 @@ documentation = "https://docs.rs/type-history-macros"
 proc-macro = true
 
 [dependencies]
-type-history-codegen = { path = "../type-history-codegen", version = "0.3.2" }
-type-history-core = { path = "../type-history-core", version = "0.3.2" }
+type-history-codegen = { path = "../type-history-codegen", version = "=0.3.2" }
+type-history-core = { path = "../type-history-core", version = "=0.3.2" }
 syn = { version = "2", features = ["full", "extra-traits"] }
 quote = "1"
 proc-macro2 = "1"

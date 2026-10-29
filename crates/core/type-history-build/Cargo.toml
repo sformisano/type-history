@@ -11,8 +11,8 @@ license.workspace = true
 description = "Shared build authority and checked type history lifecycle operations"
 
 [dependencies]
-type-history-codegen = { path = "../type-history-codegen", version = "0.3.2" }
-type-history-core = { path = "../type-history-core", version = "0.3.2" }
+type-history-codegen = { path = "../type-history-codegen", version = "=0.3.2" }
+type-history-core = { path = "../type-history-core", version = "=0.3.2" }
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true

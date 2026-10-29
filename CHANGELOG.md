@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Require exactly matching versions between the six crates, so pinning `type-history` and `type-history-build` also selects the matching macros, generator, and core crates.
+
 ## 0.3.2
 
 - Forward additional derives to retained payload structs and support Redactable helpers directly. Raw storage codecs and frozen schema checks retain their contracts. See [Redactable integration](book/src/integration.md#redactable-integration) for derive choices and historical policy limits.
