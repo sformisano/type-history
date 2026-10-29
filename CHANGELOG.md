@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Require exactly matching versions between the six crates, so pinning `type-history` and `type-history-build` also selects the matching macros, generator, and core crates.
+- Copy record documentation to historical versions only when the declaration has additional derives. Doc examples on records without derives no longer repeat for each historical version.
 
 ## 0.3.2
 

@@ -67,6 +67,10 @@ before Type History generates the numbered structs.
 Additional derives apply to every retained numbered struct, including historical
 versions. Their field bounds must hold for each version.
 Rust checks trait resolution and rejects conflicting implementations.
+With additional derives, every numbered struct also carries the record's
+documentation, so a derive can read it as a template. Doc examples on that
+record therefore also run for each historical version. Without additional
+derives, only the current version carries the documentation.
 
 Do not derive `Clone`, `Serialize`, `Deserialize`, or schema traits already
 supplied by Type History. To supply `Debug` or `PartialEq` separately, disable

@@ -316,3 +316,74 @@ fn native_derives_and_helpers_belong_only_to_retained_payloads() {
     }
     assert_eq!(payloads, 2);
 }
+
+/// Report whether each generated payload carries record documentation text.
+fn payload_documentation(record: syn::ItemStruct) -> BTreeMap<String, bool> {
+    let (input, stable_name) =
+        crate::input::parse(parse_quote!(stable_name = "fixture.changed"), record).unwrap();
+    let history = HistoryPlan::infer(&input.name, &input.fields)
+        .unwrap()
+        .expand_authorized(
+            &input.name,
+            &input.fields,
+            &stable_name,
+            &ledger(true),
+            &RecordMetadata {},
+        )
+        .unwrap();
+    let generated = generate_history(&input, &stable_name, &history, &paths()).unwrap();
+    let file = syn::parse2::<File>(generated.items).unwrap();
+    file.items
+        .iter()
+        .filter_map(|item| match item {
+            Item::Struct(record)
+                if generated
+                    .versions
+                    .iter()
+                    .any(|version| version.name == record.ident) =>
+            {
+                let documented = record.attrs.iter().any(|attribute| {
+                    attribute.path().is_ident("doc")
+                        && matches!(attribute.meta, syn::Meta::NameValue(_))
+                });
+                Some((record.ident.to_string(), documented))
+            }
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn historical_payloads_carry_record_docs_only_when_derives_can_read_them() {
+    let plain = payload_documentation(parse_quote! {
+        /// Account record.
+        pub struct Changed {
+            pub secret: String,
+            #[history(added_in = v2, backfill_value = String::new())]
+            pub public: String,
+        }
+    });
+    assert_eq!(
+        plain,
+        BTreeMap::from([
+            ("ChangedV1".to_owned(), false),
+            ("ChangedV2".to_owned(), true)
+        ])
+    );
+    let derived = payload_documentation(parse_quote! {
+        /// Account record.
+        #[derive(Eq)]
+        pub struct Changed {
+            pub secret: String,
+            #[history(added_in = v2, backfill_value = String::new())]
+            pub public: String,
+        }
+    });
+    assert_eq!(
+        derived,
+        BTreeMap::from([
+            ("ChangedV1".to_owned(), true),
+            ("ChangedV2".to_owned(), true)
+        ])
+    );
+}

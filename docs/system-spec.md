@@ -16,6 +16,7 @@
 - The UUID, decimal, and temporal adapters expose `TryFrom`, `as_inner`, and `into_inner`. They expose no mutable native access.
 - JSON and named-field MessagePack preserve admitted float bits, decimal scale, temporal nanoseconds, and offsets.
 - `derive_debug` and `derive_partial_eq` control those generated traits for every retained version. Both default to `true`.
+- With additional derives, every retained version carries the record documentation. Otherwise only the current version does.
 - The six published crates require each other at exactly the same release.
 - Lifecycle commands capture local package roots, workspace manifests, lockfiles, effective Cargo configuration, and declared snapshot inputs.
 - Each lifecycle command copies every local input again. Under an exclusive lock, it builds in `type-history-snapshot` inside Cargo's existing target directory. It first removes Cargo's state for local packages, so they always rebuild from the new copy. Only dependency output is reused. Contention, a missing target directory, or an unusable `type-history-snapshot` directory selects a private temporary snapshot. `TYPE_HISTORY_PRIVATE_SNAPSHOT=1` also selects one. Any other value fails the command.

@@ -106,9 +106,12 @@ pub(super) fn generate(
         )?;
         let field_contract = crate::json_schema_derive::field_impl_for_derived(&name, &support);
         let wire_marker = format_ident!("__TypeHistory{}Wire", name);
+        // Authored derives can read record docs as templates on every version.
+        // Without them, only the current version carries docs, so doc examples
+        // do not run again for each historical version.
         let attributes = context.input.attributes.iter().filter(|attribute| {
             attribute.path().is_ident("doc")
-                && (native || version.version == context.history.head())
+                && (version.version == context.history.head() || !authored_derives.is_empty())
         });
         let hidden = (version.version != context.history.head()).then(|| quote!(#[doc(hidden)]));
         declarations.push(quote! {
