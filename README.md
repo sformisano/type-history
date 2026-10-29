@@ -24,24 +24,24 @@ Type History works through three components:
 
 Type History requires Rust 1.97 or later. It supports Linux and macOS. Windows is not supported.
 
-Install the 0.3.1 CLI from crates.io:
+Install the 0.3.2 CLI from crates.io:
 
 ```sh
-cargo install cargo-type-history --version '=0.3.1' --locked
+cargo install cargo-type-history --version '=0.3.2' --locked
 ```
 
 Add the library and build hook to your package:
 
 ```toml
 [dependencies]
-type-history = "=0.3.1"
+type-history = "=0.3.2"
 
 [build-dependencies]
-type-history-build = "=0.3.1"
+type-history-build = "=0.3.2"
 ```
 
 Keep the library, build hook, and CLI on the same release.
-The [package setup guide](https://github.com/sformisano/type-history/blob/v0.3.1/book/src/setup.md)
+The [package setup guide](https://github.com/sformisano/type-history/blob/v0.3.2/book/src/setup.md)
 shows the complete configuration and a source checkout alternative.
 
 ### Connect Type History to Cargo
@@ -582,7 +582,7 @@ If reporting calculates sales totals after subtracting refunds, it must support 
 
 <!-- ANCHOR_END: journey -->
 
-[formats]: https://github.com/sformisano/type-history/blob/v0.3.1/book/src/decoding.md#choose-a-serde-format
+[formats]: https://github.com/sformisano/type-history/blob/v0.3.2/book/src/decoding.md#choose-a-serde-format
 
 ## Persisted field contracts
 
@@ -601,7 +601,7 @@ participate. Change any of them in a new version with an explicit conversion.
 
 The checked adapters own their JSON and named-field MessagePack encodings.
 Enabling native dependency Serde features does not change those encodings.
-See [field integration](https://github.com/sformisano/type-history/blob/v0.3.1/book/src/integration.md#supported-field-contracts)
+See [field integration](https://github.com/sformisano/type-history/blob/v0.3.2/book/src/integration.md#supported-field-contracts)
 for exact domains, feature flags, set declarations, and codec limits.
 
 ## Prepare a source checkout for tests
@@ -620,13 +620,13 @@ Each test keeps its own files and CLI copy.
 A test that reuses the frozen V1 setup still runs its own `cargo build`.
 All tests build in the repository's `target` directory.
 The last test still using the shared resources removes them, so single-threaded and filtered runs can reuse less.
-The `cargo type-history` commands in these tests reuse compiled dependencies, as [package setup](https://github.com/sformisano/type-history/blob/v0.3.1/book/src/setup.md#3-initialize-the-schema-file) describes.
+The `cargo type-history` commands in these tests reuse compiled dependencies, as [package setup](https://github.com/sformisano/type-history/blob/v0.3.2/book/src/setup.md#3-initialize-the-schema-file) describes.
 
 ## Documentation
 
 - [Agent skills](.skillcatalog/README.md) guide evolution choices, compatibility evidence, and release decisions. API mechanics remain in the book and Rustdoc.
-- [The book](https://github.com/sformisano/type-history/blob/v0.3.1/book/README.md) covers the generated types, field changes, conversions, freezing, and integrations.
-- [The 0.3.1 API reference](https://docs.rs/type-history/0.3.1/type_history/) includes all optional field integrations. Build it locally with `cargo doc --workspace --no-deps --all-features --locked`, then open `target/doc/type_history/index.html`.
-- [The invoice example](https://github.com/sformisano/type-history/blob/v0.3.1/crates/examples/invoice-history/README.md) is a complete runnable package.
+- [The book](https://github.com/sformisano/type-history/blob/v0.3.2/book/README.md) covers the generated types, field changes, conversions, freezing, and integrations.
+- [The 0.3.2 API reference](https://docs.rs/type-history/0.3.2/type_history/) includes all optional field integrations. Build it locally with `cargo doc --workspace --no-deps --all-features --locked`, then open `target/doc/type_history/index.html`.
+- [The invoice example](https://github.com/sformisano/type-history/blob/v0.3.2/crates/examples/invoice-history/README.md) is a complete runnable package.
 
-Licensed under [MIT](https://github.com/sformisano/type-history/blob/v0.3.1/LICENSE-MIT) or [Apache 2.0](https://github.com/sformisano/type-history/blob/v0.3.1/LICENSE-APACHE), at your option.
+Licensed under [MIT](https://github.com/sformisano/type-history/blob/v0.3.2/LICENSE-MIT) or [Apache 2.0](https://github.com/sformisano/type-history/blob/v0.3.2/LICENSE-APACHE), at your option.

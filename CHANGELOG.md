@@ -1,10 +1,13 @@
 # Changelog
 
-## Unreleased
+## 0.3.2
 
 - Forward additional derives to retained payload structs and support Redactable helpers directly. Raw storage codecs and frozen schema checks retain their contracts. See [Redactable integration](book/src/integration.md#redactable-integration) for derive choices and historical policy limits.
 - Document Linux and macOS as the supported platforms. Windows is not supported.
 - Correct documentation that disagreed with the code, including the package-root location of `build.rs`, lifecycle recovery steps, and accepted declaration attributes.
+- Add agent decision skills for evolution, compatibility evidence, and release boundaries, with catalog validation in CI.
+- Separate snapshot file and input helpers, and reorganize lifecycle tests by responsibility.
+- Prepare all six crates at 0.3.2 with matching installation instructions.
 
 ## 0.3.1
 
