@@ -21,7 +21,7 @@ homepage = "https://github.com/sformisano/type-history/tree/main/book"
 
 [workspace.dependencies]
 serde = { "version" = "1.0.228", "features" = ["derive"] }
-serde_json = { version = "1.0.149", features = ["arbitrary_precision", "float_roundtrip"] }
+serde_json = { version = "1.0.154", features = ["arbitrary_precision", "float_roundtrip"] }
 schemars = { "version" = "=1.2.2" }
 thiserror = "2.0.18"
 sha2 = "0.10.9"

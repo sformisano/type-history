@@ -15,7 +15,7 @@ invoice-history = { path = "../../examples/invoice-history" }
 type-history = { path = "../../core/type-history" }
 type-history-core = { path = "../../core/type-history-core" }
 serde = { version = "1.0.228", features = ["derive"] }
-serde_json = { version = "1.0.149", features = ["arbitrary_precision"] }
+serde_json = { version = "1.0.154", features = ["arbitrary_precision"] }
 rmp-serde = "1.3.1"
 libfuzzer-sys = "0.4"
 

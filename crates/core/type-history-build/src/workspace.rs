@@ -3,8 +3,8 @@ use crate::contract::ToolContract;
 use crate::options::{FeatureSelection, LifecycleOptions};
 use crate::snapshot::Snapshot;
 use crate::Result;
-use serde::Deserialize;
-use std::collections::BTreeSet;
+use serde::{de::IgnoredAny, Deserialize};
+use std::collections::{BTreeMap, BTreeSet};
 use std::io::Result as IoResult;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -77,22 +77,110 @@ fn metadata_with_selection(selection: FeatureSelection<'_>) -> Result<CargoMetad
     Ok(metadata)
 }
 
+/// Features and dependency aliases as Cargo reads them, including workspace
+/// inheritance, target tables and implicit features from optional dependencies.
+#[derive(Deserialize)]
+struct FeatureWorkspace {
+    packages: Vec<FeaturePackage>,
+}
+
+#[derive(Deserialize)]
+struct FeaturePackage {
+    id: String,
+    manifest_path: PathBuf,
+    name: String,
+    features: BTreeMap<String, IgnoredAny>,
+    dependencies: Vec<FeatureDependency>,
+}
+
+#[derive(Deserialize)]
+struct FeatureDependency {
+    name: String,
+    path: Option<PathBuf>,
+    optional: bool,
+    rename: Option<String>,
+}
+
+impl FeaturePackage {
+    fn select(
+        &self,
+        requested: &str,
+        members: &BTreeMap<&Path, &FeaturePackage>,
+    ) -> BTreeSet<String> {
+        let mut selected = BTreeSet::new();
+        for token in crate::options::feature_tokens(requested) {
+            let (scope, feature) = match token.split_once('/') {
+                Some((scope, feature)) => (Some(scope.trim_end_matches('?')), feature),
+                None => (None, token),
+            };
+            if scope.is_none_or(|name| name == self.name) && self.features.contains_key(feature) {
+                selected.insert(feature.to_owned());
+            }
+            for dependency in &self.dependencies {
+                let alias = dependency.rename.as_ref().unwrap_or(&dependency.name);
+                if scope == Some(alias) {
+                    selected.insert(token.to_owned());
+                    continue;
+                }
+                // A workspace member can also supply a consumer's field types
+                // under a different dependency alias. Forward its requested feature
+                // without turning on an otherwise inactive optional dependency.
+                let member = dependency
+                    .path
+                    .as_deref()
+                    .and_then(|path| members.get(path));
+                if let Some(member) = member {
+                    if scope.is_none_or(|name| name == member.name)
+                        && member.features.contains_key(feature)
+                    {
+                        let weak = if dependency.optional { "?" } else { "" };
+                        selected.insert(format!("{alias}{weak}/{feature}"));
+                    }
+                }
+            }
+        }
+        selected
+    }
+}
+
+pub(crate) type PackageFeatures = BTreeMap<String, BTreeSet<String>>;
+
 pub(crate) fn captured_metadata(
     snapshot: &Snapshot,
     options: &LifecycleOptions,
-) -> Result<CargoMetadata> {
+) -> Result<(CargoMetadata, PackageFeatures)> {
     let mut command = Command::new("cargo");
     command.args(["metadata", "--format-version", "1", "--locked", "--offline"]);
     FeatureSelection::from_options(options).apply_to(&mut command);
     snapshot.configure_cargo(&mut command)?;
-    let mut metadata = read_metadata(&mut command)?;
-    include_local_manifests(&mut metadata, |command, manifest| {
+    let bytes = metadata_output(&mut command)?;
+    let mut workspace: CargoMetadata = serde_json::from_slice(&bytes)?;
+    let mut features = PackageFeatures::new();
+    if let (None, Some(requested)) = (&options.package, &options.features) {
+        // resolve.nodes[].features is a union across platforms. Passing that
+        // union to a single member would activate inactive target features.
+        let declared: FeatureWorkspace = serde_json::from_slice(&bytes)?;
+        let members: BTreeMap<_, _> = declared
+            .packages
+            .iter()
+            .filter(|p| workspace.workspace_members.contains(&p.id))
+            .map(|p| (p.manifest_path.parent().expect("Cargo manifest parent"), p))
+            .collect();
+        for package in members.values() {
+            features.insert(package.name.clone(), package.select(requested, &members));
+        }
+    }
+    include_local_manifests(&mut workspace, |command, manifest| {
         snapshot.configure_cargo_at(command, manifest)
     })?;
-    Ok(metadata)
+    Ok((workspace, features))
 }
 
 fn read_metadata(command: &mut Command) -> Result<CargoMetadata> {
+    Ok(serde_json::from_slice(&metadata_output(command)?)?)
+}
+
+fn metadata_output(command: &mut Command) -> Result<Vec<u8>> {
     let output = command.output()?;
     if !output.status.success() {
         return Err(format!(
@@ -101,7 +189,7 @@ fn read_metadata(command: &mut Command) -> Result<CargoMetadata> {
         )
         .into());
     }
-    Ok(serde_json::from_slice(&output.stdout)?)
+    Ok(output.stdout)
 }
 
 fn include_local_manifests(

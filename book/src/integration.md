@@ -77,7 +77,7 @@ For a supporting struct such as `Address`:
 
 1. Derive `type_history::Schema` to describe its structure for the build checks.
 2. Derive Serde's `Serialize` and `Deserialize` for reading and writing its values.
-3. Add `#[serde(deny_unknown_fields)]` so decoding rejects unexpected fields.
+3. Add `#[serde(deny_unknown_fields)]` so direct Serde reads of the supporting type also reject unexpected fields.
 
 `Schema` generates the structure used by the build checks through `ResolvedSchema` and the schema export traits. Serde's derives read and write the values. Your constructors and validation still decide which addresses the application accepts.
 
@@ -115,6 +115,10 @@ pub mod addresses {
     }
 }
 ```
+
+Both `Versioned` and the raw JSON `decode` API check the field names when replaying a named struct or a named enum variant.
+This also protects derived supporting records inside options, collections, and other records.
+String-keyed maps accept application-defined keys. If a handwritten codec reads a record as a map, its visitor must check the keys itself.
 
 The test accepts an address with `number` and rejects one with an unknown field.
 Adding this module creates a new V1 draft. Freeze it before a release build.
@@ -431,15 +435,35 @@ The storage guarantees cover JSON and MessagePack with named struct fields.
 Use `rmp_serde::to_vec_named` for MessagePack. The three `Versioned` fields and the
 payload fields can appear in any order when decoding.
 
-Supported `Versioned` writing and decoding preserve finite float width and bits,
-including signed zero and subnormal values. They also preserve decimal
-coefficient and scale, temporal nanoseconds, and retained offsets. Invalid
-profile values return checked errors without rounding, truncation, clamping, or
-null substitution.
+Use the default binary deserializer for stored MessagePack. Switching it to
+`with_human_readable()` can reject a map whose first key is the literal
+`$serde_json::private::Number`. The default `rmp_serde::from_slice` reads it.
+
+Type History writers round-trip finite floats at the declared width, including
+signed zero and subnormal values. An external MessagePack writer should emit
+binary32 for a finite `f32` and binary64 for a finite `f64`. Reading a binary64
+value into an `f32` rounds it to binary32. For example, `1e-100` becomes zero.
+An overflow to infinity fails the finite-value check.
+
+Decimal and temporal adapters preserve coefficient and scale, nanoseconds, and
+retained offsets within their documented domains. They reject out-of-domain values.
 
 Other Serde formats are outside this guarantee. MessagePack payload struct arrays
 are unsupported. Map iteration order does not promise deterministic serialized
 bytes.
+
+### Validating records outside Rust
+
+Read each field’s integer `format` and enforce its signedness and width.
+For example, a frozen `uint32` field admits integers from 0 through 4294967295.
+A standard JSON Schema validator that treats `format` as an annotation may accept
+4294967296. The Type History reader rejects it. External validators also need
+to implement the stored `x-type-history-profile` and `x-type-history-membership`
+contracts for fields that use them.
+
+For MessagePack interoperability with `rmp-serde`, encode `i128` and `u128`
+as binary values containing exactly 16 big-endian bytes. Signed values use
+two’s complement.
 
 ## Changes that require migration
 

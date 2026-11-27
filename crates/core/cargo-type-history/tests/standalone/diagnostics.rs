@@ -66,6 +66,44 @@ fn check_json_preserves_workspace_member_source_locations() {
     assert_eq!(fixture.read("members/history/src/lib.rs"), broken);
 }
 
+#[test]
+fn removing_frozen_declarations_identifies_each_ledger_entry() {
+    use super::support::V2;
+    let fixture = Fixture::frozen();
+    let extra = r#"#[history_api::versioned(stable_name="billing.second")] pub struct Second { pub amount: u64 }"#;
+    fixture.write("src/lib.rs", &format!("{V2}\n{extra}"));
+    success(&fixture.cli(&["freeze", "--package", "standalone-history-consumer"]));
+    let before = fixture.read(LEDGER);
+    fixture.write("src/lib.rs", "pub struct Unrelated;");
+    let result = report(&fixture.cli(&["check", "--format", "json"]), false);
+    let findings = result["packages"][0]["diagnostics"].as_array().unwrap();
+    assert_eq!(findings.len(), 3, "{result:#}");
+    let expected_ledger: Value = serde_json::from_str(&before).unwrap();
+    for (finding, (name, version)) in findings.iter().zip([
+        ("billing.invoice.issued", 1),
+        ("billing.invoice.issued", 2),
+        ("billing.second", 1),
+    ]) {
+        assert_eq!(finding["code"], "history_missing");
+        assert_eq!(finding["origin"], "current_ledger");
+        assert_eq!(finding["stable_name"], name);
+        assert_eq!(finding["version"], version);
+        assert_eq!(finding["path"], json!([]));
+        assert_eq!(
+            finding["expected"],
+            expected_ledger[name][version.to_string()]
+        );
+        assert!(finding["actual"].is_null());
+        assert_eq!(
+            finding["location"]["file"],
+            fixture.root().join(LEDGER).to_str().unwrap()
+        );
+    }
+    assert_eq!(fixture.read(LEDGER), before);
+    fixture.write("src/lib.rs", &format!("{V2}\n{extra}"));
+    success(&fixture.cli(&["check"]));
+}
+
 pub(super) fn report(output: &Output, ok: bool) -> Value {
     assert_eq!(
         output.status.success(),

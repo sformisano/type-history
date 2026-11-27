@@ -127,7 +127,7 @@ pub fn execute<M: Clone + Eq + Serialize + DeserializeOwned>(
         Action::Check => unreachable!("read-only check handled before acquiring a mutation lock"),
         Action::Init => unreachable!("init handled above"),
     };
-    if candidate == before {
+    if transaction.original().is_some() && candidate == before {
         export::validate(&snapshot, &package.name, &copied_root, options, contract)?;
         snapshot.ensure_fresh()?;
         transaction.ensure_original()?;

@@ -14,17 +14,21 @@
 - `Box` persists its inner value. `Rc` and `Arc` do the same when the `rc` feature is enabled.
 - Optional adapters provide finite floats, UUID text, exact decimal text, and five shared temporal profiles.
 - The UUID, decimal, and temporal adapters expose `TryFrom`, `as_inner`, and `into_inner`. They expose no mutable native access.
-- JSON and named-field MessagePack preserve admitted float bits, decimal scale, temporal nanoseconds, and offsets.
+- Reading the original JSON or named-field MessagePack written at the declared float width preserves admitted float bits, decimal scale, temporal nanoseconds, and offsets. External MessagePack binary64 values read into finite binary32 fields round to that width. Overflow fails the read.
+- A historical struct or named enum variant decoded through Serde's struct interface rejects unknown fields at any nesting depth. String-keyed maps accept arbitrary keys. Unit enum variants use the variant name as a string.
+- On direct JSON reads, arbitrary-precision numbers and objects remain distinct, including objects with a literal `$serde_json::private::Number` key.
 - `derive_debug` and `derive_partial_eq` control those generated traits for every retained version. Both default to `true`.
 - Additional derives placed below `#[versioned]` apply to every retained version. The build hook rejects a derive placed above `#[versioned]`.
 - Each retained version that contains a field receives that field's Redactable `sensitive`, `not_sensitive`, and `redactable` helpers. Record-level Redactable helpers and `error` apply to every retained version. Every version uses the current policies; the ledger does not record them.
 - With additional derives, every retained version carries the record documentation. Otherwise only the current version does.
 - The six published crates require each other at exactly the same release.
 - Lifecycle commands capture local package roots, workspace manifests, lockfiles, effective Cargo configuration, and declared snapshot inputs.
+- Captured directory entries include empty directories. A directory added or removed between capture and final verification invalidates the snapshot.
 - Each lifecycle command copies every local input again. Under an exclusive lock, it builds in `type-history-snapshot` inside Cargo's existing target directory. It first removes Cargo's state for local packages, so they always rebuild from the new copy. Only dependency output is reused. Contention, a missing target directory, or an unusable `type-history-snapshot` directory selects a private temporary snapshot. `TYPE_HISTORY_PRIVATE_SNAPSHOT=1` also selects one. Any other value fails the command.
 - Frozen schema documents derive from compiler-resolved structural shapes. Descriptive schema exports retain container, field, and variant documentation.
 - Lifecycle commands observe source shapes in the schema export build, a dedicated development test build. They compare those shapes with the ledger. With `--released-baseline`, `check` first compares the released ledger with the package's ledger.
 - JSON reports identify observed source differences as `current_ledger` and include discovered source locations when available.
+- A removed history declaration produces a `history_missing` finding for each retained version, with the stable name and ledger location.
 
 ## Repository Layout
 
@@ -64,6 +68,8 @@
 - `typed-floats` adds direct support for `NonNaNFinite<f32>` and `NonNaNFinite<f64>`.
 - `Versioned` wraps each stored payload with its stable name and version.
 - `cargo type-history` initializes, checks, freezes, imports, resets, and undoes ledger changes.
+- Importing an empty ledger into a declaration-free package creates the missing ledger. Repeating the import reports `no-op`.
+- Workspace checks resolve feature selectors for the workspace and apply them to the relevant members.
 - Frameworks can supply payload traits and optional source locations through the shared generator and build interfaces.
 - `package.metadata.type-history.snapshot-inputs` declares relative files or directories that a package needs from outside its root.
 - Declared input snapshots bind every path-resolution component and the resolved contents; adding, removing, or retargeting a symlink invalidates the snapshot even when the resolved bytes are unchanged.
@@ -76,4 +82,4 @@
 - Borrowed fields, recursive graphs, cycles, weak pointers, locks, and atomics are unsupported.
 - `Rc` and `Arc` allocation identity and sharing are not preserved.
 - Arbitrary-precision decimals, named timezones, epoch-unit profiles, and arbitrary Serde overrides are unsupported.
-- Codec guarantees cover JSON and named-field MessagePack. Map byte order is unspecified.
+- Codec guarantees cover original JSON and named-field MessagePack using the default binary deserializer. Map byte order is unspecified.

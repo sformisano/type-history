@@ -226,7 +226,9 @@ fn declared_input_bytes_remain_part_of_freshness_checks() {
     fs::write(&input, "captured").unwrap();
     snapshot.roots.push(input.clone());
     snapshot.before = snapshot.fingerprint().unwrap();
-    snapshot.copy_tree(&input).unwrap();
+    for root in &snapshot.roots {
+        snapshot.copy_tree(root).unwrap();
+    }
     snapshot.verify_complete_copy().unwrap();
 
     fs::write(&input, "changed").unwrap();
@@ -306,6 +308,20 @@ fn source_config_and_import_edit_copy_undo_are_rejected() {
         assert!(error.to_string().contains("InputsChanged"));
         assert!(!snapshot.mapped(&path).unwrap().exists());
     }
+}
+
+#[test]
+fn transient_empty_directory_cannot_survive_in_the_copy_after_live_undo() {
+    let mut snapshot = fixture();
+    let root = snapshot.roots[0].clone();
+    snapshot.before = snapshot.fingerprint().unwrap();
+    let transient = root.join("wide-schema");
+    fs::create_dir(&transient).unwrap();
+    let error = snapshot.copy_tree(&root).unwrap_err();
+    fs::remove_dir(&transient).unwrap();
+    assert_eq!(snapshot.before, snapshot.fingerprint().unwrap());
+    assert!(error.to_string().contains("InputsChanged"));
+    assert!(!snapshot.mapped(&transient).unwrap().exists());
 }
 
 #[test]

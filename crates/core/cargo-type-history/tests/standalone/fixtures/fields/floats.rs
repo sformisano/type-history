@@ -75,6 +75,32 @@ mod tests {
     }
 
     #[test]
+    fn field_support_external_messagepack_binary64_rounds_at_a_binary32_field() {
+        #[derive(Serialize)]
+        struct External {
+            single: f64,
+            double: f64,
+            nested: BTreeMap<String, ()>,
+        }
+        for (single, expected) in [(1e-100, Some(0.0_f32)), (1.25, Some(1.25)), (f64::MAX, None)] {
+            let wire = PayloadFirst {
+                payload: External { single, double: single, nested: BTreeMap::new() },
+                version: 1, stable_name: "fields.floats",
+            };
+            let bytes = rmp_serde::to_vec_named(&wire).unwrap();
+            let result = rmp_serde::from_slice::<Versioned<Floats>>(&bytes);
+            match expected {
+                Some(rounded) => {
+                    let value = Floats::from_versioned(result.unwrap()).unwrap();
+                    assert_eq!(value.single.get().to_bits(), rounded.to_bits());
+                    assert_eq!(value.double.get().to_bits(), single.to_bits());
+                }
+                None => assert!(result.is_err()),
+            }
+        }
+    }
+
+    #[test]
     fn field_support_nonfinite_values_are_errors() {
         for raw in ["1e9999", "-1e9999", "NaN", "Infinity"] {
             let input = format!(r#"{{"payload":{{"single":{raw},"double":0,"nested":{{}}}},"version":1,"stable_name":"fields.floats"}}"#);

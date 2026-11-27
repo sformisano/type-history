@@ -40,3 +40,37 @@ fn separate() {
 "#);
     success(&fixture.cargo(&["test", "--locked", "--offline"]));
 }
+
+#[test]
+fn frozen_nested_records_remain_closed_when_serde_would_ignore_fields() {
+    let fixture = Fixture::empty();
+    let manifest = fixture
+        .read("Cargo.toml")
+        .replace("[dependencies]", "[dependencies]\nrmp-serde = '1.3.1'");
+    fixture.write("Cargo.toml", &manifest);
+    success(&fixture.cargo(&["generate-lockfile", "--offline"]));
+    success(&fixture.cli(&["init", "--package", "standalone-history-consumer"]));
+    let source = include_str!("fixtures/closed-supporting.rs");
+    fixture.write("src/lib.rs", source);
+    success(&fixture.cli(&["freeze", "--package", "standalone-history-consumer"]));
+    let ledger = fixture.read(super::support::LEDGER);
+    fixture.write("release.json", &ledger);
+    fixture.write(
+        "src/lib.rs",
+        &source.replace("#[serde(deny_unknown_fields)]", ""),
+    );
+    success(&fixture.cli(&[
+        "check",
+        "--package",
+        "standalone-history-consumer",
+        "--released-baseline",
+        "release.json",
+    ]));
+    success(&fixture.cargo(&[
+        "test",
+        "--locked",
+        "--offline",
+        "checked_decoders_reject_unknown_nested_fields",
+    ]));
+    assert_eq!(fixture.read(super::support::LEDGER), ledger);
+}

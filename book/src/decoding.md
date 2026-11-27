@@ -40,19 +40,52 @@ which serializes structs with their field names:
 
 <!-- decoding:messagepack.rs -->
 ```rust
-use rmp_serde::{from_slice, to_vec_named};
+use serde::Deserialize;
+use std::io::Cursor;
+use type_history::Versioned;
 
-let bytes = to_vec_named(&receipt.into_versioned())?;
-let receipt = ReceiptCreated::from_versioned(from_slice(&bytes)?)?;
+fn read_one(bytes: &[u8]) -> Result<ReceiptCreated, Box<dyn std::error::Error>> {
+    let mut decoder = rmp_serde::Deserializer::new(Cursor::new(bytes));
+    let stored = Versioned::<ReceiptCreated>::deserialize(&mut decoder)?;
+    if decoder.position() != bytes.len() as u64 {
+        return Err("trailing bytes after the receipt".into());
+    }
+    Ok(ReceiptCreated::from_versioned(stored)?)
+}
+
+let bytes = rmp_serde::to_vec_named(&receipt.into_versioned())?;
+let receipt = read_one(&bytes)?;
 ```
 
-This fragment assumes a `ReceiptCreated` event named `receipt`, an `rmp-serde`
-dependency, and a function that propagates errors.
-Use `serde_json::to_vec` and `serde_json::from_slice` for the equivalent JSON path.
+For a database value containing one receipt, check that the decoder consumed the entire slice.
+`rmp_serde::from_slice` returns after the first value, even if another receipt follows.
+`serde_json::from_slice` checks that only whitespace follows a complete JSON value.
+
+For a batch of concatenated MessagePack receipts, keep one decoder and read up to the end of the batch.
+A truncated final receipt returns an error.
+
+<!-- decoding:messagepack-batch.rs -->
+```rust
+use serde::Deserialize;
+use std::io::Cursor;
+use type_history::Versioned;
+
+fn read_batch(bytes: &[u8]) -> Result<Vec<ReceiptCreated>, Box<dyn std::error::Error>> {
+    let mut decoder = rmp_serde::Deserializer::new(Cursor::new(bytes));
+    let mut receipts = Vec::new();
+    while decoder.position() < bytes.len() as u64 {
+        let stored = Versioned::<ReceiptCreated>::deserialize(&mut decoder)?;
+        receipts.push(ReceiptCreated::from_versioned(stored)?);
+    }
+    Ok(receipts)
+}
+```
 
 Use `to_vec_named` for MessagePack because the decoder needs field names. MessagePack's default struct-array encoding omits them and is rejected. Other Serde formats are outside the [codec guarantees](integration.md#codec-guarantees). A format must at least be self-describing, write records as named maps, and support the history's field types.
 
-Type History enables `serde_json`'s `arbitrary_precision` feature so buffering retains 128-bit integers. That feature has a parsing limitation: `{"$serde_json::private::Number":"42"}` can also be read as an integer field. Serde exposes that object and a buffered JSON number through the same representation.
+Read stored JSON directly from bytes, text, or a reader. This preserves numeric precision and the sign of `-0`, and lets the decoder detect duplicate keys. A map field requires a JSON object. Its keys can include the literal `$serde_json::private::Number`, and its values follow the map's declared value type.
+
+Parsing into `serde_json::Value` first can discard duplicate keys, interpret a literal codec marker, or lose the sign of `-0` during replay. An outer `#[serde(untagged)]` enum also buffers its input before calling `Versioned`. It can make a genuine JSON number and an object with a numeric-marker key indistinguishable. Such ambiguous input fails the historical read. Decode the envelope directly when you need these distinctions.
 
 ## Inspect the stored version before converting
 
@@ -99,6 +132,7 @@ Deserializing a `Versioned` fails for:
 - A version that is zero, negative, larger than `u32::MAX`, or written as a string or fraction.
 - Malformed input or a sequence in place of a record map.
 - Unknown fields, duplicate fields, or missing required fields.
+- An object such as `{"Ready":null}` in place of the unit enum variant `"Ready"`.
 
 An omitted `Option<T>` field decodes as `None`. A required field cannot be omitted. The selected Serde format returns decoding errors; with JSON, their type is `serde_json::Error`.
 

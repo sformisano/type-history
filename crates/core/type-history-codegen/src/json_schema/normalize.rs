@@ -91,7 +91,17 @@ fn normalize_node(
             )?;
         }
     }
+    // Schemars expands an otherwise compact string enum into individual
+    // branches to hold variant docs. Restore its original form only when
+    // stripping those annotations; stored documents without docs stay intact.
+    let bare_alternatives = object
+        .keys()
+        .all(|key| matches!(key.as_str(), "oneOf" | "$id" | "$schema"));
     if let Some(Value::Array(entries)) = object.get_mut("oneOf") {
+        let annotated = bare_alternatives
+            && entries
+                .iter()
+                .any(|entry| entry.get("description").is_some() || entry.get("title").is_some());
         let mut expanded = Vec::with_capacity(entries.len());
         for (index, entry) in entries.iter_mut().enumerate() {
             normalize_node(
@@ -105,7 +115,27 @@ fn normalize_node(
             }
         }
         sort_by_canonical_text(&mut expanded)?;
-        *entries = expanded;
+        if annotated
+            && expanded.iter().all(|entry| {
+                entry.as_object().is_some_and(|node| {
+                    node.len() == 1 && node.get("const").is_some_and(Value::is_string)
+                })
+            })
+        {
+            let names: Vec<_> = expanded
+                .into_iter()
+                .map(|mut entry| entry["const"].take())
+                .collect();
+            object.remove("oneOf");
+            if let [name] = names.as_slice() {
+                object.insert("const".to_owned(), name.clone());
+            } else {
+                object.insert("type".to_owned(), Value::String("string".to_owned()));
+                object.insert("enum".to_owned(), Value::Array(names));
+            }
+        } else {
+            *entries = expanded;
+        }
     }
     if let Some(Value::Array(entries)) = object.get_mut("anyOf") {
         for (index, entry) in entries.iter_mut().enumerate() {

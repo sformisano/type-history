@@ -4,6 +4,7 @@ Before the shop can declare `ReceiptCreated`, its package needs the Type History
 
 This guide uses Type History 0.3.3 from crates.io and requires Rust 1.97 or later.
 Type History supports Linux and macOS. Windows is not supported, and lifecycle commands (`cargo type-history ...`) fail there.
+The repository’s automated lifecycle tests run on Linux.
 
 ## 1. Install the components
 

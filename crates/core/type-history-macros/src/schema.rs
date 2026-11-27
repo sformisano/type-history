@@ -28,10 +28,12 @@ pub(super) fn expand(input: DeriveInput) -> Result<TokenStream> {
     let implementation = match &input.data {
         Data::Struct(data) => match &data.fields {
             Fields::Named(fields) => {
-                let (wire, declaration) = record(fields, name, &support)?;
+                let (wire, declaration) = record(fields, name, &input.attrs, &support)?;
                 nominal(name, visibility, &wire, &declaration, &support)
             }
-            Fields::Unnamed(fields) => tuple::expand(fields, name, visibility, &helper, &support)?,
+            Fields::Unnamed(fields) => {
+                tuple::expand(fields, name, visibility, &helper, &input.attrs, &support)?
+            }
             Fields::Unit => {
                 return Err(Error::new_spanned(
                     &input,
@@ -40,7 +42,8 @@ pub(super) fn expand(input: DeriveInput) -> Result<TokenStream> {
             }
         },
         Data::Enum(data) => {
-            let (wire, declaration) = enumeration::expand(data, name, &helper, &support)?;
+            let (wire, declaration) =
+                enumeration::expand(data, name, &helper, &input.attrs, &support)?;
             nominal(name, visibility, &wire, &declaration, &support)
         }
         Data::Union(_) => {
@@ -80,6 +83,7 @@ fn nominal(
 fn record(
     fields: &FieldsNamed,
     name: &Ident,
+    attributes: &[Attribute],
     support: &TokenStream,
 ) -> Result<(TokenStream, TokenStream)> {
     for attribute in fields.named.iter().flat_map(|field| &field.attrs) {
@@ -104,7 +108,13 @@ fn record(
         schema_fields.iter().map(|field| (&field.name, &field.ty)),
         support,
     )?;
-    let schema = type_history_codegen::json_schema_derive::record(name, &schema_fields, support);
+    let schema = type_history_codegen::json_schema_derive::record_with_docs(
+        name,
+        &schema_fields,
+        support,
+        attributes,
+        true,
+    );
     Ok((
         wire,
         quote! {

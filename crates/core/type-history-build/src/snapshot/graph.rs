@@ -1,7 +1,7 @@
 //! Bind Cargo's discovery result to the graph resolved from captured inputs.
 use super::Snapshot;
 use crate::options::LifecycleOptions;
-use crate::workspace::{self, CargoMetadata, Package};
+use crate::workspace::{self, CargoMetadata, Package, PackageFeatures};
 use crate::Result;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
@@ -11,8 +11,8 @@ impl Snapshot {
         &self,
         metadata: &CargoMetadata,
         options: &LifecycleOptions,
-    ) -> Result<()> {
-        let captured = workspace::captured_metadata(self, options)?;
+    ) -> Result<PackageFeatures> {
+        let (captured, features) = workspace::captured_metadata(self, options)?;
         let expected = Graph::read(metadata, |path| Ok(path.to_owned()))?;
         let actual = Graph::read(&captured, |path| {
             self.original(path)
@@ -21,7 +21,8 @@ impl Snapshot {
         if expected != actual {
             return Err("InputsChanged: Cargo package graph or workspace membership changed before source capture; retry without editing inputs".into());
         }
-        self.ensure_fresh()
+        self.ensure_fresh()?;
+        Ok(features)
     }
 }
 

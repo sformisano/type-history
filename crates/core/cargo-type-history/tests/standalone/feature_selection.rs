@@ -228,6 +228,140 @@ type Count = u32;
     assert_eq!(fixture.read(LEDGER), authority);
 }
 
+#[test]
+fn workspace_features_are_resolved_for_each_initialized_library() {
+    let fixture = Fixture::empty();
+    let member = fixture.read("Cargo.toml").replace("[workspace]\n", "");
+    let member = member.split("[profile.release_child]").next().unwrap();
+    for name in ["billing", "orders"] {
+        let manifest = member.replace("standalone-history-consumer", name);
+        let features = if name == "orders" {
+            "orders_only=[]\n[dependencies.alt-engine]\npackage='engine'\npath='../engine'\noptional=true\n[target.'cfg(windows)'.dependencies]\nbilling={path='../billing',features=['windows_only']}\n"
+        } else {
+            "windows_only=[]\n"
+        };
+        fixture.write(
+            &format!("{name}/Cargo.toml"),
+            &format!("{manifest}\n[features]\nshared=[]\n{features}"),
+        );
+        fixture.write(&format!("{name}/build.rs"), &fixture.read("build.rs"));
+        fixture.write(&format!("{name}/src/lib.rs"), "");
+    }
+    fixture.write(
+        "engine/Cargo.toml",
+        "[package]\nname='engine'\nversion='0.0.0'\nedition='2021'\n[features]\nprecise=[]\n",
+    );
+    fixture.write(
+        "engine/src/lib.rs",
+        "#[cfg(feature=\"precise\")] pub const PRECISE: bool = true;",
+    );
+    fixture.write(
+        "Cargo.toml",
+        "[workspace]\nmembers=['billing','orders','engine']\nresolver='2'\n",
+    );
+    success(&fixture.cargo(&["generate-lockfile", "--offline"]));
+    for name in ["billing", "orders"] {
+        success(&fixture.cli(&["init", "--package", name]));
+        fixture.write(
+            &format!("{name}/src/lib.rs"),
+            &V1.replace("billing.invoice.issued", &format!("{name}.invoice")),
+        );
+        success(&fixture.cli(&["freeze", "--package", name]));
+        let mut source = fixture.read(&format!("{name}/src/lib.rs"));
+        source.push_str(
+            "\n#[cfg(not(feature = \"shared\"))] compile_error!(\"missing shared feature\");",
+        );
+        if name == "orders" {
+            source.push_str(
+                "\n#[cfg(not(feature = \"orders_only\"))] compile_error!(\"orders_only not active\");",
+            );
+        } else {
+            source.push_str(
+                "\n#[cfg(all(not(windows),feature = \"windows_only\"))] compile_error!(\"inactive target dependency enabled windows_only\");",
+            );
+        }
+        fixture.write(&format!("{name}/src/lib.rs"), &source);
+    }
+    for selection in ["shared,orders_only", "shared orders/orders_only"] {
+        success(&fixture.cli(&["check", "--features", selection]));
+    }
+    failure(
+        &fixture.cli(&["check", "--features", "shared"]),
+        "orders_only not active",
+    );
+    failure(
+        &fixture.cli(&["check", "--features", "unknown_feature"]),
+        "unknown_feature",
+    );
+    let orders = fixture.read("orders/src/lib.rs");
+    fixture.write(
+        "orders/src/lib.rs",
+        &format!("{orders}\n#[cfg(not(feature=\"alt-engine\"))] compile_error!(\"engine inactive\");\n#[cfg(feature=\"alt-engine\")] const _: bool = alt_engine::PRECISE;"),
+    );
+    for selection in [
+        "shared,orders_only,alt-engine/precise",
+        "shared,orders_only,alt-engine,alt-engine?/precise",
+    ] {
+        success(&fixture.cli(&["check", "--features", selection]));
+    }
+    failure(
+        &fixture.cli(&[
+            "check",
+            "--features",
+            "shared,orders_only,alt-engine?/precise",
+        ]),
+        "engine inactive",
+    );
+    fixture.write(
+        "orders/src/lib.rs",
+        &orders.replace("pub count: u32", "pub count: u64"),
+    );
+    failure(
+        &fixture.cli(&["check", "--features", "shared,orders/orders_only"]),
+        "shape_kind_changed",
+    );
+}
+
+#[test]
+fn workspace_check_preserves_shared_dependency_features_in_frozen_fields() {
+    let fixture = Fixture::frozen();
+    let manifest = fixture
+        .read("Cargo.toml")
+        .replace(
+            "[workspace]",
+            "[workspace]\nmembers=['selector','bridge','wire','unrelated']\nresolver='2'",
+        )
+        .replace(
+            "[dependencies]",
+            "[dependencies]\nmodel = { package='wire', path='wire' }",
+        );
+    fixture.write("Cargo.toml", &manifest);
+    for (name, settings, source) in [
+        ("wire", "[features]\nwide=[]", "#[cfg(feature=\"wide\")] pub type Count = u64; #[cfg(not(feature=\"wide\"))] pub type Count = u32;"),
+        ("bridge", "[dependencies]\nwire={path='../wire'}\n[features]\nforward=['wire/wide']", ""),
+        ("selector", "[dependencies]\nbridge={path='../bridge'}\n[features]\nforward=['bridge/forward']", ""),
+        ("unrelated", "", "compile_error!(\"unselected library must not compile\");"),
+    ] {
+        fixture.write(&format!("{name}/Cargo.toml"), &format!("[package]\nname='{name}'\nversion='0.0.0'\nedition='2021'\n{settings}\n"));
+        fixture.write(&format!("{name}/src/lib.rs"), source);
+    }
+    fixture.write("selector/type-history/schemas.json", "{}");
+    fixture.write(
+        "src/lib.rs",
+        &V1.replace("pub count: u32", "pub count: model::Count"),
+    );
+    success(&fixture.cargo(&["generate-lockfile", "--offline"]));
+    success(&fixture.cli(&["check"]));
+    failure(
+        &fixture.cli(&["check", "--features", "wire/wide"]),
+        "shape_kind_changed",
+    );
+    failure(
+        &fixture.cli(&["check", "--features", "selector/forward"]),
+        "frozen wire shape",
+    );
+}
+
 fn configure_backends(fixture: &Fixture) {
     for package in ["default-backend", "alternative-backend"] {
         fixture.write(

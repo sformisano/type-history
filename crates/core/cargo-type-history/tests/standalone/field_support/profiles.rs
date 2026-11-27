@@ -5,6 +5,19 @@ const LOGICAL: &str = include_str!("../fixtures/fields/logical.rs");
 const TEMPORAL: &str = include_str!("../fixtures/fields/temporal.rs");
 
 #[test]
+fn field_support_json_numbers_maps_and_unit_variants_keep_their_wire_kinds() {
+    let fixture = fixture(
+        &["typed-floats"],
+        r#"float_native = { package = "typed_floats", version = "1.0.7", features = ["serde"] }"#,
+    );
+    fixture.write(
+        "src/lib.rs",
+        include_str!("../fixtures/fields/json_kinds.rs"),
+    );
+    tests(&fixture);
+}
+
+#[test]
 fn field_support_floats_preserve_bits_and_reject_width_changes() {
     let fixture = fixture(&["typed-floats"], "float_native = { package = \"typed_floats\", version = \"1.0.7\", features = [\"serde\"] }");
     fixture.write("src/lib.rs", FLOATS);

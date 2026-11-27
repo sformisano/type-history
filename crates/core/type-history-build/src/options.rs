@@ -20,7 +20,7 @@ pub enum Action {
     Import,
 }
 /// Validated package, history, and Cargo selectors.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct LifecycleOptions {
     /// Ledger operation.
     pub action: Action,
@@ -72,6 +72,11 @@ impl<'a> FeatureSelection<'a> {
             command.args(["--features", features]);
         }
     }
+}
+
+pub(crate) fn feature_tokens(list: &str) -> impl Iterator<Item = &str> {
+    list.split(|c: char| c == ',' || c.is_whitespace())
+        .filter(|token| !token.is_empty())
 }
 
 /// Describe the frontend's fixed command and selector spelling.
