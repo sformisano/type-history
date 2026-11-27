@@ -147,3 +147,28 @@ fn raw_json_errors_keep_the_decoder_error_and_reject_trailing_input() {
     assert_eq!(error.line(), 1);
     assert!(error.column() > 0);
 }
+
+#[test]
+fn nested_literal_number_keys_preserve_nesting_and_respect_the_json_depth_limit() {
+    use super::{key::NUMBER_TOKEN, BufferedValue, Content};
+    let nested = |levels: usize| {
+        let key = format!(r#"{{"{NUMBER_TOKEN}":"#);
+        format!("{}0{}", key.repeat(levels), "}".repeat(levels))
+    };
+    let text = nested(80);
+    let mut value: BufferedValue = serde_json::from_str(&text).unwrap();
+    for _ in 0..80 {
+        let Content::Map(mut fields) = value.value else {
+            panic!("literal key lost");
+        };
+        assert_eq!(fields.len(), 1);
+        let (name, child) = fields.pop().unwrap();
+        assert_eq!(name, NUMBER_TOKEN);
+        value = child;
+    }
+    assert!(matches!(
+        value.value,
+        Content::Scalar(serde_json::Value::Number(_))
+    ));
+    assert!(serde_json::from_str::<BufferedValue>(&nested(200)).is_err());
+}

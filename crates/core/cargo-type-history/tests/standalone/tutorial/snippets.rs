@@ -38,8 +38,28 @@ pub(super) fn receipt_tests() -> String {
         "messagepack",
         format!(
             "let receipt = ReceiptCreated {{ amount_cents: 3000, currency: \"EUR\".to_owned() }};\n\
-             let expected = receipt.clone();\n{}\nassert_eq!(receipt, expected);\n",
+             let expected = receipt.clone();\n{}\nassert_eq!(receipt, expected);\n\
+             let batch = bytes.repeat(2);\nassert!(read_one(&batch).is_err());\n\
+             let mut trailing = bytes.clone(); trailing.push(0xc1);\n\
+             assert!(read_one(&trailing).is_err());\n",
             documented("decoding:messagepack.rs")
+        ),
+    ));
+    cases.push((
+        "messagepack_batch",
+        format!(
+            "{}\n{}",
+            documented("decoding:messagepack-batch.rs"),
+            r#"
+let first = ReceiptCreated { amount_cents: 3000, currency: "EUR".into() };
+let second = ReceiptCreated { amount_cents: 4000, currency: "USD".into() };
+let mut bytes = rmp_serde::to_vec_named(&first.clone().into_versioned())?;
+bytes.extend(rmp_serde::to_vec_named(&second.clone().into_versioned())?);
+assert_eq!(read_batch(&bytes)?, [first, second]);
+bytes.pop();
+assert!(read_batch(&bytes).is_err());
+assert!(read_batch(&[])?.is_empty());
+"#
         ),
     ));
     test_module(&cases)

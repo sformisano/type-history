@@ -2,7 +2,7 @@
 use crate::check_report::{CheckCode, Diagnostic, Origin};
 use crate::compiler_diagnostics::{self, CompilerFailure};
 use crate::contract::ToolContract;
-use crate::inventory::{Admission, PackageInventory};
+use crate::inventory::{Admission, MissingHistories, PackageInventory};
 use crate::lifecycle::LifecycleOps;
 use crate::options::{Action, FeatureSelection, LifecycleOptions};
 use crate::snapshot::Snapshot;
@@ -28,15 +28,15 @@ pub(crate) fn export<M: Clone + Eq + Serialize + DeserializeOwned>(
     let inventory = match (ops.discover)(root, Admission::Ordinary) {
         Ok(inventory) => inventory,
         Err(discovery_error) => {
-            if options.action == Action::Check {
+            if options.action == Action::Check && !discovery_error.is::<MissingHistories>() {
                 // A Rust parse failure must still reach the Rust compiler.
                 // Successful compilation never excuses failed source discovery.
-                cargo(snapshot, package, options, contract, true)?;
+                cargo(snapshot, &[package], options, contract, true)?;
             }
             return Err(discovery_error);
         }
     };
-    let output = cargo(snapshot, &inventory.package, options, contract, true)?;
+    let output = cargo(snapshot, &[&inventory.package], options, contract, true)?;
     let ledger = (ops.decode_export)(&inventory, &output.stdout)?;
     Ok(Observation { ledger, inventory })
 }
@@ -48,12 +48,21 @@ pub(crate) fn validate(
     options: &LifecycleOptions,
     contract: &ToolContract,
 ) -> Result<()> {
-    cargo(snapshot, package, options, contract, false)?;
+    validate_packages(snapshot, &[package], options, contract)
+}
+
+pub(crate) fn validate_packages(
+    snapshot: &Snapshot,
+    packages: &[&str],
+    options: &LifecycleOptions,
+    contract: &ToolContract,
+) -> Result<()> {
+    cargo(snapshot, packages, options, contract, false)?;
     Ok(())
 }
 fn cargo(
     snapshot: &Snapshot,
-    package: &str,
+    packages: &[&str],
     options: &LifecycleOptions,
     contract: &ToolContract,
     export: bool,
@@ -76,11 +85,12 @@ fn cargo(
             "--offline",
             "--profile",
             "dev",
-            "--package",
-            package,
             "--target-dir",
         ])
         .arg(&snapshot.target);
+    for package in packages {
+        command.args(["--package", package]);
+    }
     FeatureSelection::from_options(options).apply_to(&mut command);
     if let Some(target) = &options.target {
         command.args(["--target", target]);
@@ -93,12 +103,13 @@ fn cargo(
     eprint!("{}", String::from_utf8_lossy(&output.stderr));
     if !output.status.success() {
         let message = format!(
-            "{} failed for package {package}. If Cargo configuration restores {}=1, schema observation is unavailable; adjust the caller configuration deliberately. Source and ledger were not changed.\n{}",
+            "{} failed for package {}. If Cargo configuration restores {}=1, schema observation is unavailable; adjust the caller configuration deliberately. Source and ledger were not changed.\n{}",
             if export {
                 "schema export"
             } else {
                 "candidate compilation"
             },
+            packages.join(", "),
             contract.strict_env,
             String::from_utf8_lossy(&output.stderr)
         );

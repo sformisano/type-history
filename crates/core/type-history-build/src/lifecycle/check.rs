@@ -6,10 +6,10 @@ use crate::check_report::{
 use crate::compiler_diagnostics::CompilerFailure;
 use crate::contract::ToolContract;
 use crate::export;
-use crate::inventory::PackageInventory;
+use crate::inventory::{MissingHistories, PackageInventory};
 use crate::options::{self, Action, CheckOptions, LifecycleOptions, OutputFormat};
 use crate::snapshot::Snapshot;
-use crate::workspace::{self, CargoMetadata, Package};
+use crate::workspace::{self, CargoMetadata, Package, PackageFeatures};
 use crate::Result;
 use serde::{de::DeserializeOwned, Serialize};
 use serde_json::Value;
@@ -68,17 +68,17 @@ pub fn run_with_check<M: Clone + Eq + Serialize + DeserializeOwned>(
         .iter()
         .filter_map(|path| path.canonicalize().ok())
         .collect::<Vec<_>>();
-    let snapshot =
-        match Snapshot::create_reusable(&metadata, &extra, contract).and_then(|snapshot| {
-            snapshot.verify_graph(&metadata, &options)?;
-            Ok(snapshot)
+    let (snapshot, features) = match Snapshot::create_reusable(&metadata, &extra, contract)
+        .and_then(|snapshot| {
+            let features = snapshot.verify_graph(&metadata, &options)?;
+            Ok((snapshot, features))
         }) {
-            Ok(snapshot) => snapshot,
-            Err(error) => {
-                report.errors.push(operation_error(error));
-                return emit(report, json);
-            }
-        };
+        Ok(snapshot) => snapshot,
+        Err(error) => {
+            report.errors.push(operation_error(error));
+            return emit(report, json);
+        }
+    };
     let mut packages = match workspace::select_captured(
         &metadata,
         options.package.as_deref(),
@@ -96,7 +96,7 @@ pub fn run_with_check<M: Clone + Eq + Serialize + DeserializeOwned>(
         }
     };
     packages.sort_by(|a, b| a.name.cmp(&b.name));
-    for package in packages {
+    for package in &packages {
         report.packages.push(execute_check_in(
             &metadata,
             package,
@@ -104,8 +104,45 @@ pub fn run_with_check<M: Clone + Eq + Serialize + DeserializeOwned>(
             &check,
             contract,
             ops,
-            Some(&snapshot),
+            Some((&snapshot, &features)),
         ));
+    }
+    if packages.len() > 1
+        && !features.is_empty()
+        && report.packages.iter().all(|p| p.diagnostics.is_empty())
+    {
+        // A dependency feature enabled by one checked library may also change
+        // another library's frozen fields when Cargo builds them together.
+        let requested: std::collections::BTreeSet<_> =
+            options::feature_tokens(options.features.as_deref().unwrap_or_default()).collect();
+        let mut joint = std::collections::BTreeSet::new();
+        let names: Vec<_> = packages.iter().map(|p| p.name.as_str()).collect();
+        for name in &names {
+            for feature in &features[*name] {
+                joint.insert(
+                    if feature.contains('/') || requested.contains(feature.as_str()) {
+                        feature.to_owned()
+                    } else {
+                        format!("{name}/{feature}")
+                    },
+                );
+            }
+        }
+        if !joint.is_empty() {
+            let joint_options = LifecycleOptions {
+                features: Some(joint.into_iter().collect::<Vec<_>>().join(",")),
+                ..options
+            };
+            if let Err(error) =
+                export::validate_packages(&snapshot, &names, &joint_options, contract)
+            {
+                if let Some(failure) = error.downcast_ref::<CompilerFailure>() {
+                    report.errors.extend(failure.diagnostics.clone());
+                } else {
+                    report.errors.push(operation_error(error));
+                }
+            }
+        }
     }
     // Earlier package results remain bound to this capture until the whole check ends.
     if let Err(error) = snapshot.ensure_fresh() {
@@ -141,7 +178,7 @@ fn execute_check_in<M: Clone + Eq + Serialize + DeserializeOwned>(
     check: &CheckOptions,
     contract: &ToolContract,
     ops: &LifecycleOps<M>,
-    shared: Option<&Snapshot>,
+    shared: Option<(&Snapshot, &PackageFeatures)>,
 ) -> PackageReport {
     let mut result = PackageReport {
         package: package.name.clone(),
@@ -189,13 +226,13 @@ fn execute_check_in<M: Clone + Eq + Serialize + DeserializeOwned>(
         extra.push(path.clone());
     }
     let owned;
-    let snapshot = match shared {
+    let (snapshot, features) = match shared {
         Some(snapshot) => snapshot,
         None => {
             owned =
                 match Snapshot::create_reusable(metadata, &extra, contract).and_then(|snapshot| {
-                    snapshot.verify_graph(metadata, options)?;
-                    Ok(snapshot)
+                    let features = snapshot.verify_graph(metadata, options)?;
+                    Ok((snapshot, features))
                 }) {
                     Ok(snapshot) => snapshot,
                     Err(error) => {
@@ -203,7 +240,7 @@ fn execute_check_in<M: Clone + Eq + Serialize + DeserializeOwned>(
                         return result;
                     }
                 };
-            &owned
+            (&owned.0, &owned.1)
         }
     };
     let attempt = (|| -> Result<()> {
@@ -241,14 +278,51 @@ fn execute_check_in<M: Clone + Eq + Serialize + DeserializeOwned>(
             )?);
         }
         // Baseline findings do not suppress independent compiler observations.
-        let observed = export::export(
+        let package_options;
+        let options = if let Some(features) = features.get(&package.name) {
+            package_options = LifecycleOptions {
+                features: (!features.is_empty())
+                    .then(|| features.iter().cloned().collect::<Vec<_>>().join(",")),
+                ..options.clone()
+            };
+            &package_options
+        } else {
+            options
+        };
+        let observed = match export::export(
             snapshot,
             &copied_root,
             &package.name,
             options,
             contract,
             ops,
-        )?;
+        ) {
+            Ok(observed) => observed,
+            Err(error) => {
+                let Some(missing) = error.downcast_ref::<MissingHistories>() else {
+                    return Err(error);
+                };
+                for name in &missing.names {
+                    let versions = current
+                        .entries()
+                        .get(name)
+                        .ok_or("missing history absent from captured ledger")?;
+                    for (version, entry) in versions {
+                        let mut finding = Diagnostic::operational(
+                            CheckCode::HistoryMissing,
+                            Origin::CurrentLedger,
+                            "committed history exists but no source declaration declares it; restore the declaration",
+                        );
+                        finding.stable_name = Some(name.clone());
+                        finding.version = Some(*version);
+                        finding.expected = serde_json::to_value(entry)?;
+                        finding.location = Some(file_location(&current_path));
+                        result.diagnostics.push(finding);
+                    }
+                }
+                return Ok(());
+            }
+        };
         let mut differences = compare_ledgers(&current, &observed.ledger, false, None, None)?;
         for difference in &mut differences {
             difference.location = source_location(difference, &observed.inventory, snapshot);

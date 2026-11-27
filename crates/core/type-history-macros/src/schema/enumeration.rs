@@ -2,7 +2,7 @@
 
 use proc_macro2::TokenStream;
 use quote::quote;
-use syn::{DataEnum, Error, Fields, Ident, Result};
+use syn::{Attribute, DataEnum, Error, Fields, Ident, Result};
 use type_history_codegen::{
     json_schema_derive::{isolated, isolated_field_attribute, parameter},
     lint_attributes::{lint_attributes, scoped_field_type},
@@ -15,6 +15,7 @@ pub(super) fn expand(
     data: &DataEnum,
     name: &Ident,
     helper: &Ident,
+    attributes: &[Attribute],
     support: &TokenStream,
 ) -> Result<(TokenStream, TokenStream)> {
     if data.variants.is_empty() {
@@ -40,6 +41,10 @@ pub(super) fn expand(
             ));
         }
         let variant_name = &variant.ident;
+        let variant_docs = variant
+            .attrs
+            .iter()
+            .filter(|attr| attr.path().is_ident("doc"));
         let variant_lints = lint_attributes(&variant.attrs).collect::<Vec<_>>();
         let mut fields = Vec::new();
         for field in &mut variant.fields {
@@ -63,21 +68,26 @@ pub(super) fn expand(
                 Some(name) => quote!(#name: #param),
                 None => quote!(#param),
             };
-            fields.push(quote!(#schema #declaration));
+            let docs = field
+                .attrs
+                .iter()
+                .filter(|attr| attr.path().is_ident("doc"));
+            fields.push(quote!(#(#docs)* #schema #declaration));
         }
         let payload = match &variant.fields {
             Fields::Unit => quote!(),
             Fields::Unnamed(_) => quote!((#(#fields),*)),
             Fields::Named(_) => quote!({#(#fields),*}),
         };
-        declarations.push(quote!(#(#variant_lints)* #variant_name #payload));
+        declarations.push(quote!(#(#variant_docs)* #(#variant_lints)* #variant_name #payload));
     }
     let wire = enum_wire_type(&variants, support)?;
+    let docs = attributes.iter().filter(|attr| attr.path().is_ident("doc"));
     let schema = isolated(
         name,
         helper,
         &types,
-        &quote!(pub(super) enum #helper<#(#params),*> { #(#declarations),* }),
+        &quote!(#(#docs)* pub(super) enum #helper<#(#params),*> { #(#declarations),* }),
         support,
     );
     Ok((

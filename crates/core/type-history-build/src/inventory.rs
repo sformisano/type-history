@@ -118,6 +118,19 @@ impl<M: Clone + Eq + Serialize + DeserializeOwned> Declaration<M> {
     }
 }
 
+#[derive(Debug)]
+pub(crate) struct MissingHistories {
+    pub names: Vec<String>,
+}
+
+impl std::fmt::Display for MissingHistories {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(formatter, "{}: committed history exists but no source declaration declares it; restore the declaration rather than deleting retained history ({} missing in total)", self.names[0], self.names.len())
+    }
+}
+
+impl std::error::Error for MissingHistories {}
+
 /// Validate complete stable name inventory, including declarations whose macros disappeared.
 pub fn validate<M: Clone + Eq + Serialize + DeserializeOwned>(
     inventory: &PackageInventory<M>,
@@ -153,12 +166,13 @@ pub fn validate<M: Clone + Eq + Serialize + DeserializeOwned>(
             .into());
         }
     }
-    let missing = ledger
+    let names: Vec<_> = ledger
         .stable_names()
         .filter(|stable_name| !declared.contains(stable_name))
-        .collect::<Vec<_>>();
-    if let Some(first) = missing.first() {
-        return Err(format!("{first}: committed history exists but no source declaration declares it; restore the declaration rather than deleting retained history ({} missing in total)", missing.len()).into());
+        .map(str::to_owned)
+        .collect();
+    if !names.is_empty() {
+        return Err(MissingHistories { names }.into());
     }
     Ok(())
 }

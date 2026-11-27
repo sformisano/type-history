@@ -28,7 +28,9 @@ when it implements payload traits.
 Frozen export readers use `JsonSchemaDocument::try_from_shape`, which rejects
 malformed shapes before writing a document. The separate `schema_expression`
 exports descriptive JSON Schema through each field type's `JsonSchemaField`
-implementation.
+implementation. Use the descriptive export to publish field and variant
+documentation, including documentation on supporting types. Frozen ledgers
+record the storage contract and omit descriptions.
 
 A configured `observation_cfg` suppresses shape assertions only when both that
 cfg and `test` are active. The frontend build hook must reject that cfg in

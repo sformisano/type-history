@@ -2,7 +2,7 @@
 
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
-use syn::{Error, FieldsUnnamed, Ident, Result, Visibility};
+use syn::{Attribute, Error, FieldsUnnamed, Ident, Result, Visibility};
 use type_history_codegen::lint_attributes::scoped_field_type;
 
 use super::validate_attribute;
@@ -12,6 +12,7 @@ pub(super) fn expand(
     name: &Ident,
     visibility: &Visibility,
     helper: &Ident,
+    attributes: &[Attribute],
     support: &TokenStream,
 ) -> Result<TokenStream> {
     if fields.unnamed.is_empty() {
@@ -39,12 +40,17 @@ pub(super) fn expand(
     } else {
         type_history_codegen::resolved_schema::tuple_wire_type(&types, support)
     };
-    let schema = type_history_codegen::json_schema_derive::tuple(name, helper, &types, support);
-    let field_contract = if types.len() == 1 {
-        type_history_codegen::json_schema_derive::field_impl_delegating_to(name, &types[0], support)
-    } else {
-        type_history_codegen::json_schema_derive::field_impl_for_derived(name, support)
-    };
+    let schema = type_history_codegen::json_schema_derive::tuple_with_docs(
+        name,
+        helper,
+        types
+            .iter()
+            .zip(fields.unnamed.iter().map(|field| field.attrs.as_slice())),
+        attributes,
+        support,
+    );
+    let field_contract =
+        type_history_codegen::json_schema_derive::field_impl_for_derived(name, support);
     let marker = format_ident!("__TypeHistory{}SchemaWire", name);
     let wire_alias = format_ident!("__TypeHistory{}TupleWire", name);
     // A public associated type must not expose private field types. Keep their

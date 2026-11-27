@@ -78,16 +78,40 @@ pub fn record(name: &Ident, fields: &[NamedField], support: &TokenStream) -> Tok
 
 /// Isolated schema implementation for a supporting tuple struct.
 pub fn tuple(name: &Ident, helper: &Ident, types: &[Type], support: &TokenStream) -> TokenStream {
-    let params = (0..types.len()).map(parameter).collect::<Vec<_>>();
-    let fields = params.iter().map(|param| {
-        let schema = isolated_field_attribute(param);
-        quote!(#schema #param)
-    });
+    tuple_with_docs(
+        name,
+        helper,
+        types.iter().map(|ty| (ty, &[][..])),
+        &[],
+        support,
+    )
+}
+
+/// Isolated tuple-struct schema retaining its public description and item documentation.
+pub fn tuple_with_docs<'a>(
+    name: &Ident,
+    helper: &Ident,
+    fields: impl IntoIterator<Item = (&'a Type, &'a [Attribute])>,
+    attributes: &[Attribute],
+    support: &TokenStream,
+) -> TokenStream {
+    let mut types = Vec::new();
+    let mut params = Vec::new();
+    let mut declarations = Vec::new();
+    for (index, (ty, attributes)) in fields.into_iter().enumerate() {
+        let param = parameter(index);
+        let schema = isolated_field_attribute(&param);
+        let docs = attributes.iter().filter(|attr| attr.path().is_ident("doc"));
+        declarations.push(quote!(#(#docs)* #schema #param));
+        params.push(param);
+        types.push(ty.clone());
+    }
+    let docs = attributes.iter().filter(|attr| attr.path().is_ident("doc"));
     isolated(
         name,
         helper,
-        types,
-        &quote!(pub(super) struct #helper<#(#params),*>(#(#fields),*);),
+        &types,
+        &quote!(#(#docs)* pub(super) struct #helper<#(#params),*>(#(#declarations),*);),
         support,
     )
 }

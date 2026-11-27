@@ -59,7 +59,6 @@ impl<'de> VariantAccess<'de> for BufferedVariant {
     fn unit_variant(self) -> Result<(), Self::Error> {
         match self.0 {
             None => Ok(()),
-            Some(value) if matches!(value.value, Content::Scalar(Value::Null)) => Ok(()),
             Some(_) => Err(JsonError::custom(
                 "a unit enum variant cannot contain a payload",
             )),

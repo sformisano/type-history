@@ -8,6 +8,18 @@ A new history starts at V1, even when no field has a history attribute. [Importe
 
 ## Generated items
 
+Rust checks a nested type for the generated field list. A wide record can exceed
+the consuming crate’s recursion limit. If rustc reports that it overflowed while
+checking the generated type, raise the limit at the top of the library crate.
+For example, this setting accommodates a record with 128 scalar fields:
+
+<!-- macro:recursion-limit.rs -->
+```rust
+#![recursion_limit = "256"]
+```
+
+The limit a record needs depends on its field types and the compiler.
+
 | Generated item | What it provides |
 | --- | --- |
 | `ReceiptCreatedV1`, `ReceiptCreatedV2`, and later types | One struct with the fields and types for that version |

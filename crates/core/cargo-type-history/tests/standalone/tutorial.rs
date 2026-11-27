@@ -14,6 +14,7 @@ const DOCUMENTATION: &[&str] = &[
     include_str!("../../../../../book/src/decoding.md"),
     include_str!("../../../../../book/src/lifecycle.md"),
     include_str!("../../../../../book/src/integration.md"),
+    include_str!("../../../../../book/src/macro.md"),
     include_str!("../../../../../book/src/setup.md"),
 ];
 const PACKAGE: &str = "standalone-history-consumer";

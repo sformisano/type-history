@@ -56,6 +56,7 @@ impl Snapshot {
                 [vec![2], target.as_os_str().as_encoded_bytes().to_vec()].concat(),
             );
         } else if metadata.is_dir() {
+            files.insert(path.to_owned(), vec![3]);
             for child in fs::read_dir(path)? {
                 self.collect(&child?.path(), files)?;
             }
@@ -95,6 +96,7 @@ impl Snapshot {
         if metadata.file_type().is_symlink() {
             self.copy_symlink(path)?;
         } else if metadata.is_dir() {
+            self.verify_captured(path, &[3])?;
             fs::create_dir_all(self.mapped(path)?)?;
             for child in fs::read_dir(path)? {
                 self.copy_tree(&child?.path())?;

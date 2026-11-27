@@ -5,9 +5,9 @@ use serde::{
         value::{MapDeserializer, SeqDeserializer},
         Error, IntoDeserializer, Visitor,
     },
-    Deserialize, Deserializer,
+    Deserializer,
 };
-use serde_json::{Error as JsonError, Number, Value};
+use serde_json::{Error as JsonError, Value};
 
 use super::{BufferedValue, Content};
 
@@ -27,7 +27,6 @@ macro_rules! deserialize_integer {
         fn $method<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
             match self.value {
                 Content::Scalar(value) => value.$method(visitor),
-                Content::Map(fields) if self.human_readable => number(fields)?.$method(visitor),
                 _ => self.deserialize_any(visitor),
             }
         }
@@ -63,9 +62,6 @@ impl<'de> Deserializer<'de> for BufferedValue {
     fn deserialize_f32<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
         match self.value {
             Content::Scalar(value) => value.deserialize_f32(visitor),
-            // Preserve JSON text until the requested width is known. Parsing
-            // through f64 first can double-round an otherwise exact f32 input.
-            Content::Map(fields) if self.human_readable => number(fields)?.deserialize_f32(visitor),
             Content::Float(value) => visitor.visit_f32(value as f32),
             _ => self.deserialize_any(visitor),
         }
@@ -74,7 +70,6 @@ impl<'de> Deserializer<'de> for BufferedValue {
     fn deserialize_f64<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
         match self.value {
             Content::Scalar(value) => value.deserialize_f64(visitor),
-            Content::Map(fields) if self.human_readable => number(fields)?.deserialize_f64(visitor),
             Content::Float(value) => visitor.visit_f64(value),
             _ => self.deserialize_any(visitor),
         }
@@ -83,9 +78,6 @@ impl<'de> Deserializer<'de> for BufferedValue {
     fn deserialize_i128<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
         match self.value {
             Content::Scalar(value) => value.deserialize_i128(visitor),
-            Content::Map(fields) if self.human_readable => {
-                number(fields)?.deserialize_i128(visitor)
-            }
             // MessagePack represents 128-bit integers as 16 big-endian bytes.
             Content::Bytes(bytes) => {
                 let bytes = bytes.try_into().map_err(|_| {
@@ -100,9 +92,6 @@ impl<'de> Deserializer<'de> for BufferedValue {
     fn deserialize_u128<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
         match self.value {
             Content::Scalar(value) => value.deserialize_u128(visitor),
-            Content::Map(fields) if self.human_readable => {
-                number(fields)?.deserialize_u128(visitor)
-            }
             Content::Bytes(bytes) => {
                 let bytes = bytes.try_into().map_err(|_| {
                     JsonError::custom("a binary u128 payload must contain exactly 16 bytes")
@@ -151,14 +140,35 @@ impl<'de> Deserializer<'de> for BufferedValue {
         self.human_readable
     }
 
+    fn deserialize_map<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
+        // A large serde_json::Number can present itself as a Serde map again
+        // during untyped replay. Only an actual input map can fill a map field.
+        match self.value {
+            Content::Map(fields) => {
+                MapDeserializer::new(fields.into_iter()).deserialize_map(visitor)
+            }
+            _ => Err(JsonError::custom(
+                "expected a map in the historical payload",
+            )),
+        }
+    }
+
     fn deserialize_struct<V: Visitor<'de>>(
         self,
         _name: &'static str,
-        _fields: &'static [&'static str],
+        fields: &'static [&'static str],
         visitor: V,
     ) -> Result<V::Value, Self::Error> {
-        if !matches!(self.value, Content::Map(_)) {
+        let Content::Map(entries) = &self.value else {
             return Err(JsonError::custom("a history record must use named fields"));
+        };
+        // Derived Serde visitors may discard unknown fields. The persisted
+        // contract for a struct is closed, including a named enum payload.
+        if let Some((unknown, _)) = entries
+            .iter()
+            .find(|(name, _)| !fields.contains(&name.as_str()))
+        {
+            return Err(JsonError::unknown_field(unknown, fields));
         }
         self.deserialize_any(visitor)
     }
@@ -174,15 +184,6 @@ impl<'de> Deserializer<'de> for BufferedValue {
 
     serde::forward_to_deserialize_any! {
         bool char str string bytes byte_buf unit unit_struct
-        tuple_struct map identifier ignored_any
+        tuple_struct identifier ignored_any
     }
-}
-
-fn number(fields: Vec<(String, BufferedValue)>) -> Result<Number, JsonError> {
-    if fields.len() != 1 {
-        return Err(JsonError::custom("expected a numeric payload value"));
-    }
-    // JSON's arbitrary-precision numbers use Serde's map data model. Defer
-    // recognition to Number's public API only when a numeric field is requested.
-    Number::deserialize(MapDeserializer::new(fields.into_iter()))
 }

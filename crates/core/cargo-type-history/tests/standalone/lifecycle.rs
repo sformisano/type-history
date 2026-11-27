@@ -181,6 +181,53 @@ fn standalone_draft_reset_undo_exact_freeze_and_read_only_check() {
 }
 
 #[test]
+fn empty_import_creates_missing_authority_and_can_be_retried() {
+    let fixture = Fixture::empty();
+    fixture.write("import.json", "{}");
+    let args = [
+        "import",
+        "--package",
+        "standalone-history-consumer",
+        "--from",
+        "import.json",
+    ];
+    success(&fixture.cli(&args));
+    assert_eq!(fixture.read(LEDGER), "{}\n");
+    success(&fixture.cargo(&["check", "--locked", "--offline"]));
+    let retry = fixture.cli(&args);
+    success(&retry);
+    assert!(String::from_utf8_lossy(&retry.stdout).contains("no-op"));
+}
+
+#[test]
+fn empty_directory_added_during_freeze_preserves_original_ledger() {
+    let fixture = Fixture::frozen();
+    let original = fixture.read(LEDGER);
+    fixture.write("src/lib.rs", V2);
+    // Change an initially absent directory in the live package from the captured build.
+    fixture.write(
+        "build.rs",
+        r#"fn main() {
+        if let Some(directory) = std::env::var_os("HISTORY_TEST_LIVE_DIRECTORY") {
+            std::fs::create_dir_all(directory).unwrap();
+        }
+        history_build::compile();
+    }"#,
+    );
+    let directory = fixture.root().join("wide-schema");
+    let result = fixture.cli_env(
+        &["freeze", "--package", "standalone-history-consumer"],
+        &[(
+            "HISTORY_TEST_LIVE_DIRECTORY",
+            Some(directory.to_str().unwrap()),
+        )],
+    );
+    failure(&result, "InputsChanged");
+    assert!(directory.is_dir());
+    assert_eq!(fixture.read(LEDGER), original);
+}
+
+#[test]
 fn standalone_import_requires_complete_history_from_version_one() {
     let fixture = Fixture::frozen();
     let entry = fixture.ledger()[STABLE_NAME]["1"].clone();

@@ -9,6 +9,28 @@ use type_history_core::resolved::{FieldPresence, SchemaField, SchemaShape};
 const PACKAGE: &str = "standalone-history-consumer";
 
 #[test]
+fn wide_record_freezes_with_the_documented_crate_recursion_limit() {
+    let fixture = Fixture::empty();
+    success(&fixture.cli(&["init", "--package", PACKAGE]));
+    let limit = super::tutorial::documented_block("macro:recursion-limit.rs", "rust");
+    let mut source = format!(
+        "{limit}\nuse history_api::versioned;\n#[versioned(stable_name = \"audit.wide\")]\npub struct Wide {{\n"
+    );
+    for index in 0..128 {
+        writeln!(source, "pub field_{index}: u32,").unwrap();
+    }
+    source.push_str("}\n");
+    fixture.write("src/lib.rs", &source);
+    success(&fixture.cli(&["freeze", "--package", PACKAGE]));
+    let ledger = fixture.ledger();
+    let fields = ledger["audit.wide"]["1"]["schema"]["properties"]
+        .as_object()
+        .unwrap();
+    assert_eq!(fields.len(), 128);
+    assert_eq!(fields["field_127"]["format"], "uint32");
+}
+
+#[test]
 fn standalone_sixty_four_version_import_decodes_every_backfill() {
     let fixture = Fixture::empty();
     success(&fixture.cli(&["init", "--package", PACKAGE]));

@@ -79,6 +79,12 @@ cargo type-history check --package my-shop-demo-project --no-default-features --
 ```
 
 Selected features must still preserve every frozen schema.
+For a workspace check, use `--features billing/foreign-currency` to select
+a member’s feature. Each initialized library builds separately with its applicable
+feature requests, defaults, and target settings. When multiple libraries pass
+with selected features, a joint Cargo check also catches frozen field types
+that change when those libraries share a dependency feature. Requests that
+apply only to unrelated, uninitialized members have no effect on these checks.
 
 If you call the build library directly, `LifecycleOptions::no_default_features` controls the same choice. Set it to `false` to keep package defaults or `true` to disable them. `workspace::metadata(features)` keeps package defaults; `options::parse` reads the command-line selection.
 
@@ -168,6 +174,9 @@ Import requires a complete ledger in the current format. It cannot change or
 remove entries already frozen in the destination ledger, and it cannot contain
 reset reservations.
 
+In a package without declarations, importing `{}` creates the destination
+ledger. Repeating that import reports `no-op`.
+
 The source and imported ledger must agree:
 
 - The ledger contains every declared stable name and version, starting at V1.
@@ -206,7 +215,9 @@ authenticate it. Ordinary builds and running applications need no released ledge
 
 Use `--format json` when another tool needs to read the results. The command writes one JSON document to stdout. A successful check exits with status 0; a failed check exits with status 2. Both `--format` and `--released-baseline` apply only to `check`.
 
-Each diagnostic has a stable `code` and an `origin`. It names the affected `stable_name`, `version`, and `path`, so a change inside a nested record points to that field. It also gives the `expected` and `actual` values, a correction `hint`, and a source `location` when available. The top level has `schema_version`, `command`, `ok`, `packages`, and `errors`. Each `packages` entry has `package` and `diagnostics`. Paths distinguish fields, enum variants, tuple positions, and container elements. Missing values use JSON null. The report includes independent differences in a consistent order.
+Each diagnostic has a stable `code` and an `origin`. A schema difference identifies its `stable_name`, `version`, and `path`. Paths distinguish fields, enum variants, tuple positions, and container elements. Diagnostics also provide `expected` and `actual` values, a correction `hint`, and a `location` when available. Missing values use JSON null. A compiler error can have a source location without a stable name or version.
+
+When source discovery completes and a declaration is missing, each retained version receives a `history_missing` diagnostic with its name, version, and working ledger location. Its path is empty and its actual value is null. The report orders the differences consistently. The top level has `schema_version`, `command`, `ok`, `packages`, and `errors`. Each `packages` entry has `package` and `diagnostics`.
 
 The command runs a dedicated test build, the **schema export build**, that records source shapes. It then compares them with the ledger. The schema export build permits frozen-shape drift so the report can describe each difference. Other compiler or input errors remain failures.
 
@@ -216,8 +227,9 @@ Ordinary builds still reject frozen-shape drift. When the comparison finds no di
 
 ### Copied inputs
 
-Commands copy and fingerprint every file under each local package root and
-declared input, including files in `node_modules` and `.next`. They skip only:
+Commands track directories, including empty ones, and fingerprint file contents
+under local package roots and declared inputs. This includes files in
+`node_modules` and `.next`. They skip only:
 
 - The workspace's Cargo target directory.
 - A `target` directory created by Cargo at the top of a package or declared input.

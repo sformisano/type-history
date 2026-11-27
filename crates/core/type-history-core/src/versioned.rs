@@ -14,7 +14,7 @@ use buffer::BufferedValue;
 /// Decode a generated JSON payload using the same named-record rules as `Versioned`.
 #[doc(hidden)]
 pub fn decode_json_payload<T: DeserializeOwned>(bytes: &[u8]) -> Result<T, JsonError> {
-    let buffered: BufferedValue = serde_json::from_slice(bytes)?;
+    let buffered = BufferedValue::from_json(bytes)?;
     T::deserialize(buffered)
 }
 
@@ -72,8 +72,10 @@ pub trait VersionedHistory: Sized {
 /// into the matching historical type. Supported formats include JSON and
 /// MessagePack with named fields; payload structs must be represented as maps.
 /// This includes supporting records nested in fields and containers.
-/// JSON numbers use `serde_json`'s arbitrary-precision representation, which can
-/// also interpret that library's reserved numeric-marker objects as numbers.
+/// Read the original JSON bytes or text to preserve numeric precision, literal
+/// keys such as `$serde_json::private::Number`, and duplicate-field detection.
+/// An outer untagged enum can erase the distinction between a number and a map
+/// before this decoder runs. Ambiguous values from that buffer are rejected.
 /// Finite float integrations preserve the written width's bits, including signed
 /// zero and subnormals. Non-finite values are rejected by their field types.
 pub struct Versioned<T: VersionedHistory> {

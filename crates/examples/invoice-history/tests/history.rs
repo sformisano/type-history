@@ -18,6 +18,38 @@ fn old_bytes_reach_the_current_type() {
 }
 
 #[test]
+fn historical_uint32_fields_enforce_the_width_named_in_the_ledger() {
+    let ledger: Value = from_slice(include_bytes!("../type-history/schemas.json")).unwrap();
+    assert_eq!(
+        ledger[Invoice::STABLE_NAME.as_str()]["1"]["schema"]["properties"]["count"]["format"],
+        "uint32"
+    );
+    for count in [u64::from(u32::MAX), u64::from(u32::MAX) + 1] {
+        let payload = json!({"count": count, "legacy": "INV-42"});
+        let raw = decode::<Invoice>(
+            &Invoice::STABLE_NAME,
+            PayloadVersion::INITIAL,
+            &to_vec(&payload).unwrap(),
+        );
+        let wire =
+            json!({"stable_name": Invoice::STABLE_NAME.as_str(), "version": 1, "payload": payload});
+        let wrapped = from_slice::<type_history::Versioned<Invoice>>(&to_vec(&wire).unwrap());
+        if count == u64::from(u32::MAX) {
+            assert_eq!(raw.unwrap().count, count.to_string());
+            assert_eq!(
+                Invoice::from_versioned(wrapped.unwrap()).unwrap().count,
+                count.to_string()
+            );
+        } else {
+            assert!(
+                matches!(raw, Err(ReadError::Decode(e)) if e.kind() == DecodeFailureKind::Decode)
+            );
+            assert!(wrapped.is_err());
+        }
+    }
+}
+
+#[test]
 fn current_payload_round_trips_without_historical_backfills() {
     let invoice = Invoice {
         count: "84".to_owned(),
