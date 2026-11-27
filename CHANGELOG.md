@@ -1,10 +1,11 @@
 # Changelog
 
-## Unreleased
+## 0.3.4
 
 - Historical reads distinguish JSON numbers from maps, preserve the sign of JSON `-0` in finite floats, reject unknown fields in supporting records and named enum variants, and require unit enum variants to use their string form. The minimum `serde_json` version is 1.0.154.
 - Lifecycle commands detect changes to empty directories, create a missing ledger on empty import, and apply workspace feature selections to the relevant members. JSON checks identify each removed history and retained version.
 - Descriptive schemas include documentation from supporting records, fields and enum variants. The book covers MessagePack framing, external numeric validation and compiler recursion limits for wide records.
+- Prepare all six crates at 0.3.4 with matching installation instructions.
 
 ## 0.3.3
 
